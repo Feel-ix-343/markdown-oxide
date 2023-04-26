@@ -1,0 +1,3 @@
+[submodule "tree-sitter-markdown"]
+	path = tree-sitter-markdown
+	url = git@github.com:MDeiml/tree-sitter-markdown.git
