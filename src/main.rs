@@ -13,6 +13,8 @@ fn main() {
     let test_files: Vec<(String, Vec<u8>)> = std::fs::read_dir("/home/felix/Notes")
         .unwrap()
         .map(|f| f.unwrap())
+        .collect_vec()
+        .par_iter()
         .map(|f| f.path())
         .filter(|f| f.is_file())
         .filter(|f| f.file_name().unwrap().to_str().unwrap().ends_with(".md"))
@@ -20,11 +22,13 @@ fn main() {
         .collect();
 
 
-    let links: Vec<(&String, Vec<&str>)> = test_files.iter().map(|(file, source)| {
-        let parser = MarkdownLinkParser::new();
-        (file, parser.links_for_file(&source))
-    })
-    .collect();
+    let links: Vec<(&String, Vec<&str>)> = test_files
+        .par_iter()
+        .map(|(file, source)| {
+            let parser = MarkdownLinkParser::new();
+            (file, parser.links_for_file(&source))
+        })
+        .collect();
 
     // Pring the matches
     println!("LOOK HERE; the links in the file:\n{:#?}", links)
