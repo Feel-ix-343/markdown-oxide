@@ -1,16 +1,30 @@
+use std::path::PathBuf;
+
 use tree_sitter::QueryCursor;
 use::tree_sitter_md::{MarkdownParser};
 use::tree_sitter_md::{language, inline_language};
 use::tree_sitter::{Query, TextProvider};
 use::itertools::Itertools;
+use::rayon::prelude::*;
 
 fn main() {
     // Read the ../TestFiles/Test.md
-    let test_md_file = std::fs::read("./TestFiles/Test.md").unwrap();
-    let source_code: &[u8] = &test_md_file;
+    // let test_md_file = std::fs::read("./TestFiles/Test.md").unwrap();
+    let test_files: Vec<(String, Vec<u8>)> = std::fs::read_dir("/home/felix/Notes")
+        .unwrap()
+        .map(|f| f.unwrap())
+        .map(|f| f.path())
+        .filter(|f| f.is_file())
+        .filter(|f| f.file_name().unwrap().to_str().unwrap().ends_with(".md"))
+        .map(|p| (p.to_str().unwrap().to_owned(), std::fs::read(p).unwrap()))
+        .collect();
 
-    let parser = MarkdownLinkParser::new();
-    let links = parser.links_for_file(source_code);
+
+    let links: Vec<(&String, Vec<&str>)> = test_files.iter().map(|(file, source)| {
+        let parser = MarkdownLinkParser::new();
+        (file, parser.links_for_file(&source))
+    })
+    .collect();
 
     // Pring the matches
     println!("LOOK HERE; the links in the file:\n{:#?}", links)
