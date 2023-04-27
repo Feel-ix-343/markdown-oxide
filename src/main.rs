@@ -2,6 +2,7 @@ use tree_sitter::QueryCursor;
 use::tree_sitter_md::{MarkdownParser};
 use::tree_sitter_md::{language, inline_language};
 use::tree_sitter::{Query, TextProvider};
+use::itertools::Itertools;
 
 fn main() {
     let mut parser = MarkdownParser::default();
@@ -21,26 +22,19 @@ fn main() {
     // inline_trees.iter().for_each(|node| println!("{:?}", node.root_node().to_sexp()));
 
     // Finding links in the files
-    
 
     // Execute a treesitter query for finding the links from a file
     let query = Query::new(inline_language, "(link_text) @link;").unwrap();
-    let mut query_cursor = QueryCursor::new();
-    let text_provider: &[u8] = &[];
-    let links: Vec<&str> = inline_trees
-        .iter()
+
+    let links: Vec<&str> = inline_trees // There are multiple inline trees
+        .iter() // Iterate over each of them
         .flat_map(|tree| {
-            let matches = query_cursor.captures(&query, tree.root_node(), text_provider);
-            let links: Vec<&str> = matches
-                .flat_map(|(q, _)|
-                    q.captures
-                        .iter()
-                        .map(|c| c.node.utf8_text(source_code).unwrap())
-                )
-                .collect();
-            return links
-        })
-        .collect();
+            let mut query_cursor = QueryCursor::new();
+            let text_provider: &[u8] = &[];
+            let captures = query_cursor.captures(&query, tree.root_node(), text_provider).collect_vec();
+            return captures.into_iter().flat_map(|(q, _)| q.captures).map(|c| c.node.utf8_text(source_code).unwrap()).collect_vec()
+        }) // Map each tree to its query captures, then flatten all trees to a collection of their query captures
+        .collect(); // TODO: I still want to refactor this more
 
     // Pring the matches
     println!("LOOK HERE; the links in the file:\n{:#?}", links)
