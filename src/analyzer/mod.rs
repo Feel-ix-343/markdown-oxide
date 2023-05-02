@@ -81,7 +81,7 @@ impl<'a> MDFile {
         let paths = links.into_iter()
             .map(|s| {
                 let mut path = PathBuf::new();
-                path.push("/home/felix/Notes/"); // 
+                path.push(&self.home_dir); // 
                 path.push(s);
                 let path = path.with_extension("md");
                 path
