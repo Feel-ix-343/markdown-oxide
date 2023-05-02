@@ -14,9 +14,7 @@ use analyzer::*;
 
 fn main() {
     let analyzer = Analyzer::new("/home/felix/Notes");
-
-    // Pring the matches
-    println!("Links:\n{:#?}", analyzer.files.par_iter().map(|f| f.links()).collect::<Vec<_>>())
+    analyzer.calc_incoming();
 }
 
 

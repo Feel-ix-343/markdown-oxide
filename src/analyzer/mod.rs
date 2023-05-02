@@ -1,4 +1,4 @@
-use std::{path::PathBuf, fs::DirEntry};
+use std::{path::{PathBuf, Path}, fs::DirEntry, collections::HashMap, net::Incoming};
 
 use itertools::Itertools;
 use tree_sitter::{Query, QueryCursor};
@@ -8,25 +8,41 @@ pub mod graph;
 
 #[derive(Debug)]
 pub struct Analyzer {
-    pub files: Vec<MDFile>
+    pub files: Vec<MDFile>,
+    directory: PathBuf,
 }
 
 impl Analyzer {
     pub fn new(directory: &str) -> Analyzer {
+        let directory = Path::new(directory).to_owned();
+        assert!(directory.is_dir());
 
-        let files: Vec<MDFile> = std::fs::read_dir(directory)
+        let files: Vec<MDFile> = std::fs::read_dir(directory.to_owned())
             .unwrap()
             .map(|f| f.unwrap())
             .collect_vec()
             .into_iter()
             .filter(|f| f.path().is_file() && f.path().to_str().unwrap().ends_with(".md"))
-            .map(MDFile::new)
+            .map(|p| MDFile::new(p, directory.to_owned()))
             .collect();
-
+        
         return Analyzer {
-            files
+            files,
+            directory
         };
+    }
 
+    pub fn calc_incoming(&self) {
+
+        let incoming_map: HashMap<PathBuf, Vec<&MDFile>> = self.files.iter()
+            .flat_map(|f| {
+                f.resolved_links().into_iter().map(|path| (path, f)).collect_vec()
+            })
+            .into_group_map();
+
+        let display = incoming_map.iter().map(|(k, v)| format!("File: {:?}, incoming {:#?}", k, v.iter().map(|f| f.title()).collect_vec())).join("\n");
+
+        println!("{display}");
     }
 }
 
@@ -34,6 +50,7 @@ impl Analyzer {
 pub struct MDFile {
     pub path: PathBuf,
     source: Vec<u8>,
+    home_dir: PathBuf
     // pub title: &'a str, // Could these be functions so that they don't need to be cloned?
     // pub links: Vec<&'a str>, // Could these be functions so that they don't need to be cloned?
 }
@@ -41,13 +58,14 @@ pub struct MDHeading;
 pub struct MDTag;
 
 impl<'a> MDFile {
-    pub fn new(dir_entry: DirEntry) -> MDFile {
+    pub fn new(dir_entry: DirEntry, home_dir: PathBuf) -> MDFile {
         let path = dir_entry.path();
         let source = std::fs::read(&path).unwrap();
 
         MDFile {
             path,
             source,
+            home_dir
         }
     }
 
@@ -55,10 +73,23 @@ impl<'a> MDFile {
         return self.path.file_name().unwrap().to_str().unwrap()
     }
 
-    pub fn links(&self) -> Vec<&str> {
-        let parser = MarkdownLinkParser::new();
+    /// All of the resolved, relative links in a markdown file
+    pub fn resolved_links(&self) -> Vec<PathBuf> {
+        let mut parser = MarkdownLinkParser::new();
         let links = parser.links_for_file(&self.source); 
-        return links
+
+        let paths = links.into_iter()
+            .map(|s| {
+                let mut path = PathBuf::new();
+                path.push("/home/felix/Notes/"); // 
+                path.push(s);
+                let path = path.with_extension("md");
+                path
+            }) // Turn into full path
+            .filter(|p| p.is_file())
+            .collect_vec();
+
+        return paths
     }
 }
 
@@ -70,7 +101,7 @@ impl<'a> MDFile {
 
 
 struct MarkdownLinkParser {
-    parser: MarkdownParser
+    parser: MarkdownParser,
 }
 
 impl MarkdownLinkParser {
@@ -80,8 +111,8 @@ impl MarkdownLinkParser {
         }
     }
 
-    fn links_for_file<'a>(self, source_code: &'a [u8]) -> Vec<&'a str> {
-        let mut parser = self.parser;
+    fn links_for_file<'a>(&mut self, source_code: &'a [u8]) -> Vec<&'a str> {
+        let parser = &mut self.parser;
 
         let tree = parser.parse(source_code, None).unwrap();
         // let language = language();
@@ -89,9 +120,6 @@ impl MarkdownLinkParser {
 
         // let block_tree = tree.block_tree();
         let inline_trees = tree.inline_trees();
-
-        // println!("{:?}", block_tree.root_node().to_sexp());
-        // inline_trees.iter().for_each(|node| println!("{:?}", node.root_node().to_sexp()));
 
         // Finding links in the files
 
