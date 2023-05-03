@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use itertools::Itertools;
 
-use super::markdownparser::MarkdownLinkParser;
+use super::{markdownparser::MarkdownLinkParser, graph::Node};
 
 
 #[derive(Debug)]
@@ -49,5 +49,23 @@ impl<'a> MDFile {
             .collect_vec();
 
         return paths
+    }
+}
+
+impl Node for MDFile {
+    fn outgoing<'a>(&'a self, ctx: &'a super::graph::Graph) -> Vec<&'a dyn Node> {
+        let outgoing_files = ctx.outgoing(&self).unwrap();
+        let outgoing_nodes: Vec<&dyn Node> = outgoing_files.into_iter()
+            .map(|&f| f as &dyn Node)
+            .collect_vec();
+        return outgoing_nodes
+    }
+
+    fn incoming<'a>(&'a self, ctx: &'a super::graph::Graph) -> Vec<&'a dyn Node> {
+        let incoming_files = ctx.incoming(&self).unwrap();
+        let incoming_nodes = incoming_files.into_iter()
+            .map(|&f| f as &dyn Node)
+            .collect_vec();
+        return incoming_nodes
     }
 }

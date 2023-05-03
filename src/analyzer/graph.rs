@@ -2,6 +2,10 @@ use std::{path::PathBuf, collections::HashMap};
 
 use itertools::Itertools;
 
+pub trait Node {
+    fn incoming<'a>(&'a self, ctx: &'a Graph) -> Vec<&'a dyn Node>;
+    fn outgoing<'a>(&'a self, ctx: &'a Graph) -> Vec<&'a dyn Node>;
+}
 
 
 use super::nodes::MDFile;
@@ -18,16 +22,16 @@ use super::nodes::MDFile;
 // - References for a node
 // - Transform to node suggestions
 
-pub struct Graph {
-    incoming_map: HashMap<PathBuf, Vec<PathBuf>>,
-    outgoing_map: HashMap<PathBuf, Vec<PathBuf>>
+pub struct Graph<'a> {
+    mdfile_incoming_map: HashMap<PathBuf, Vec<&'a MDFile>>,
+    mdfile_outgoing_map: HashMap<PathBuf, Vec<&'a MDFile>>
 }
 
-impl Graph {
-    pub fn new(files: &Vec<MDFile>) -> Graph {
-        let incoming_map: HashMap<PathBuf, Vec<PathBuf>> = files.iter()
+impl<'a> Graph<'a> {
+    pub fn new(files: &HashMap<PathBuf, MDFile>, home_dir: PathBuf) -> Graph {
+        let incoming_map: HashMap<PathBuf, Vec<&MDFile>> = files.values()
             .flat_map(|f| {
-                f.resolved_links().into_iter().map(|path| (path, f.path.to_owned())).collect_vec()
+                f.resolved_links().into_iter().map(|path| (path, f)).collect_vec()
             })
             .into_group_map();
 
@@ -35,21 +39,23 @@ impl Graph {
 
         // println!("{display}");
 
-        let outgoing_map: HashMap<PathBuf, Vec<PathBuf>> = files.iter().map(|f| (f.path.to_owned(), f.resolved_links())).collect();
+        let outgoing_map: HashMap<PathBuf, Vec<&MDFile>> = files.iter()
+            .map(|(p, f)| (p.to_owned(), f.resolved_links().iter().map(|p| files.get(p).unwrap()).collect_vec()))
+            .collect();
 
         return Graph {
-            incoming_map,
-            outgoing_map
+            mdfile_incoming_map: incoming_map,
+            mdfile_outgoing_map: outgoing_map
         }
     }
 
-    pub fn incoming(&self, file: &MDFile) -> Option<&Vec<PathBuf>> {
-        let incoming = self.incoming_map.get(&file.path)?;
+    pub fn incoming(&self, file: &MDFile) -> Option<&Vec<&MDFile>> {
+        let incoming = self.mdfile_incoming_map.get(&file.path)?;
         return Some(incoming)
     }
 
-    pub fn outgoing(&self, file: &MDFile) -> Option<&Vec<PathBuf>> { 
-        let outgoing = self.outgoing_map.get(&file.path)?;
+    pub fn outgoing(&self, file: &MDFile) -> Option<&Vec<&MDFile>> { 
+        let outgoing = self.mdfile_outgoing_map.get(&file.path)?;
         return Some(outgoing)
     }
 }
