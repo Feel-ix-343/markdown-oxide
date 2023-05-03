@@ -2,8 +2,13 @@ use std::path::PathBuf;
 
 use itertools::Itertools;
 
-use super::{markdownparser::MarkdownLinkParser, graph::Node};
+use super::{markdownparser::MarkdownLinkParser, graph::Graph};
 
+pub trait Node {
+    fn incoming<'a>(&'a self, ctx: &'a Graph) -> Vec<&'a dyn Node>;
+    fn outgoing<'a>(&'a self, ctx: &'a Graph) -> Vec<&'a dyn Node>;
+    fn name(&self) -> &str;
+}
 
 #[derive(Debug)]
 pub struct MDFile {

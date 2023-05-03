@@ -1,7 +1,9 @@
 use std::path::PathBuf;
 
-use analyzer::{analyzer::Analyzer, nodes::MDFile, graph::Node};
+use analyzer::{analyzer::Analyzer, nodes::MDFile};
 use itertools::Itertools;
+
+use crate::analyzer::nodes::Node;
 
 mod analyzer;
 mod lsp;
