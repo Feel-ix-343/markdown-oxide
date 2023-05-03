@@ -17,6 +17,7 @@ pub struct MDFile {
 pub struct MDHeading;
 pub struct MDTag;
 
+
 impl<'a> MDFile {
     pub fn new(path: PathBuf, home_dir: PathBuf) -> MDFile {
         let source = std::fs::read(&path).unwrap();
@@ -68,4 +69,8 @@ impl Node for MDFile {
             .collect_vec();
         return incoming_nodes
     }
+
+     fn name(&self) -> &str {
+         return self.title()
+     }
 }

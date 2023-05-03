@@ -5,6 +5,7 @@ use itertools::Itertools;
 pub trait Node {
     fn incoming<'a>(&'a self, ctx: &'a Graph) -> Vec<&'a dyn Node>;
     fn outgoing<'a>(&'a self, ctx: &'a Graph) -> Vec<&'a dyn Node>;
+    fn name(&self) -> &str;
 }
 
 
