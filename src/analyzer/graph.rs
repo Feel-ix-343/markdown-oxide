@@ -1,10 +1,10 @@
 use std::{path::PathBuf, collections::HashMap};
 
 use itertools::Itertools;
-use tree_sitter::{Query, QueryCursor};
-use tree_sitter_md::{MarkdownParser, inline_language};
 
-use super::MDFile;
+
+
+use super::nodes::MDFile;
 
 // NODE: file, headings, tags, ... ... maybe highlighted text, prob different though
 
