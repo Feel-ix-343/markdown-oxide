@@ -14,7 +14,7 @@ use analyzer::*;
 
 fn main() {
     let analyzer = Analyzer::new("/home/felix/Notes");
-    analyzer.calc_incoming();
+    let graph = analyzer.construct_graph();
 }
 
 

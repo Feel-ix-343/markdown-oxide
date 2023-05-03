@@ -4,6 +4,8 @@ use itertools::Itertools;
 use tree_sitter::{Query, QueryCursor};
 use tree_sitter_md::{MarkdownParser, inline_language};
 
+use self::graph::Graph;
+
 pub mod graph;
 
 #[derive(Debug)]
@@ -23,7 +25,7 @@ impl Analyzer {
             .collect_vec()
             .into_iter()
             .filter(|f| f.path().is_file() && f.path().to_str().unwrap().ends_with(".md"))
-            .map(|p| MDFile::new(p, directory.to_owned()))
+            .map(|p| MDFile::new(p.path(), directory.to_owned()))
             .collect();
         
         return Analyzer {
@@ -32,17 +34,9 @@ impl Analyzer {
         };
     }
 
-    pub fn calc_incoming(&self) {
-
-        let incoming_map: HashMap<PathBuf, Vec<&MDFile>> = self.files.iter()
-            .flat_map(|f| {
-                f.resolved_links().into_iter().map(|path| (path, f)).collect_vec()
-            })
-            .into_group_map();
-
-        let display = incoming_map.iter().map(|(k, v)| format!("File: {:?}, incoming {:#?}", k, v.iter().map(|f| f.title()).collect_vec())).join("\n");
-
-        println!("{display}");
+    pub fn construct_graph(&self) -> Graph {
+        let graph = Graph::new(&self.files);
+        return graph
     }
 }
 
@@ -50,7 +44,8 @@ impl Analyzer {
 pub struct MDFile {
     pub path: PathBuf,
     source: Vec<u8>,
-    home_dir: PathBuf
+    home_dir: PathBuf,
+
     // pub title: &'a str, // Could these be functions so that they don't need to be cloned?
     // pub links: Vec<&'a str>, // Could these be functions so that they don't need to be cloned?
 }
@@ -58,8 +53,7 @@ pub struct MDHeading;
 pub struct MDTag;
 
 impl<'a> MDFile {
-    pub fn new(dir_entry: DirEntry, home_dir: PathBuf) -> MDFile {
-        let path = dir_entry.path();
+    pub fn new(path: PathBuf, home_dir: PathBuf) -> MDFile {
         let source = std::fs::read(&path).unwrap();
 
         MDFile {
