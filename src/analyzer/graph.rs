@@ -24,7 +24,7 @@ pub struct Graph<'a> {
 }
 
 impl<'a> Graph<'a> {
-    pub fn new(files: &HashMap<PathBuf, MDFile>, home_dir: PathBuf) -> Graph {
+    pub fn new(files: &HashMap<PathBuf, MDFile>) -> Graph {
         let incoming_map: HashMap<PathBuf, Vec<&MDFile>> = files.values()
             .flat_map(|f| {
                 f.resolved_links().into_iter().map(|path| (path, f)).collect_vec()

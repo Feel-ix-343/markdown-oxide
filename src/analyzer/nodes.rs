@@ -19,8 +19,8 @@ pub struct MDFile {
     // pub title: &'a str, // Could these be functions so that they don't need to be cloned?
     // pub links: Vec<&'a str>, // Could these be functions so that they don't need to be cloned?
 }
-pub struct MDHeading;
-pub struct MDTag;
+// TODO: pub struct MDHeading;
+// TODO: pub struct MDTag;
 
 
 impl<'a> MDFile {

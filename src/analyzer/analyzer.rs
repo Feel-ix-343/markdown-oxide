@@ -9,7 +9,6 @@ use super::{nodes::MDFile, graph::Graph};
 /// The base struct for making calculations on the vault of markdown files. It saves the states of the current directory and a list of all of the files in the vault
 pub struct Analyzer {
     pub files: HashMap<PathBuf, MDFile>,
-    directory: PathBuf,
 }
 
 impl Analyzer {
@@ -29,12 +28,11 @@ impl Analyzer {
         
         return Analyzer {
             files,
-            directory
         };
     }
 
     pub fn construct_graph(&self) -> Graph {
-        let graph = Graph::new(&self.files, self.directory.to_owned());
+        let graph = Graph::new(&self.files);
         return graph
     }
 }
