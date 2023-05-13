@@ -34,8 +34,9 @@ impl MarkdownNodeParser {
         let links: Vec<&str> = inline_trees // There are multiple inline trees
             .iter() // Iterate over each of them
             .flat_map(|tree| {
-                let captures = query_cursor.captures(&query, tree.root_node(), text_provider).collect_vec();
-                return captures.into_iter().flat_map(|(q, _)| q.captures).map(|c| c.node.utf8_text(source_code).unwrap()).collect_vec()
+                query_cursor
+                    .captures(&query, tree.root_node(), text_provider)
+                   .flat_map(|(q, _)| q.captures).map(|c| c.node.utf8_text(source_code).unwrap()).collect_vec()
             }) // Map each tree to its query captures, then flatten all trees to a collection of their query captures
             .collect(); // TODO: I still want to refactor this more
 
