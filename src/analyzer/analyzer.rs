@@ -1,9 +1,10 @@
 use std::{path::{PathBuf, Path}, collections::HashMap};
 
 use itertools::Itertools;
+use rayon::prelude::*;
 
-use super::{nodes::MDFile, graph::Graph};
-
+use super::graph::*;
+use super::nodes::*;
 
 #[derive(Debug)]
 /// The base struct for making calculations on the vault of markdown files. It saves the states of the current directory and a list of all of the files in the vault
@@ -21,7 +22,7 @@ impl Analyzer {
             .unwrap()
             .map(|f| f.unwrap())
             .collect_vec()
-            .into_iter()
+            .par_iter()
             .filter(|f| f.path().is_file() && f.path().to_str().unwrap().ends_with(".md"))
             .map(|p| (p.path().to_owned(), MDFile::new(p.path(), directory.to_owned())))
             .collect();

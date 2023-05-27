@@ -36,7 +36,7 @@ impl MarkdownNodeParser {
             .flat_map(|tree| {
                 query_cursor
                     .captures(&query, tree.root_node(), text_provider)
-                   .flat_map(|(q, _)| q.captures).map(|c| c.node.utf8_text(source_code).unwrap()).collect_vec()
+                    .flat_map(|(q, _)| q.captures).map(|c| c.node.utf8_text(source_code).unwrap()).collect_vec()
             }) // Map each tree to its query captures, then flatten all trees to a collection of their query captures
             .collect(); // TODO: I still want to refactor this more
 
@@ -73,7 +73,7 @@ impl MarkdownNodeParser {
         return text
     }
 
-    pub fn links_for_file<'a>(&mut self, source_code: &'a [u8]) -> Vec<&'a str> {
+    pub fn links_for_source<'a>(&mut self, source_code: &'a [u8]) -> Vec<&'a str> {
         return self.query_matches_inline(source_code, "(link_text) @link;");
     }
 
@@ -81,7 +81,6 @@ impl MarkdownNodeParser {
     pub fn headings_for_file<'a>(&mut self, source_code: &'a [u8]) -> Vec<&'a str> {
         let headings = self.query_matches_block(source_code, "(atx_heading heading_content: (inline) @link);");
         let trimmed_headings = headings.iter().map(|s| s.trim_start()).collect_vec();
-        println!("headings: {:?}", trimmed_headings);
         return trimmed_headings
     }
 }
