@@ -1,40 +1,55 @@
-use std::{path::{PathBuf, Path}, collections::HashMap, fs::{DirEntry, read}, ffi::OsString};
+use std::{path::{PathBuf, Path}, collections::HashMap, fs::{DirEntry, read}, ffi::OsString, ops::Range};
 
 use itertools::Itertools;
+use once_cell::sync::Lazy;
 use rayon::prelude::*;
-use tree_sitter::{Query, QueryCursor, Tree, Language};
-use tree_sitter_md::{MarkdownParser, language, inline_language};
+use regex::Regex;
 
 pub (super) struct Vault {
     pub (super) files: HashMap<String, MDFile>
 }
 
-pub (super) fn get_parsed_vault(vault_dir: &str) -> Result<Vault, std::io::Error> {
-    let dir_path = Path::new(vault_dir).to_owned();
+impl Vault {
+    pub (super) fn new(vault_dir: &str) -> Result<Vault, std::io::Error> {
+        let dir_path = Path::new(vault_dir).to_owned();
 
 
 
-    // The MDFiles by their ref name
-    let md_files: HashMap<String, MDFile> = dir_path
-        .read_dir()?
-        .filter_map(|f| Result::ok(f))
-        .collect_vec()
-        .par_iter()
-        .filter(|f| f.path().extension().and_then(|e| e.to_str()) == Some("md"))
-        .map(|f| {
+        let files = dir_path
+            .read_dir()?
+            .filter_map(|f| Result::ok(f))
+            .collect_vec();
 
-            let md_file = MDFile::new(f.path());
+        let md_files = files.iter()
+            .filter(|f| f.path().extension().and_then(|e| e.to_str()) == Some("md"))
+            .map(|f| {
 
-            let relative_path = f.path().strip_prefix(&dir_path).unwrap().to_owned();
-            let ref_name = relative_path.file_stem().unwrap().to_owned(); // TODO: Make sure that this did not mess up folders
+                let md_file = MDFile::new(f.path().to_str().unwrap()); 
 
-            return (ref_name.to_str().unwrap().to_owned(), md_file)
-        })
-        .collect();
+                let relative_path = f.path().strip_prefix(&dir_path).unwrap().to_owned();
+                let ref_name = relative_path.file_stem().unwrap().to_owned();
 
-    return Ok(Vault { files: md_files })
+                return (ref_name.to_str().unwrap().to_owned(), md_file)
+            })
+            .collect();
 
+
+        return Ok(Vault { files: md_files })
+
+    }
+
+    pub(super) fn get_linking_nodes(&self) -> Vec<&dyn Linking> {
+        return self.files.iter()
+            // .flat_map(|(_, f)| f.paragraphs.iter().map(|p| p as &dyn Linking).chain(f.headings.iter().map(|h| h as &dyn Linking)))
+            .map(|(_, f)| f as &dyn Linking)
+            .collect_vec()
+    }
 }
+
+pub (super) trait Linking {
+    fn get_links(&self) -> &Vec<Link>;
+}
+
 
 
 #[derive(Debug)]
@@ -42,67 +57,117 @@ pub struct MDFile {
     pub path: PathBuf,
     pub source: Vec<u8>,
     pub headings: Vec<MDHeading>,
-    pub paragraphs: Vec<MDParagraph>,
-    pub tags: Vec<MDTag>
+    // pub paragraphs: Vec<MDParagraph>,
+    pub tags: Vec<MDTag>,
+    pub links: Vec<Link>,
+    pub indexed_blocks: Vec<MDIndexedBlock>
 }
 
 impl MDFile {
-    pub fn new(path: PathBuf) -> MDFile {
+    /// Regex parsing the file after reading it from path
+    pub fn new(path: &str) -> MDFile {
+
         let source = read(&path).unwrap();
+        let text = String::from_utf8(source.clone()).unwrap();
 
-        let headings = query_and_links(&path, &source, "(atx_heading heading_content: (inline) @heading);")
-            .into_iter()
-            .map(|(text_match, links)| MDHeading::new(text_match, links))
+        static HEADING_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(#+ (.+))").unwrap());
+        let headings: Vec<MDHeading> = HEADING_RE.captures_iter(&text)
+            .flat_map(|c| c.get(1).and_then(|r| c.get(0).map(|z| (z, r))))
+            .map(|(full_heading, heading_text)| {
+                let links = Link::regex_new(heading_text.as_str(), path);
+                let file_match = Match {
+                    file: path.into(),
+                    text: full_heading.as_str().into(),
+                    start: full_heading.range().start,
+                    end: full_heading.range().end
+                };
+                return MDHeading {
+                    links,
+                    file_match,
+                    heading_text: heading_text.as_str().into()
+                }
+            })
             .collect_vec();
 
-        let paragraphs = query_and_links(&path, &source, "(paragraph (_) @paragraph);")
-            .into_iter()
-            .map(|(text_match, links)| MDParagraph::new(text_match, links))
+        static INDEXED_BLOCK_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(\n|^)(?<paragraph>.+ (?<index>\^\w+))\n").unwrap());
+        let indexed_blocks: Vec<MDIndexedBlock> = INDEXED_BLOCK_RE.captures_iter(&text)
+            .flat_map(|c| c.name("index").and_then(|index| c.name("paragraph").map(|paragraph| (paragraph, index))))
+            .map(|(paragraph, index)|  {
+                MDIndexedBlock {
+                    file_match: 
+                    Match { 
+                        file: path.into(), 
+                        text: paragraph.as_str().into(), 
+                        start: paragraph.range().start,
+                        end: paragraph.range().end 
+                    },
+                    index: index.as_str().into() 
+                }
+            })
+            .collect_vec();
+        println!("File: {:?} indexed_blocks: {:?}", indexed_blocks, path);
+
+
+
+        // let mut ppath = PathBuf::new();
+        // ppath.push(Path::new(path));
+        // let paragraphs = query_and_links(&ppath, &source, "(paragraph (_) @paragraph);")
+        //     .into_iter()
+        //     .map(|(text_match, links)| MDParagraph::new(text_match, links))
+        //     .collect_vec();
+
+        static TAG_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"#([\w\/]+)").unwrap());
+        let tags = TAG_RE.captures_iter(&text)
+            .flat_map(|c| c.get(1))
+            .map(|m| MDTag{
+                tag: m.as_str().into(),
+                file_match: Match { file: path.into(), text: m.as_str().into(), start: m.range().start, end: m.range().end }
+            })
             .collect_vec();
 
-        let tags = query_and_links(&path, &source, "(paragraph (_) @paragraph);")
-            .into_iter()
-            .filter(|(text_match, _)| text_match.text.starts_with("#"))
-            .map(|(text_match, _)| MDTag::new(text_match))
-            .collect_vec();
+
+        let links = Link::regex_new(&text, path);
 
         return MDFile {
-            path,
+            path: path.into(),
             headings,
-            paragraphs,
             source,
-            tags
+            tags,
+            links,
+            indexed_blocks
         };
 
     }
 }
 
+impl Linking for MDFile {
+    fn get_links(&self) -> &Vec<Link> {
+        &self.links
+    }
+}
+
+
 #[derive(Debug, PartialEq)]
 pub struct MDHeading {
     pub heading_text: String,
-    pub resolved_links: Vec<Link>,
+    pub links: Vec<Link>,
     pub file_match: Match
 }
 
 impl MDHeading {
     pub fn new(source_match: Match, links: Vec<Link>) -> MDHeading {
         let heading_text = source_match.text.trim_start().to_owned();
-        return MDHeading { heading_text, resolved_links: links, file_match: source_match }
+        return MDHeading { heading_text, links, file_match: source_match }
     }
 }
 
 
 #[derive(Debug, PartialEq)]
-pub struct MDParagraph {
-    pub resolved_links: Vec<Link>,
-    pub file_match: Match
+pub struct MDIndexedBlock {
+    pub file_match: Match,
+    pub index: String
 }
 
-impl MDParagraph {
-    pub fn new(source_match: Match, links: Vec<Link>) -> MDParagraph {
-        MDParagraph { resolved_links: links, file_match: source_match }
-    }
-}
 
 #[derive(Debug, PartialEq)]
 pub struct MDTag {
@@ -120,12 +185,21 @@ impl MDTag {
     }
 }
 
+impl Linkable for MDTag {
+    fn get_range(&self) -> (&usize, &usize) {
+        (&self.file_match.start, &self.file_match.end)
+    }
+    fn get_link_ref_name(&self) -> &String {
+        &self.tag
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct Match {
     pub file: PathBuf,
     pub text: String,
-    pub start: (usize, usize),
-    pub end: (usize, usize)
+    pub start: usize,
+    pub end: usize
 }
 
 #[derive(Debug, PartialEq)]
@@ -141,94 +215,30 @@ impl Link {
             link_match,
         }
     }
+    fn regex_new(text: &str, path: &str) -> Vec<Link> {
+        static LINK_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\[\[([.[^\[\]]]+)\]\]").unwrap()); // Add support for []() quotes
+        return LINK_RE.captures_iter(text)
+            .map(|c| c.get(1).unwrap())
+            .map(|m| Link {
+                link_ref: String::from(m.as_str()), 
+                link_match: Match { 
+                    file: path.into(), 
+                    text: String::from(m.as_str()), 
+                    start: m.range().start, 
+                    end: m.range().end
+                }
+            })
+            .collect_vec();
+    }
 }
 
-pub fn query_and_links<'a>(file: &PathBuf, source_code: &'a [u8], query: &str) -> Vec<(Match, Vec<Link>)> {
-
-    let query_matches: Vec<Match> = query_matches_block(file, &source_code, query);
-
-    query_matches.into_iter()
-        .map( |m| {
-            // get the match text as an array of u8
-            let match_text = m.text.as_bytes();
-            let link_matches = query_matches_inline(&file, &match_text, "(link_text) @link;");
-
-            let links: Vec<Link> = link_matches.into_iter()
-                .map(Link::new)
-                .collect_vec();
-
-            return (m, links);
-        })
-        .collect_vec()
+impl Linking for MDHeading {
+    fn get_links(&self) -> &Vec<Link> {
+        &self.links
+    }
 }
 
-fn query_matches_block<'a>(file: &PathBuf, source_code: &'a [u8], query: &str) -> Vec<Match> {
-    let mut parser = MarkdownParser::default();
-
-    let tree = parser.parse(source_code, None).unwrap();
-    // let language = language();
-    let language = language();
-
-    let block_tree = tree.block_tree();
-
-    // Finding links in the files
-
-    let mut query_cursor = QueryCursor::new();
-    let text_provider: &[u8] = &[];
-
-    let matches = tree_matches(&file, block_tree, language, query, source_code);
-
-    // wow what a bad bug! Don't do this! All of the matches will have the ranges
-    // let matches = query_cursor.matches(&query, block_tree.root_node(), text_provider).collect_vec();
-    // println!("matches: {:?}", matches);
-
-    return matches
+pub (super) trait Linkable {
+    fn get_range(&self) -> (&usize, &usize);
+    fn get_link_ref_name(&self) -> &String;
 }
-
-fn query_matches_inline<'a>(file: &PathBuf, source_code: &'a [u8], query: &str) -> Vec<Match> {
-    let mut parser = MarkdownParser::default();
-
-    let tree = parser.parse(source_code, None).unwrap();
-    // let language = language();
-    let language = inline_language();
-
-    let inline_trees = tree.inline_trees();
-
-    // Finding links in the files
-
-    let mut query_cursor = QueryCursor::new();
-    let text_provider: &[u8] = &[];
-
-    let matches = inline_trees.into_iter()
-        .flat_map(|tree| {
-            tree_matches(file, tree, language, query, source_code)
-        })
-        .collect_vec();
-
-
-    // wow what a bad bug! Don't do this! All of the matches will have the ranges
-    // let matches = query_cursor.matches(&query, block_tree.root_node(), text_provider).collect_vec();
-    // println!("matches: {:?}", matches);
-
-    return matches
-}
-
-fn tree_matches(file: &PathBuf, tree: &Tree, language: Language, query: &str, source_code: &[u8]) -> Vec<Match> {
-    let query = Query::new(language, query).unwrap();
-    let text_provider: &[u8] = &[];
-    let mut query_cursor = QueryCursor::new();
-
-    return query_cursor
-        .matches(&query, tree.root_node(), text_provider)
-        .flat_map(|m| m.captures)
-        .map(|c| {
-            Match {
-                file: file.to_path_buf(),
-                text: c.node.utf8_text(source_code).unwrap().to_owned(),
-                start: (c.node.start_position().column, c.node.start_position().row),
-                end: (c.node.end_position().column, c.node.end_position().row),
-            }
-        })
-        .collect_vec();
-}
-

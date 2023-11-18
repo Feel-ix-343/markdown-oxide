@@ -34,7 +34,7 @@ fn main() {
     println!("References: File: Obsidian Text Link Suggestions {:#?}", a.file_incoming("Obsidian Text Link Suggestions"));
     println!("References: File: Practice Reflections.md {:#?}", a.file_incoming("Practice Reflections"));
     println!("References: Heading: cons in Practice Reflections {:#?}", a.heading_incoming("Practice Reflections", "cons"));
-    println!("References: Tag: #MapOfContent/apworld: {:#?}", a.tags_incoming("MapOfContent/apworld"));
+    println!("References: Tag: #MapOfContent/apworld: {:#?}", a.tags_incoming("MapOfContent/aplit"));
 
     // let analyzer = Analyzer::new("/home/felix/Notes");
     // let graph = analyzer.construct_graph();
