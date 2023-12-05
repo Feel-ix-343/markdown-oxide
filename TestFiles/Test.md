@@ -15,4 +15,4 @@
 
 # Heading 1 2
 
-[[Another test]]
+[[Another Test]]
