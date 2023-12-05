@@ -397,7 +397,7 @@ more text
 
         let vault = construct_vault(&root_dir).unwrap();
 
-        let position = Position {line: 2, character: 0};
+        let position = Position {line: 5, character: 2};
         let mut path = root_dir.clone();
         path.push("A third test.md");
         let result = goto_definition(&vault, position, &path);
