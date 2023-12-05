@@ -116,8 +116,8 @@ fn range_to_position(rope: &Rope, range: Range<usize>) -> tower_lsp::lsp_types::
     let string = rope.to_string();
 
     // convert from byte offset to char offset
-    let char_start = rope.to_string()[..range.start].chars().count();
-    let char_end = char_start + rope.to_string()[range.start..range.end].chars().count();
+    let char_start = rope.byte_to_char(range.start);
+    let char_end = rope.byte_to_char(range.end);
 
 
     let start_line = rope.char_to_line(char_start);
