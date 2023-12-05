@@ -15,8 +15,6 @@ pub fn goto_definition<'a>(vault: &'a Vault, cursor_position: Position, path: &'
     )?;
     let reference_text = &cursors_link.reference_text;
 
-    println!("Reference text: {}", reference_text);
-
     // Now we have the reference text. We need to find where this is actually referencing, or if it is referencing anything.
     // Lets get all of the linkable nodes
 
