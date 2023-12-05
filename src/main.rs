@@ -7,7 +7,7 @@ use gotodef::goto_definition;
 use tower_lsp::jsonrpc::{Result, Error, ErrorCode};
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
-use vault::{Vault, construct_vault};
+use vault::{Vault, construct_vault, reconstruct_vault};
 
 mod vault;
 mod gotodef;
@@ -59,6 +59,20 @@ impl LanguageServer for Backend {
         self.client
             .log_message(MessageType::INFO, "Obsidian_ls initialized")
             .await;
+    }
+
+    async fn did_change(&self, params: DidChangeTextDocumentParams) {
+        let Some(ref mut vault) = *self.vault.write().await else {
+            self.client.log_message(MessageType::ERROR, "Vault is not initialized").await;
+            return;
+        };
+
+        let Ok(path) = params.text_document.uri.to_file_path() else {
+            self.client.log_message(MessageType::ERROR, "Failed to parse URI path").await;
+            return;
+        };
+        let text = &params.content_changes[0].text;
+        reconstruct_vault(vault, (&path, text));
     }
 
     async fn goto_definition(

@@ -32,6 +32,16 @@ pub fn construct_vault(root_dir: &Path) -> Result<Vault, std::io::Error> {
     })
 }
 
+pub fn reconstruct_vault(old: &mut Vault, new_file: (&Path, &str)) {
+    let new_md_file = parse_obsidian_md(&Rope::from_str(new_file.1));
+    let new = old.files.get_mut(new_file.0);
+
+    match new {
+        Some(file) => { *file = new_md_file; }
+        None => { old.files.insert(new_file.0.into(), new_md_file); }
+    };
+}
+
 fn parse_obsidian_md(rope: &Rope) -> MDFile {
 
     let links = parse_obsidian_links(rope);
