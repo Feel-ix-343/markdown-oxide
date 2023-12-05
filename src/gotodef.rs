@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use tower_lsp::lsp_types::{Position, Range, Url, Location};
+use tower_lsp::lsp_types::{Position, Url, Location};
 
 use crate::vault::Vault;
 

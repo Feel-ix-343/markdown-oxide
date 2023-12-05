@@ -5,7 +5,7 @@ use once_cell::sync::Lazy;
 use pathdiff::diff_paths;
 use regex::Regex;
 use ropey::Rope;
-use tower_lsp::lsp_types::{Position};
+use tower_lsp::lsp_types::Position;
 
 pub fn construct_vault(root_dir: &Path) -> Result<Vault, std::io::Error> {
 
@@ -53,7 +53,7 @@ fn parse_obsidian_md(rope: &Rope) -> MDFile {
 
 fn parse_obsidian_links(rope: &Rope) -> Vec<Link> {
     static LINK_RE: Lazy<Regex> = Lazy::new(|| 
-        Regex::new(r"\[\[(?<referencetext>[.[^\[\]\|]]+)(\|(?<display>[.[^\[\]]]+))?\]\]").unwrap()
+        Regex::new(r"\[\[(?<referencetext>[.[^\[\]\|]]+)(\|(?<display>[.[^\[\]|]]+))?\]\]").unwrap()
     ); // A [[link]] that does not have any [ or ] in it
 
     let links: Vec<Link> = LINK_RE.captures_iter(&rope.to_string())
@@ -114,8 +114,6 @@ fn parse_obsidian_indexed_blocks(rope: &Rope) -> Vec<MDIndexedBlock> {
 } // Make this better identify the full blocks
 
 fn range_to_position(rope: &Rope, range: Range<usize>) -> tower_lsp::lsp_types::Range {
-    let string = rope.to_string();
-
     // convert from byte offset to char offset
     let char_start = rope.byte_to_char(range.start);
     let char_end = rope.byte_to_char(range.end);
@@ -209,7 +207,7 @@ impl Vault {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-struct MDFile {
+pub struct MDFile {
     links: Vec<Link>,
     headings: Vec<MDHeading>,
     indexed_blocks: Vec<MDIndexedBlock>
@@ -223,13 +221,13 @@ pub struct Link {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-struct MDHeading {
+pub struct MDHeading {
     heading_text: String,
     range: tower_lsp::lsp_types::Range
 }
 
 #[derive(Debug, PartialEq, Eq)]
-struct MDIndexedBlock {
+pub struct MDIndexedBlock {
     index: String,
     range: tower_lsp::lsp_types::Range
 }
@@ -427,7 +425,7 @@ more text
         root_dir.push("TestFiles");
 
         match construct_vault(&root_dir) {
-            Ok(v) => (),
+            Ok(_) => (),
             Err(e) => panic!("{}", e)
         }
     }
