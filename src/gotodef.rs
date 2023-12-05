@@ -4,7 +4,7 @@ use tower_lsp::lsp_types::{Position, Url, Location};
 
 use crate::vault::Vault;
 
-pub fn goto_definition<'a>(vault: &'a Vault, cursor_position: Position, path: &'a Path) -> Option<Location> {
+pub fn goto_definition(vault: &Vault, cursor_position: Position, path: &Path) -> Option<Location> {
     // First, find the link that the cursor is in. Get a links for the file and match the cursor position up to one of them
     let links = vault.select_links_in_file(&path)?;
     let cursors_link = links.iter().find(|&l| 
