@@ -53,18 +53,19 @@ fn parse_obsidian_md(rope: &Rope) -> MDFile {
 
 fn parse_obsidian_links(rope: &Rope) -> Vec<Link> {
     static LINK_RE: Lazy<Regex> = Lazy::new(|| 
-        Regex::new(r"\[\[(?<referencetext>[.[^\[\]]]+)\]\]").unwrap()
+        Regex::new(r"\[\[(?<referencetext>[.[^\[\]\|]]+)(\|(?<display>[.[^\[\]]]+))?\]\]").unwrap()
     ); // A [[link]] that does not have any [ or ] in it
 
     let links: Vec<Link> = LINK_RE.captures_iter(&rope.to_string())
-        .flat_map(|capture| match (capture.get(0), capture.name("referencetext")) {
-            (Some(full), Some(reference_text)) => Some((full, reference_text)),
+        .flat_map(|capture| match (capture.get(0), capture.name("referencetext"), capture.name("display")) {
+            (Some(full), Some(reference_text), display) => Some((full, reference_text, display)),
             _ => None
         })
-        .map(|(outer, re_match)| {
+        .map(|(outer, re_match, display)| {
         Link {
             reference_text: re_match.as_str().into(),
-            range: range_to_position(rope, outer.range())
+            range: range_to_position(rope, outer.range()),
+            display_text: display.map(|d| d.as_str().into())
         }})
         .collect_vec();
 
@@ -214,9 +215,10 @@ struct MDFile {
     indexed_blocks: Vec<MDIndexedBlock>
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Default)]
 pub struct Link {
     pub reference_text: String,
+    pub display_text: Option<String>,
     pub range: tower_lsp::lsp_types::Range
 }
 
@@ -252,15 +254,44 @@ mod vault_tests {
         let expected = vec![
             Link {
             reference_text: "link".into(),
-            range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 0, character: 10 }, end: tower_lsp::lsp_types::Position { line: 0, character: 18 } }
+            range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 0, character: 10 }, end: tower_lsp::lsp_types::Position { line: 0, character: 18 } },
+            ..Link::default()
             },
             Link {
             reference_text: "link 2".into(),
-            range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 0, character: 19 }, end: tower_lsp::lsp_types::Position { line: 0, character: 29} }
+            range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 0, character: 19 }, end: tower_lsp::lsp_types::Position { line: 0, character: 29} },
+            ..Link::default()
             },
             Link {
             reference_text: "link 3".into(),
-            range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 1, character: 0 }, end: tower_lsp::lsp_types::Position { line: 1, character: 10 } }
+            range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 1, character: 0 }, end: tower_lsp::lsp_types::Position { line: 1, character: 10 } },
+            ..Link::default()
+            }
+        ];
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn link_parsin_with_display_text() {
+        let text = "This is a [[link|but called different]] [[link 2|222]]\n[[link 3|333]]";
+        let parsed = parse_obsidian_links(&Rope::from_str(text));
+
+        let expected = vec![
+            Link {
+            reference_text: "link".into(),
+            range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 0, character: 10 }, end: tower_lsp::lsp_types::Position { line: 0, character: 39 } },
+            display_text: Some("but called different".into()),
+            },
+            Link {
+            reference_text: "link 2".into(),
+            range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 0, character: 40 }, end: tower_lsp::lsp_types::Position { line: 0, character: 54} },
+            display_text: Some("222".into()),
+            },
+            Link {
+            reference_text: "link 3".into(),
+            range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 1, character: 0 }, end: tower_lsp::lsp_types::Position { line: 1, character: 14 } },
+            display_text: Some("333".into()),
             }
         ];
 
@@ -371,15 +402,18 @@ more text
         let expected = vec![
             Link {
             reference_text: "link".into(),
-            range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 0, character: 10 }, end: tower_lsp::lsp_types::Position { line: 0, character: 18 } }
+            range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 0, character: 10 }, end: tower_lsp::lsp_types::Position { line: 0, character: 18 } },
+            ..Link::default()
             },
             Link {
             reference_text: "link 2".into(),
-            range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 0, character: 19 }, end: tower_lsp::lsp_types::Position { line: 0, character: 29} }
+            range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 0, character: 19 }, end: tower_lsp::lsp_types::Position { line: 0, character: 29} },
+            ..Link::default()
             },
             Link {
             reference_text: "link 3".into(),
-            range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 1, character: 0 }, end: tower_lsp::lsp_types::Position { line: 1, character: 10 } }
+            range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 1, character: 0 }, end: tower_lsp::lsp_types::Position { line: 1, character: 10 } },
+            ..Link::default()
             }
         ];
 
