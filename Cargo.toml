@@ -17,3 +17,4 @@ tokio = { version="1.34.0", features=["full"]}
 tower-lsp = "0.20.0"
 tree-sitter = "0.20.10"
 tree-sitter-md = "0.1.5"
+walkdir = "2.4.0"

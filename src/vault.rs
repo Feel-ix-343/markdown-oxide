@@ -6,14 +6,14 @@ use pathdiff::diff_paths;
 use regex::Regex;
 use ropey::Rope;
 use tower_lsp::lsp_types::Position;
+use walkdir::WalkDir;
 
 pub fn construct_vault(root_dir: &Path) -> Result<Vault, std::io::Error> {
 
-    let md_file_paths = root_dir
-        .read_dir()?
+    let md_file_paths = WalkDir::new(root_dir)
+        .into_iter()
         .filter_map(|f| Result::ok(f))
-        .filter(|f| f.path().extension().and_then(|e| e.to_str()) == Some("md"))
-        .collect_vec();
+        .filter(|f| f.path().extension().and_then(|e| e.to_str()) == Some("md"));
 
     let md_files: HashMap<PathBuf, MDFile> = md_file_paths
         .into_iter()
@@ -22,7 +22,7 @@ pub fn construct_vault(root_dir: &Path) -> Result<Vault, std::io::Error> {
             let rope = Rope::from_str(&text);
             let md_file = parse_obsidian_md(&rope);
 
-            return Ok::<(PathBuf, MDFile), std::io::Error>((p.path(), md_file))
+            return Ok::<(PathBuf, MDFile), std::io::Error>((p.path().into(), md_file))
         })
         .collect();
 
