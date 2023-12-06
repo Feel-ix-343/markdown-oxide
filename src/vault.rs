@@ -141,6 +141,7 @@ pub struct Vault {
     root_dir: PathBuf,
 }
 
+#[derive(Debug)]
 /// Linkable algebreic type that easily allows for new linkable nodes to be added if necessary and everything in it should live the same amount because it is all from vault
 /// These will also use the current obsidian syntax to come up with reference names for the linkables. These are the things that are using in links ([[Refname]])
 pub enum Linkable<'a> {
@@ -181,7 +182,7 @@ impl Linkable<'_> {
 
 impl Vault {
     /// Select all links ([[Link]]) in a file
-    pub fn select_links(&self, path: Option<&Path>) -> Option<Vec<(&Path, &Link)>> {
+    pub fn select_links<'a>(&'a self, path: Option<&'a Path>) -> Option<Vec<(&'a Path, &'a Link)>> {
         match path {
             Some(path) => self.files.get(path).map(|md| &md.links).map(|vec| vec.iter().map(|i| (path, i)).collect()),
             None => Some(self.files.iter().map(|(path, md)| md.links.iter().map(|link| (path.as_path(), link))).flatten().collect())
@@ -205,6 +206,22 @@ impl Vault {
         return files.into_iter().chain(headings).into_iter().chain(indexed_blocks).collect()
     }
 
+    pub fn select_linkable_nodes_for_path<'a>(&'a self, path: &'a PathBuf) -> Vec<Linkable<'a>> {
+        let files = self.files.get(path);
+        let file_linkables = files.iter()
+            .map(|md| Linkable::MDFile(path, md));
+
+        let headings = self.files.iter()
+            .flat_map(|(path, md)| md.headings.iter())
+            .map(|h| Linkable::Heading(path, h));
+
+        let indexed_blocks = self.files.iter()
+            .flat_map(|(path, md)| md.indexed_blocks.iter())
+            .map(|ib| Linkable::IndexedBlock(path, ib));
+
+        return file_linkables.into_iter().chain(headings).into_iter().chain(indexed_blocks).collect()
+    }
+
     pub fn root_dir(&self) -> &PathBuf {
         &self.root_dir
     }
@@ -217,7 +234,7 @@ pub struct MDFile {
     indexed_blocks: Vec<MDIndexedBlock>
 }
 
-#[derive(Debug, PartialEq, Eq, Default)]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct Link {
     pub reference_text: String,
     pub display_text: Option<String>,

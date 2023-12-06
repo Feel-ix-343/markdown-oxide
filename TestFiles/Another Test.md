@@ -10,3 +10,5 @@ This file is popppinnng, 2 links to it.
 [[Completion]]
 
 [[folder/File]]
+
+[[Test#Heading 1 2]]

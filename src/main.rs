@@ -1,6 +1,7 @@
 use std::ops::Deref;
 use std::path::Path;
 
+use references::references;
 use tokio::sync::RwLock;
 
 use gotodef::goto_definition;
@@ -11,6 +12,7 @@ use vault::{Vault, construct_vault, reconstruct_vault};
 
 mod vault;
 mod gotodef;
+mod references;
 
 
 #[derive(Debug)]
@@ -100,6 +102,27 @@ impl LanguageServer for Backend {
         self.client.log_message(MessageType::INFO, format!("Result {:?}", result)).await;
 
         return Ok(result.map(|l| GotoDefinitionResponse::Scalar(l)))
+    }
+
+
+    async fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>> {
+        let position = params.text_document_position.position;
+
+        let vault_option = self.vault.read().await;
+        let Some(vault) = vault_option.deref() else {
+            self.client.log_message(MessageType::ERROR, "Vault is not initialized").await;
+            return Err(Error::new(ErrorCode::ServerError(0)));
+        };
+        let Ok(path) = params.text_document_position.text_document.uri.to_file_path() else {
+            self.client.log_message(MessageType::ERROR, "Failed to parse URI path").await;
+            return Err(Error::new(ErrorCode::ServerError(0)));
+        };
+        self.client.log_message(MessageType::INFO, format!( "Path: {:?}", path )).await;
+
+        let locations = references(vault, position, &path);
+        // log locations
+        self.client.log_message(MessageType::INFO, format!("Result {:?}", locations)).await;
+        Ok(locations)
     }
 
     async fn shutdown(&self) -> Result<()> {
