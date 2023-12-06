@@ -173,7 +173,7 @@ impl Linkable<'_> {
 
     pub fn get_range(&self) -> tower_lsp::lsp_types::Range {
         match self {
-            &Linkable::MDFile(_, _) => tower_lsp::lsp_types::Range { start: Position { line: 0, character: 0 }, end: Position { line: 0, character: 1 } },
+            &Linkable::MDFile(_, _) => tower_lsp::lsp_types::Range { start: Position { line: 0, character: 0 }, end: Position { line: 0, character: u32::MAX} },
             &Linkable::Heading(_, heading) => heading.range,
             &Linkable::IndexedBlock(_, indexed_block) => indexed_block.range
         }
@@ -471,7 +471,7 @@ more text
             uri: Url::from_file_path(result_path.to_str().unwrap()).unwrap(),
             range: Range { 
             start: Position { line: 0, character: 0 }, 
-            end: Position { line: 0, character: 1 }
+            end: Position { line: 0, character: u32::MAX }
             }
         });
         assert_eq!(result, proper);
