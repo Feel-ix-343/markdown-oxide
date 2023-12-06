@@ -3,7 +3,7 @@ use std::path::Path;
 use itertools::Itertools;
 use tower_lsp::lsp_types::{Position, Location, Url};
 
-use crate::vault::Vault;
+use crate::vault::{Vault, Linkable};
 
 pub fn references(vault: &Vault, cursor_position: Position, path: &Path) -> Option<Vec<Location>> {
     // First we need to get the linkable node under the cursor
@@ -18,20 +18,25 @@ pub fn references(vault: &Vault, cursor_position: Position, path: &Path) -> Opti
             l.get_range().end.character >= cursor_position.character
         )?;
 
-    println!("Linkable: {:?}", linkable);
-
-    let reference_text = linkable.get_refname(&vault.root_dir())?;
 
     let references = vault.select_links(None)?;
-    let locations = references.into_iter()
-        .filter(|&r| r.1.reference_text == reference_text)
+    let locations = |reference_text| references.iter()
+        .filter(move |r| r.1.reference_text == reference_text)
         .map(|link| Url::from_file_path(link.0).map(|good| Location {uri: good, range: link.1.range}))
         .flat_map(|l| match l.is_ok() {
             true => Some(l),
             false => None
         })
-        .flatten()
-        .collect_vec();
+        .flatten();
 
-    Some(locations)
+    return match linkable {
+        file @ Linkable::MDFile(path, md) => {
+            return Some(linkable_nodes.iter()
+                .filter_map(|linkable| linkable.get_refname(vault.root_dir()))
+                .map(|refname| locations(refname))
+                .flatten()
+                .collect())
+        }
+        linkable @ _ => linkable.get_refname(vault.root_dir()).and_then(|r| Some(locations(r).collect()))
+    }
 }
