@@ -8,12 +8,12 @@ pub fn goto_definition(vault: &Vault, cursor_position: Position, path: &Path) ->
     // First, find the link that the cursor is in. Get a links for the file and match the cursor position up to one of them
     let links = vault.select_links(Some(&path))?;
     let cursors_link = links.iter().find(|&l| 
-        l.range.start.line <= cursor_position.line && 
-        l.range.end.line >= cursor_position.line && 
-        l.range.start.character <= cursor_position.character &&
-        l.range.end.character >= cursor_position.character
+        l.1.range.start.line <= cursor_position.line && 
+        l.1.range.end.line >= cursor_position.line && 
+        l.1.range.start.character <= cursor_position.character &&
+        l.1.range.end.character >= cursor_position.character
     )?;
-    let reference_text = &cursors_link.reference_text;
+    let reference_text = &cursors_link.1.reference_text;
 
     // Now we have the reference text. We need to find where this is actually referencing, or if it is referencing anything.
     // Lets get all of the linkable nodes

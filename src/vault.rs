@@ -181,10 +181,10 @@ impl Linkable<'_> {
 
 impl Vault {
     /// Select all links ([[Link]]) in a file
-    pub fn select_links(&self, path: Option<&Path>) -> Option<Vec<&Link>> {
+    pub fn select_links(&self, path: Option<&Path>) -> Option<Vec<(&Path, &Link)>> {
         match path {
-            Some(path) => self.files.get(path).map(|md| &md.links).map(|vec| vec.iter().collect()),
-            None => Some(self.files.values().flat_map(|md| &md.links).collect())
+            Some(path) => self.files.get(path).map(|md| &md.links).map(|vec| vec.iter().map(|i| (path, i)).collect()),
+            None => Some(self.files.iter().map(|(path, md)| md.links.iter().map(|link| (path.as_path(), link))).flatten().collect())
         }
         
     } // TODO: less cloning?
