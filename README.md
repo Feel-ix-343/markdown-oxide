@@ -17,7 +17,8 @@ configs["obsidian_ls"] = {
 default_config = {
   root_dir = function() return vim.fn.getcwd() end,
   filetypes = {"markdown"},
-  cmd = {"{path}"} -- replace {path} with the path to the --release build. It will be {where ever you cloned from}/obsidian-ls/target/release/obsidian-ls
+  cmd = {"{path}"} -- replace {path} with the path to the --release build. 
+  -- {path} will be {where ever you cloned from}/obsidian-ls/target/release/obsidian-ls
 },
 on_attach = on_attach, -- do this only if you have an on_attach function already
 capabilities = capabilities, -- add the nvim cmp capabilities if using it
