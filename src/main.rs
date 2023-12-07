@@ -94,7 +94,7 @@ impl LanguageServer for Backend {
         let result = goto_definition(&vault, position, &path);
 
 
-        return Ok(result.map(|l| GotoDefinitionResponse::Scalar(l)))
+        return Ok(result.map(|l| GotoDefinitionResponse::Array(l)))
     }
 
 

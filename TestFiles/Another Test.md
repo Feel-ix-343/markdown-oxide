@@ -18,3 +18,6 @@ This file is popppinnng, 2 links to it.
 [[folder/File#Heading]]
 [[Test#Heading 1 2]]
 [[Test#Heading 1 2]]
+
+#tag
+
