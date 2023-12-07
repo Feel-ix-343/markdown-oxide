@@ -8,7 +8,7 @@ use crate::vault::{Vault, Linkable};
 pub fn references(vault: &Vault, cursor_position: Position, path: &Path) -> Option<Vec<Location>> {
     // First we need to get the linkable node under the cursor
     let path = path.to_path_buf();
-    let linkable_nodes = vault.select_linkable_nodes_for_path(&path);
+    let linkable_nodes = vault.select_linkable_nodes_for_path(&path)?;
     let linkable = linkable_nodes
         .iter()
         .find(|&l| 
@@ -30,13 +30,13 @@ pub fn references(vault: &Vault, cursor_position: Position, path: &Path) -> Opti
         .flatten();
 
     return match linkable {
-        file @ Linkable::MDFile(path, md) => {
+        Linkable::MDFile(path, md) => {
             return Some(linkable_nodes.iter()
                 .filter_map(|linkable| linkable.get_refname(vault.root_dir()))
                 .map(|refname| locations(refname))
                 .flatten()
                 .collect())
         }
-        linkable @ _ => linkable.get_refname(vault.root_dir()).and_then(|r| Some(locations(r).collect()))
+        _ => linkable.get_refname(vault.root_dir()).and_then(|r| Some(locations(r).collect()))
     }
 }

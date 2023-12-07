@@ -19,8 +19,7 @@ pub fn construct_vault(root_dir: &Path) -> Result<Vault, std::io::Error> {
         .into_iter()
         .flat_map(|p| {
             let text = std::fs::read_to_string(p.path())?;
-            let rope = Rope::from_str(&text);
-            let md_file = parse_obsidian_md(&rope);
+            let md_file = parse_obsidian_md(&text);
 
             return Ok::<(PathBuf, MDFile), std::io::Error>((p.path().into(), md_file))
         })
@@ -33,7 +32,7 @@ pub fn construct_vault(root_dir: &Path) -> Result<Vault, std::io::Error> {
 }
 
 pub fn reconstruct_vault(old: &mut Vault, new_file: (&Path, &str)) {
-    let new_md_file = parse_obsidian_md(&Rope::from_str(new_file.1));
+    let new_md_file = parse_obsidian_md(new_file.1);
     let new = old.files.get_mut(new_file.0);
 
     match new {
@@ -42,21 +41,21 @@ pub fn reconstruct_vault(old: &mut Vault, new_file: (&Path, &str)) {
     };
 }
 
-fn parse_obsidian_md(rope: &Rope) -> MDFile {
+fn parse_obsidian_md(text: &str) -> MDFile {
 
-    let links = parse_obsidian_links(rope);
-    let headings = parse_obsidian_headings(rope);
-    let indexed_blocks = parse_obsidian_indexed_blocks(rope);
+    let links = parse_obsidian_links(text);
+    let headings = parse_obsidian_headings(text);
+    let indexed_blocks = parse_obsidian_indexed_blocks(text);
 
     return MDFile { links, headings, indexed_blocks }
 }
 
-fn parse_obsidian_links(rope: &Rope) -> Vec<Link> {
+fn parse_obsidian_links(text: &str) -> Vec<Link> {
     static LINK_RE: Lazy<Regex> = Lazy::new(|| 
         Regex::new(r"\[\[(?<referencetext>[.[^\[\]\|]]+)(\|(?<display>[.[^\[\]|]]+))?\]\]").unwrap()
     ); // A [[link]] that does not have any [ or ] in it
 
-    let links: Vec<Link> = LINK_RE.captures_iter(&rope.to_string())
+    let links: Vec<Link> = LINK_RE.captures_iter(text)
         .flat_map(|capture| match (capture.get(0), capture.name("referencetext"), capture.name("display")) {
             (Some(full), Some(reference_text), display) => Some((full, reference_text, display)),
             _ => None
@@ -64,7 +63,7 @@ fn parse_obsidian_links(rope: &Rope) -> Vec<Link> {
         .map(|(outer, re_match, display)| {
         Link {
             reference_text: re_match.as_str().into(),
-            range: range_to_position(rope, outer.range()),
+            range: range_to_position(&Rope::from_str(text), outer.range()),
             display_text: display.map(|d| d.as_str().into())
         }})
         .collect_vec();
@@ -72,12 +71,12 @@ fn parse_obsidian_links(rope: &Rope) -> Vec<Link> {
     return links
 }
 
-fn parse_obsidian_headings(rope: &Rope) -> Vec<MDHeading> {
+fn parse_obsidian_headings(text: &str) -> Vec<MDHeading> {
 
-    static HEADING_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"#+ (.+)").unwrap());
+    static HEADING_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"#+ (?<heading_text>.+)").unwrap());
 
-    let headings: Vec<MDHeading> = HEADING_RE.captures_iter(&rope.to_string())
-        .flat_map(|c| match (c.get(0), c.get(1)) {
+    let headings: Vec<MDHeading> = HEADING_RE.captures_iter(text)
+        .flat_map(|c| match (c.get(0), c.name("heading_text")) {
             (Some(full), Some(text)) => Some((full, text)),
             _ => None
         })
@@ -85,7 +84,7 @@ fn parse_obsidian_headings(rope: &Rope) -> Vec<MDHeading> {
 
             return MDHeading {
                 heading_text: heading_match.as_str().into(),
-                range: range_to_position(rope, full_heading.range())
+                range: range_to_position(&Rope::from_str(text), full_heading.range())
             }
         })
         .collect_vec();
@@ -93,11 +92,11 @@ fn parse_obsidian_headings(rope: &Rope) -> Vec<MDHeading> {
     return headings
 }
 
-fn parse_obsidian_indexed_blocks(rope: &Rope) -> Vec<MDIndexedBlock> {
+fn parse_obsidian_indexed_blocks(text: &str) -> Vec<MDIndexedBlock> {
 
     static INDEXED_BLOCK_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r".+(\^(?<index>\w+))").unwrap());
 
-    let indexed_blocks: Vec<MDIndexedBlock> = INDEXED_BLOCK_RE.captures_iter(&rope.to_string())
+    let indexed_blocks: Vec<MDIndexedBlock> = INDEXED_BLOCK_RE.captures_iter(&text.to_string())
         .flat_map(|c| match (c.get(1), c.name("index")) {
             (Some(full), Some(index)) => Some((full, index)),
             _ => None
@@ -105,7 +104,7 @@ fn parse_obsidian_indexed_blocks(rope: &Rope) -> Vec<MDIndexedBlock> {
         .map(|(full, index)|  {
             MDIndexedBlock {
                 index: index.as_str().into(),
-                range: range_to_position(rope, full.range())
+                range: range_to_position(&Rope::from_str(text), full.range())
             }
         })
         .collect_vec();
@@ -206,20 +205,15 @@ impl Vault {
         return files.into_iter().chain(headings).into_iter().chain(indexed_blocks).collect()
     }
 
-    pub fn select_linkable_nodes_for_path<'a>(&'a self, path: &'a PathBuf) -> Vec<Linkable<'a>> {
-        let files = self.files.get(path);
-        let file_linkables = files.iter()
-            .map(|md| Linkable::MDFile(path, md));
+    pub fn select_linkable_nodes_for_path<'a>(&'a self, path: &'a PathBuf) -> Option< Vec<Linkable<'a>> > {
+        let file = self.files.get(path)?;
+        let file_linkable = Linkable::MDFile(path, file);
 
-        let headings = self.files.iter()
-            .flat_map(|(path, md)| md.headings.iter())
-            .map(|h| Linkable::Heading(path, h));
+        let headings = file.headings.iter().map(|h| Linkable::Heading(path, h));
 
-        let indexed_blocks = self.files.iter()
-            .flat_map(|(path, md)| md.indexed_blocks.iter())
-            .map(|ib| Linkable::IndexedBlock(path, ib));
+        let indexed_blocks = file.indexed_blocks.iter().map(|ib| Linkable::IndexedBlock(path, ib));
 
-        return file_linkables.into_iter().chain(headings).into_iter().chain(indexed_blocks).collect()
+        return Some(vec![file_linkable].into_iter().chain(headings).into_iter().chain(indexed_blocks).collect())
     }
 
     pub fn root_dir(&self) -> &PathBuf {
@@ -268,7 +262,7 @@ mod vault_tests {
     #[test]
     fn link_parsing() {
         let text = "This is a [[link]] [[link 2]]\n[[link 3]]";
-        let parsed = parse_obsidian_links(&Rope::from_str(text));
+        let parsed = parse_obsidian_links(text);
 
         let expected = vec![
             Link {
@@ -294,7 +288,7 @@ mod vault_tests {
     #[test]
     fn link_parsin_with_display_text() {
         let text = "This is a [[link|but called different]] [[link 2|222]]\n[[link 3|333]]";
-        let parsed = parse_obsidian_links(&Rope::from_str(text));
+        let parsed = parse_obsidian_links(text);
 
         let expected = vec![
             Link {
@@ -334,7 +328,7 @@ more text
 
 ## This shoudl be a heading!";
 
-        let parsed = parse_obsidian_headings(&Rope::from_str(text));
+        let parsed = parse_obsidian_headings(text);
 
         let expected = vec![
             MDHeading {
@@ -366,7 +360,7 @@ more text
         some mroe text
         more text";
 
-        let parsed = parse_obsidian_indexed_blocks(&Rope::from_str(text));
+        let parsed = parse_obsidian_indexed_blocks(text);
 
         assert_eq!(parsed[0].index, "12345")
     }
@@ -416,7 +410,7 @@ more text
     #[test]
     fn parsing_special_text() {
         let text = "’’’󰌶 is a [[link]] [[link 2]]\n[[link 3]]";
-        let parsed = parse_obsidian_links(&Rope::from_str(text));
+        let parsed = parse_obsidian_links(text);
 
         let expected = vec![
             Link {
