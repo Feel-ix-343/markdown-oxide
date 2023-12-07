@@ -82,24 +82,17 @@ impl LanguageServer for Backend {
         params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
 
-        self.client.log_message(MessageType::INFO, format!( "Got goto def request: {:?}", params )).await;
-
-
         let position = params.text_document_position_params.position;
 
         let vault_option = self.vault.read().await;
         let Some(vault) = vault_option.deref() else {
-            self.client.log_message(MessageType::ERROR, "Vault is not initialized").await;
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
         let Ok(path) = params.text_document_position_params.text_document.uri.to_file_path() else {
-            self.client.log_message(MessageType::ERROR, "Failed to parse URI path").await;
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
-        self.client.log_message(MessageType::INFO, format!( "Path: {:?}", path )).await;
         let result = goto_definition(&vault, position, &path);
 
-        self.client.log_message(MessageType::INFO, format!("Result {:?}", result)).await;
 
         return Ok(result.map(|l| GotoDefinitionResponse::Scalar(l)))
     }
@@ -110,18 +103,13 @@ impl LanguageServer for Backend {
 
         let vault_option = self.vault.read().await;
         let Some(vault) = vault_option.deref() else {
-            self.client.log_message(MessageType::ERROR, "Vault is not initialized").await;
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
         let Ok(path) = params.text_document_position.text_document.uri.to_file_path() else {
-            self.client.log_message(MessageType::ERROR, "Failed to parse URI path").await;
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
-        self.client.log_message(MessageType::INFO, format!( "Path: {:?}", path )).await;
 
         let locations = references(vault, position, &path);
-        // log locations
-        self.client.log_message(MessageType::INFO, format!("Result {:?}", locations)).await;
         Ok(locations)
     }
 
