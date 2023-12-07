@@ -3,6 +3,30 @@ Markdown language server for the obsidian note-taking format
 
 Implementing obsidian PKM features (and possibly more) in the form of a language server allows us to use these features in our favorite text editors (neovim!) and reuse other lsp related plugins (like Telescope, outline, ...)
 
+## Installation for Neovim (there is no VS code plugin yet)
+
+Make sure rust is installed properly
+
+1. Clone the repo
+2. `Cargo build --release`
+3. Add and adjust the following to your Neovim config  
+
+```
+local configs = require("lspconfig.configs")
+configs["obsidian_ls"] = {
+default_config = {
+  root_dir = function() return vim.fn.getcwd() end,
+  filetypes = {"markdown"},
+  cmd = {"{path}"} -- replace {path} with the path to the --release build. It will be {where ever you cloned from}/obsidian-ls/target/release/obsidian-ls
+},
+on_attach = on_attach, -- do this only if you have an on_attach function already
+capabilities = capabilities, -- add the nvim cmp capabilities if using it
+}
+require("lspconfig").obsidian_ls.setup({})
+```
+
+4. Test it out! Go to definitions, get references, and more when they get added!
+
 ## Features
 
 - [ ] Go to definition (or definitions) from ...
