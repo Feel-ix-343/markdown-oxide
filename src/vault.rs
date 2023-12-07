@@ -190,7 +190,7 @@ impl Referenceable<'_> {
 
     pub fn is_reference(&self, root_dir: &Path, reference: &str) -> bool {
         match self {
-            &Referenceable::Tag(_, tag) => self.get_refname(root_dir).is_some_and(|refname| reference.starts_with(&refname)),
+            &Referenceable::Tag(_, _) => self.get_refname(root_dir).is_some_and(|refname| reference.starts_with(&refname)),
             _ => self.get_refname(root_dir) == Some(reference.to_string())
         }
     }
@@ -206,7 +206,7 @@ impl Referenceable<'_> {
 
     pub fn get_range(&self) -> tower_lsp::lsp_types::Range {
         match self {
-            &Referenceable::File(_, _) => tower_lsp::lsp_types::Range { start: Position { line: 0, character: 0 }, end: Position { line: 0, character: u32::MAX} },
+            &Referenceable::File(_, _) => tower_lsp::lsp_types::Range { start: Position { line: 0, character: 0 }, end: Position { line: 0, character: 1} },
             &Referenceable::Heading(_, heading) => heading.range,
             &Referenceable::IndexedBlock(_, indexed_block) => indexed_block.range,
             &Referenceable::Tag(_, tag) => tag.range
