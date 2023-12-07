@@ -205,7 +205,7 @@ impl Vault {
         return files.into_iter().chain(headings).into_iter().chain(indexed_blocks).collect()
     }
 
-    pub fn select_linkable_nodes_for_path<'a>(&'a self, path: &'a PathBuf) -> Option< Vec<Linkable<'a>> > {
+    pub fn select_linkable_nodes_for_path<'a>(&'a self, path: &'a PathBuf) -> Option<Vec<Linkable<'a>>> {
         let file = self.files.get(path)?;
         let file_linkable = Linkable::MDFile(path, file);
 
