@@ -1,6 +1,5 @@
 use std::path::Path;
 
-use itertools::Itertools;
 use tower_lsp::lsp_types::{Position, Location, Url};
 
 use crate::vault::{Vault, Referenceable};
@@ -30,7 +29,7 @@ pub fn references(vault: &Vault, cursor_position: Position, path: &Path) -> Opti
         .flatten();
 
     return match linkable {
-        Referenceable::File(path, md) => {
+        Referenceable::File(_, _) => {
             return Some(linkable_nodes.iter()
                 .filter(|&referenceable| !matches!(referenceable, &Referenceable::Tag(_, _)))
                 .filter_map(|linkable| linkable.get_refname(vault.root_dir()))
