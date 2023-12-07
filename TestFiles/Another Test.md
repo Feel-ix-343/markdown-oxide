@@ -9,6 +9,12 @@ This file is popppinnng, 2 links to it.
 
 [[Completion]]
 
-[[folder/File]]
+[[folder/File#Heading]]
 
+[[Test#Heading 1 2]]
+[[Test#Heading 1 2]]
+[[Test#Heading 1 2]]
+
+[[folder/File#Heading]]
+[[Test#Heading 1 2]]
 [[Test#Heading 1 2]]
