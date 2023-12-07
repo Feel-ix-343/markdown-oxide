@@ -164,7 +164,7 @@ pub struct Vault {
     root_dir: PathBuf,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// Linkable algebreic type that easily allows for new linkable nodes to be added if necessary and everything in it should live the same amount because it is all from vault
 /// These will also use the current obsidian syntax to come up with reference names for the linkables. These are the things that are using in links ([[Refname]])
 pub enum Referenceable<'a> {
@@ -185,6 +185,13 @@ impl Referenceable<'_> {
             &Referenceable::Heading(path, heading) => get_obsidian_ref_path(root_dir, path).and_then(|refpath| Some(format!("{}#{}", refpath, heading.heading_text))),
             &Referenceable::IndexedBlock(path, heading) => get_obsidian_ref_path(root_dir, path).and_then(|refpath| Some(format!("{}#^{}", refpath, heading.index))),
             &Referenceable::Tag(_, tag) => Some(format!("#{}", tag.tag_ref))
+        }
+    }
+
+    pub fn is_reference(&self, root_dir: &Path, reference: &str) -> bool {
+        match self {
+            &Referenceable::Tag(_, tag) => self.get_refname(root_dir).is_some_and(|refname| reference.starts_with(&refname)),
+            _ => self.get_refname(root_dir) == Some(reference.to_string())
         }
     }
 

@@ -19,5 +19,5 @@ This file is popppinnng, 2 links to it.
 [[Test#Heading 1 2]]
 [[Test#Heading 1 2]]
 
-#tag
+#tag/test
 
