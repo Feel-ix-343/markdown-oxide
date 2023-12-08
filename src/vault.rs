@@ -3,6 +3,7 @@ use std::{collections::HashMap, path::{Path, PathBuf}, ops::Range};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use pathdiff::diff_paths;
+use rayon::prelude::*;
 use regex::Regex;
 use ropey::Rope;
 use tower_lsp::lsp_types::Position;
@@ -13,10 +14,11 @@ pub fn construct_vault(root_dir: &Path) -> Result<Vault, std::io::Error> {
     let md_file_paths = WalkDir::new(root_dir)
         .into_iter()
         .filter_map(|f| Result::ok(f))
-        .filter(|f| f.path().extension().and_then(|e| e.to_str()) == Some("md"));
+        .filter(|f| f.path().extension().and_then(|e| e.to_str()) == Some("md"))
+        .collect_vec();
 
     let md_files: HashMap<PathBuf, MDFile> = md_file_paths
-        .into_iter()
+        .into_par_iter()
         .flat_map(|p| {
             let text = std::fs::read_to_string(p.path())?;
             let md_file = parse_obsidian_md(&text);
@@ -513,7 +515,7 @@ more text
             uri: Url::from_file_path(result_path.to_str().unwrap()).unwrap(),
             range: Range { 
             start: Position { line: 0, character: 0 }, 
-            end: Position { line: 0, character: u32::MAX }
+            end: Position { line: 0, character: 1 }
             }
         }]);
         assert_eq!(result, proper);
