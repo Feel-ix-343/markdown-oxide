@@ -13,7 +13,8 @@ pub fn construct_vault(root_dir: &Path) -> Result<Vault, std::io::Error> {
 
     let md_file_paths = WalkDir::new(root_dir)
         .into_iter()
-        .filter_map(|f| Result::ok(f))
+        .filter_entry(|e| !e.file_name().to_str().map(|s| s.starts_with(".")).unwrap_or(false))
+        .flatten()
         .filter(|f| f.path().extension().and_then(|e| e.to_str()) == Some("md"))
         .collect_vec();
 
@@ -127,6 +128,7 @@ fn parse_obsidian_tags(text: &str) -> Vec<MDTag> {
             (Some(full), Some(index)) => Some((full, index)),
             _ => None
         })
+        .filter(|(_, index)| index.as_str().chars().any(|c| c.is_alphabetic()))
         .map(|(full, index)|  {
             MDTag {
                 tag_ref: index.as_str().into(),

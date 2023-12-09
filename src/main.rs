@@ -1,6 +1,7 @@
 use std::ops::Deref;
 use std::path::Path;
 
+use completion::get_completions;
 use references::references;
 use tokio::sync::RwLock;
 
@@ -13,6 +14,7 @@ use vault::{Vault, construct_vault, reconstruct_vault};
 mod vault;
 mod gotodef;
 mod references;
+mod completion;
 
 
 #[derive(Debug)]
@@ -42,7 +44,7 @@ impl LanguageServer for Backend {
                 )),
                 completion_provider: Some(CompletionOptions {
                     resolve_provider: Some(false),
-                    trigger_characters: Some(vec![".".to_string()]),
+                    trigger_characters: Some(vec!["#".to_string()]),
                     work_done_progress_options: Default::default(),
                     all_commit_characters: None,
                     completion_item: None,
@@ -115,6 +117,15 @@ impl LanguageServer for Backend {
 
     async fn shutdown(&self) -> Result<()> {
         Ok(())
+    }
+
+
+    async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+        let bad_vault = self.vault.read().await;
+        let Some(vault) = bad_vault.deref() else {
+            return Err(Error::new(ErrorCode::ServerError(0)))
+        };
+        Ok(get_completions(vault, params))
     }
 }
 
