@@ -65,6 +65,20 @@ impl LanguageServer for Backend {
             .await;
     }
 
+    async fn did_open(&self, params: DidOpenTextDocumentParams) {
+        let Some(ref mut vault) = *self.vault.write().await else {
+            self.client.log_message(MessageType::ERROR, "Vault is not initialized").await;
+            return;
+        };
+
+        let Ok(path) = params.text_document.uri.to_file_path() else {
+            self.client.log_message(MessageType::ERROR, "Failed to parse URI path").await;
+            return;
+        };
+        let text = params.text_document.text;
+        reconstruct_vault(vault, (&path, &text));
+    }
+
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         let Some(ref mut vault) = *self.vault.write().await else {
             self.client.log_message(MessageType::ERROR, "Vault is not initialized").await;
