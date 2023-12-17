@@ -101,7 +101,7 @@ fn parse_obsidian_headings(text: &str) -> Vec<MDHeading> {
 
 fn parse_obsidian_indexed_blocks(text: &str) -> Vec<MDIndexedBlock> {
 
-    static INDEXED_BLOCK_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r".+(\^(?<index>\w+))").unwrap());
+    static INDEXED_BLOCK_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r".+ (\^(?<index>\w+))").unwrap());
 
     let indexed_blocks: Vec<MDIndexedBlock> = INDEXED_BLOCK_RE.captures_iter(&text.to_string())
         .flat_map(|c| match (c.get(1), c.name("index")) {
