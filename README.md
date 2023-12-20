@@ -1,7 +1,7 @@
 # obsidian-markdown-ls
 Markdown language server for the obsidian note-taking format
 
-Implementing obsidian PKM features (and possibly more) in the form of a language server allows us to use these features in our favorite text editors (neovim!) and reuse other lsp related plugins (like Telescope, outline, ...)
+Implementing obsidian PKM features (and possibly more) in the form of a language server allows us to use these features in our favorite text editors (neovim or vscode!) and reuse other lsp related plugins (like Telescope, outline, and builtin lsp support)
 
 ## Installation for Neovim (there is no VS code plugin yet)
 
