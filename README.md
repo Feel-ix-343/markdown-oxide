@@ -45,7 +45,8 @@ require("lspconfig").obsidian_ls.setup({})
     - [ ] Footnotes
     - [ ] Metadata tag
 - [ ] Completions
-    - [ ] File, heading, tag completions, footnotes (named and numbered)
+    - [ ] File completions
+    - [ ] Heading Completions
     - [ ] Indexed block completions. Somehow using Ripgrep to find the paragraphs/blocks in the vault, then appending an index in the file, then inserting a link
     - [ ] Callout completions
     - [ ] Metadata completions
