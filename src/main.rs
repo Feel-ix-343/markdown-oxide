@@ -44,7 +44,7 @@ impl LanguageServer for Backend {
                 )),
                 completion_provider: Some(CompletionOptions {
                     resolve_provider: Some(false),
-                    trigger_characters: Some(vec!["#".to_string()]),
+                    trigger_characters: Some(vec!["#".to_string(), "[".into()]),
                     work_done_progress_options: Default::default(),
                     all_commit_characters: None,
                     completion_item: None,
@@ -53,7 +53,7 @@ impl LanguageServer for Backend {
                 definition_provider: Some(OneOf::Left(true)),
                 references_provider: Some(OneOf::Left(true)),
                 rename_provider: Some(OneOf::Left(true)),
-                ..ServerCapabilities::default()
+                ..Default::default()
 
             }
         })
@@ -139,7 +139,11 @@ impl LanguageServer for Backend {
         let Some(vault) = bad_vault.deref() else {
             return Err(Error::new(ErrorCode::ServerError(0)))
         };
-        Ok(get_completions(vault, params))
+        let completions = get_completions(vault, &params);
+        if completions == None {
+            self.client.log_message(MessageType::INFO, format!("No completions for: {:?}", params)).await;
+        }
+        Ok(completions)
     }
 }
 
