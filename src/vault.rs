@@ -109,7 +109,7 @@ fn parse_obsidian_headings(text: &str) -> Vec<MDHeading> {
         .map(|(full_heading, heading_match)| {
 
             return MDHeading {
-                heading_text: heading_match.as_str().into(),
+                heading_text: heading_match.as_str().trim_end().into(),
                 range: range_to_position(&Rope::from_str(text), full_heading.range())
             }
         })
