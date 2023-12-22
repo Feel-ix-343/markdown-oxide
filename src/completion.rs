@@ -33,7 +33,7 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
                     .filter(|referenceable| !matches!(referenceable, Referenceable::Tag(_, _)));
 
                 return Some(CompletionResponse::Array(
-                    all_tags.map(|tag| tag.get_refname(&vault.root_dir()).map(|root| CompletionItem { kind: Some(CompletionItemKind::REFERENCE), label: root.replace(" ", "_"), insert_text: Some(root), ..Default::default()})).flatten().unique_by(|c| c.label.to_owned()).collect_vec()
+                    all_tags.map(|tag| tag.get_refname(&vault.root_dir()).map(|root| CompletionItem { kind: Some(CompletionItemKind::REFERENCE), label: root, ..Default::default()})).flatten().unique_by(|c| c.label.to_owned()).collect_vec()
                 ))
             } else {
                 return None
