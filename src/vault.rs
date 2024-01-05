@@ -112,6 +112,7 @@ fn parse_obsidian_headings(text: &str) -> Vec<MDHeading> {
                 heading_text: heading_match.as_str().trim_end().into(),
                 range: range_to_position(&Rope::from_str(text), full_heading.range())
             }
+
         })
         .collect_vec();
 
