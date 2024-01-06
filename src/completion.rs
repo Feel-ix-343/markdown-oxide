@@ -1,26 +1,10 @@
 use itertools::Itertools;
-use tower_lsp::lsp_types::{CompletionResponse, CompletionParams, CompletionContext, CompletionItem, CompletionItemKind};
+use tower_lsp::lsp_types::{CompletionResponse, CompletionParams, CompletionItem, CompletionItemKind};
 
 use crate::vault::{Vault, Referenceable};
 
 pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<CompletionResponse> {
     match params {
-        CompletionParams { context: Some(CompletionContext { trigger_character: Some(character), .. }), .. } if character == "#" => {
-            // Initial Tag completion
-            let tag_refereneables = vault.select_linkable_nodes()
-                .into_iter()
-                .flat_map(|referenceable| match referenceable {
-                    tag @ Referenceable::Tag(_, _) => Some(tag),
-                    _ => None
-                });
-                
-
-            return Some(CompletionResponse::Array(
-                tag_refereneables
-                    .map(|tag| tag.get_refname(&vault.root_dir()).map(|root| CompletionItem {label: root.replace("/", "_"), insert_text: Some(root), ..Default::default()})).flatten().unique_by(|c| c.label.to_owned()).collect_vec()
-            )
-            )
-        },
         CompletionParams { text_document_position, .. } => {
 
             let Ok(path) = text_document_position.text_document.uri.to_file_path() else {
@@ -39,8 +23,24 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
                     .filter(|referenceable| !matches!(referenceable, Referenceable::Tag(_, _)));
 
                 return Some(CompletionResponse::Array(
-                    all_tags.map(|tag| tag.get_refname(&vault.root_dir()).map(|root| CompletionItem { kind: Some(CompletionItemKind::REFERENCE), label: root.replace(" ", "_").replace("#", "_").replace("/", "_"), insert_text: Some(root), ..Default::default()})).flatten().unique_by(|c| c.label.to_owned()).collect_vec()
+                    all_tags.map(|tag| tag.get_refname(&vault.root_dir()).map(|root| CompletionItem { kind: Some(CompletionItemKind::FILE), label: root, ..Default::default()})).flatten().unique_by(|c| c.label.to_owned()).collect_vec()
                 ))
+            } else if selected_line.get(character-1..character) == Some(&vec!['#']) {
+
+                // Initial Tag completion
+                let tag_refereneables = vault.select_linkable_nodes()
+                    .into_iter()
+                    .flat_map(|referenceable| match referenceable {
+                        tag @ Referenceable::Tag(_, _) => Some(tag),
+                        _ => None
+                    });
+
+
+                return Some(CompletionResponse::Array(
+                    tag_refereneables
+                        .map(|tag| tag.get_refname(&vault.root_dir()).map(|root| CompletionItem { kind: Some(CompletionItemKind::CONSTANT), label: root, ..Default::default()})).flatten().unique_by(|c| c.label.to_owned()).collect_vec()
+                )
+                )
             } else {
                 return None
             }

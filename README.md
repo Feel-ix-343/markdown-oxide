@@ -5,7 +5,7 @@ Implementing obsidian PKM features (and possibly more) in the form of a language
 
 ## Installation for Neovim (there is no VS code plugin yet)
 
-Make sure rust is installed properly
+Make sure rust is installed properly and that you are using nvim cmp (I am not sure if it works in other completion engines)
 
 1. Clone the repo
 2. `Cargo build --release`
@@ -26,7 +26,21 @@ capabilities = capabilities, -- add the nvim cmp capabilities if using it
 require("lspconfig").obsidian_ls.setup({})
 ```
 
-4. Test it out! Go to definitions, get references, and more when they get added!
+then adjust your nvim-cmp source settings for the following. Note that this will likely change in the future.
+
+```
+{
+    name = 'nvim_lsp',
+         option = {
+             obsidian_ls = {
+                 keyword_pattern = [[\(\k\| \|\/\|#\)\+]]
+             }
+         }
+},
+```
+
+
+1. Test it out! Go to definitions, get references, and more when they get added!
 
 ## Features
 
@@ -44,10 +58,10 @@ require("lspconfig").obsidian_ls.setup({})
     - [X] to tag (explained above)
     - [ ] Footnotes
     - [ ] Metadata tag
-- [ ] Completions
-    - [ ] File completions
-    - [ ] Heading Completions
-    - [ ] Indexed block completions. Somehow using Ripgrep to find the paragraphs/blocks in the vault, then appending an index in the file, then inserting a link
+- [.] Completions
+    - [X] File completions (requires extra nvim cmp configuration)
+    - [X] Heading Completions (requires extra nvim cmp config)
+    - [ ] Indexed block completions. Somehow using Ripgrep to find the paragraphs/blocks in the vault, then appending an index in the file, then inserting a link (workaround supported; using "_" instead of any non_word characters)
     - [ ] Callout completions
     - [ ] Metadata completions
     - [ ] Dataview?
