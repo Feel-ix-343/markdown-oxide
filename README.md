@@ -40,7 +40,7 @@ then adjust your nvim-cmp source settings for the following. Note that this will
 ```
 
 
-1. Test it out! Go to definitions, get references, and more when they get added!
+1. Test it out! Go to definitions, get references, and more!
 
 ## Features
 
