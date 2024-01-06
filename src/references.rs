@@ -21,7 +21,7 @@ pub fn references(vault: &Vault, cursor_position: Position, path: &Path) -> Opti
 
     let references = vault.select_references(None)?;
     let locations = |referenceable: &Referenceable| references.iter()
-        .filter(|&r| referenceable.is_reference(&vault.root_dir(), &r.1.reference_text))
+        .filter(|&r| referenceable.is_reference(&vault.root_dir(), &r.1))
         .map(|link| Url::from_file_path(link.0).map(|good| Location {uri: good, range: link.1.range}))
         .flat_map(|l| match l.is_ok() {
             true => Some(l),

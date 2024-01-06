@@ -204,6 +204,7 @@ fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
 }
 
 impl Referenceable<'_> {
+    /// Gets the default reference name for a referenceable. If comparing to a reference text, use the is_reference function
     pub fn get_refname(&self, root_dir: &Path) -> Option<String> {
         match self {
             &Referenceable::File(path, _) => get_obsidian_ref_path(root_dir, path),
@@ -213,10 +214,11 @@ impl Referenceable<'_> {
         }
     }
 
-    pub fn is_reference(&self, root_dir: &Path, reference: &str) -> bool {
+    pub fn is_reference(&self, root_dir: &Path, reference: &Reference) -> bool {
+        let text = &reference.reference_text;
         match self {
-            &Referenceable::Tag(_, _) => self.get_refname(root_dir).is_some_and(|refname| reference.starts_with(&refname)),
-            _ => self.get_refname(root_dir) == Some(reference.to_string())
+            &Referenceable::Tag(_, _) => self.get_refname(root_dir).is_some_and(|refname| text.starts_with(&refname)),
+            _ => self.get_refname(root_dir) == Some(text.to_string())
         }
     }
 

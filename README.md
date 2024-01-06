@@ -71,8 +71,8 @@ then adjust your nvim-cmp source settings for the following. Note that this will
     - [ ] Missing file for link -> Create the file
     - [ ] Link suggestions (by text match or other)
     - [ ] Refactoring: Move headers or selections to a new file
-- [ ] Diagnostics
-    - [ ] Missing link
+- [X] Diagnostics
+    - [X] Missing link
 - [ ] Outline
     - [ ] Headings and subheadings
     - [ ] Headings and subheadings of links

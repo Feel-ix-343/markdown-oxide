@@ -2,6 +2,7 @@ use std::ops::Deref;
 use std::path::Path;
 
 use completion::get_completions;
+use itertools::Itertools;
 use references::references;
 use tokio::sync::RwLock;
 
@@ -21,6 +22,51 @@ mod completion;
 struct Backend {
     client: Client,
     vault: RwLock<Option<Vault>>
+}
+
+
+struct TextDocumentItem {
+    uri: Url,
+    text: String,
+}
+
+impl Backend {
+    async fn on_change(&self, params: TextDocumentItem) {
+        let Some(ref mut vault) = *self.vault.write().await else {
+            self.client.log_message(MessageType::ERROR, "Vault is not initialized").await;
+            return;
+        };
+
+        let Ok(path) = params.uri.to_file_path() else {
+            self.client.log_message(MessageType::ERROR, "Failed to parse URI path").await;
+            return;
+        };
+        let text = &params.text;
+        reconstruct_vault(vault, (&path, text));
+
+        // Diagnostics
+        // get all links for changed file
+        let referenceables = vault.select_linkable_nodes();
+        let Some(references) = vault.select_references(Some(&path)) else {
+            return
+        };
+        let unresolved = references
+            .into_iter()
+            .filter(|(_, reference)| !referenceables.iter().any(|referenceable| referenceable.is_reference(&vault.root_dir(), reference) ))
+            .collect_vec();
+
+        let diags: Vec<Diagnostic> = unresolved.into_iter()
+            .map(|(_, reference)| Diagnostic {
+                range: reference.range,
+                message: "Unresolved Link".into(),
+                source: Some("Obsidian LS".into()),
+                ..Default::default()
+            })
+            .collect_vec();
+
+
+        self.client.publish_diagnostics(params.uri, diags, None).await;
+    }
 }
 
 #[tower_lsp::async_trait]
@@ -66,32 +112,14 @@ impl LanguageServer for Backend {
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        let Some(ref mut vault) = *self.vault.write().await else {
-            self.client.log_message(MessageType::ERROR, "Vault is not initialized").await;
-            return;
-        };
-
-        let Ok(path) = params.text_document.uri.to_file_path() else {
-            self.client.log_message(MessageType::ERROR, "Failed to parse URI path").await;
-            return;
-        };
-        let text = params.text_document.text;
-        reconstruct_vault(vault, (&path, &text));
+        self.on_change(TextDocumentItem {uri: params.text_document.uri, text: params.text_document.text}).await;
     }
 
-    async fn did_change(&self, params: DidChangeTextDocumentParams) {
-        let Some(ref mut vault) = *self.vault.write().await else {
-            self.client.log_message(MessageType::ERROR, "Vault is not initialized").await;
-            return;
-        };
-
-        let Ok(path) = params.text_document.uri.to_file_path() else {
-            self.client.log_message(MessageType::ERROR, "Failed to parse URI path").await;
-            return;
-        };
-        let text = &params.content_changes[0].text;
-        reconstruct_vault(vault, (&path, text));
+    async fn did_change(&self, mut params: DidChangeTextDocumentParams) {
+        self.on_change(TextDocumentItem { uri: params.text_document.uri, text: params.content_changes.remove(0).text }).await;
     }
+
+
 
     async fn goto_definition(
         &self,
