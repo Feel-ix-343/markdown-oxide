@@ -67,6 +67,11 @@ then adjust your nvim-cmp source settings for the following. Note that this will
     - [ ] Dataview?
     - [ ] Metadata tag
     - [ ] \`\`\`query\`\`\` code blocks
+- [ ] Preview
+    - [ ] File
+    - [ ] Headings
+    - [ ] Indexed Blocks
+    - [ ] Footnotes
 - [ ] Code Actions
     - [ ] Missing file for link -> Create the file
     - [ ] Link suggestions (by text match or other)

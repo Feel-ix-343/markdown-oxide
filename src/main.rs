@@ -55,10 +55,13 @@ impl Backend {
             .filter(|(_, reference)| !referenceables.iter().any(|referenceable| referenceable.is_reference(&vault.root_dir(), reference) ))
             .collect_vec();
 
-        let diags: Vec<Diagnostic> = unresolved.into_iter()
+        let diags: Vec<Diagnostic> = unresolved.iter()
             .map(|(_, reference)| Diagnostic {
                 range: reference.range,
-                message: "Unresolved Link".into(),
+                message: match unresolved.iter().filter(|un| un.1.reference_text == reference.reference_text).count() {
+                    num if num > 1 => format!("Unresolved Link used {} times", num),
+                    _ => format!("Unresolved Link")
+                },
                 source: Some("Obsidian LS".into()),
                 ..Default::default()
             })
@@ -103,6 +106,10 @@ impl LanguageServer for Backend {
 
             }
         })
+    }
+
+    async fn shutdown(&self) -> Result<()> {
+        Ok(())
     }
 
     async fn initialized(&self, _: InitializedParams) {
@@ -156,11 +163,6 @@ impl LanguageServer for Backend {
         let locations = references(vault, position, &path);
         Ok(locations)
     }
-
-    async fn shutdown(&self) -> Result<()> {
-        Ok(())
-    }
-
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         let bad_vault = self.vault.read().await;
