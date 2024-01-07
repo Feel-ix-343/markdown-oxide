@@ -213,7 +213,7 @@ impl Reference {
 
         // TODO: HOnestly, it is just a work around to have tag and footnote in here. A better system is needed. 
         static FOOTNOTE_LINK_RE: Lazy<Regex> = Lazy::new(|| 
-            Regex::new(r"[^\[](?<full>\[(?<index>[^\[\] ]+)\])[^\:]").unwrap()
+            Regex::new(r"[^\[](?<full>\[(?<index>\^[^\[\] ]+)\])[^\:]").unwrap()
         );
         let footnote_references: Vec<Reference> = FOOTNOTE_LINK_RE.captures_iter(text)
             .flat_map(|capture| match (capture.name("full"), capture.name("index")) {
@@ -305,7 +305,7 @@ pub struct MDFootnote {
 impl MDFootnote {
     fn new(text: &str) -> Vec<MDFootnote> {
         // static FOOTNOTE_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r".+ (\^(?<index>\w+))").unwrap());
-        static FOOTNOTE_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\[(?<index>[^ \[\]]+)\]\:(?<text>.+)").unwrap());
+        static FOOTNOTE_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\[(?<index>\^[^ \[\]]+)\]\:(?<text>.+)").unwrap());
 
         let footnotes: Vec<MDFootnote> = FOOTNOTE_RE.captures_iter(&text.to_string())
             .flat_map(|c| match (c.get(0), c.name("index"), c.name("text")) {
