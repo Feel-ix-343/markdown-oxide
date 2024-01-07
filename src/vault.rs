@@ -34,7 +34,7 @@ impl Vault {
             .par_iter()
             .flat_map(|p| {
                 let text = std::fs::read_to_string(p.path())?;
-                let md_file = parse_obsidian_md(&text);
+                let md_file = MDFile::parse(&text);
 
                 return Ok::<(PathBuf, MDFile), std::io::Error>((p.path().into(), md_file))
             })
@@ -58,7 +58,7 @@ impl Vault {
     }
 
     pub fn reconstruct_vault(old: &mut Vault, new_file: (&PathBuf, &str)) {
-        let new_md_file = parse_obsidian_md(new_file.1);
+        let new_md_file = MDFile::parse(new_file.1);
         let new = old.md_files.get_mut(new_file.0);
 
         match new {
@@ -128,102 +128,8 @@ impl Vault {
 }
 
 
-fn parse_obsidian_md(text: &str) -> MDFile {
-
-    let links = parse_obsidian_references(text);
-    let headings = parse_obsidian_headings(text);
-    let indexed_blocks = parse_obsidian_indexed_blocks(text);
-    let tags = parse_obsidian_tags(text);
-
-    return MDFile { references: links, headings, indexed_blocks, tags }
-}
-
-/// Parse out the references to referenceables in each file. This will have links to files and tags
-fn parse_obsidian_references(text: &str) -> Vec<Reference> {
-    static LINK_RE: Lazy<Regex> = Lazy::new(|| 
-        Regex::new(r"\[\[(?<referencetext>[^\[\]\|\.]+)(\|(?<display>[^\[\]\.\|]+))?\]\]").unwrap()
-    ); // A [[link]] that does not have any [ or ] in it
-
-    let links: Vec<Reference> = LINK_RE.captures_iter(text)
-        .flat_map(|capture| match (capture.get(0), capture.name("referencetext"), capture.name("display")) {
-            (Some(full), Some(reference_text), display) => Some((full, reference_text, display)),
-            _ => None
-        })
-        .map(|(outer, re_match, display)| {
-        Reference {
-            reference_text: re_match.as_str().into(),
-            range: range_to_position(&Rope::from_str(text), outer.range()),
-            display_text: display.map(|d| d.as_str().into())
-        }})
-        .collect_vec();
-
-    let tags: Vec<Reference> = parse_obsidian_tags(text).iter().map(|tag| Reference {display_text: None, range: tag.range, reference_text: format!("#{}", tag.tag_ref)}).collect();
-
-    return links.into_iter().chain(tags.into_iter()).collect_vec()
-}
-
-fn parse_obsidian_headings(text: &str) -> Vec<MDHeading> {
-
-    static HEADING_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"#+ (?<heading_text>.+)").unwrap());
-
-    let headings: Vec<MDHeading> = HEADING_RE.captures_iter(text)
-        .flat_map(|c| match (c.get(0), c.name("heading_text")) {
-            (Some(full), Some(text)) => Some((full, text)),
-            _ => None
-        })
-        .map(|(full_heading, heading_match)| {
-
-            return MDHeading {
-                heading_text: heading_match.as_str().trim_end().into(),
-                range: range_to_position(&Rope::from_str(text), full_heading.range())
-            }
-
-        })
-        .collect_vec();
-
-    return headings
-}
-
-fn parse_obsidian_indexed_blocks(text: &str) -> Vec<MDIndexedBlock> {
-
-    static INDEXED_BLOCK_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r".+ (\^(?<index>\w+))").unwrap());
-
-    let indexed_blocks: Vec<MDIndexedBlock> = INDEXED_BLOCK_RE.captures_iter(&text.to_string())
-        .flat_map(|c| match (c.get(1), c.name("index")) {
-            (Some(full), Some(index)) => Some((full, index)),
-            _ => None
-        })
-        .map(|(full, index)|  {
-            MDIndexedBlock {
-                index: index.as_str().into(),
-                range: range_to_position(&Rope::from_str(text), full.range())
-            }
-        })
-        .collect_vec();
-
-    return indexed_blocks
-} // Make this better identify the full blocks
-
-fn parse_obsidian_tags(text: &str) -> Vec<MDTag> {
-    static TAG_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(\n|\A| )(?<full>#(?<tag>[.[^ \n\#]]+))(\n|\z| )").unwrap());
 
 
-    let tagged_blocks = TAG_RE.captures_iter(&text.to_string())
-        .flat_map(|c| match (c.name("full"), c.name("tag")) {
-            (Some(full), Some(index)) => Some((full, index)),
-            _ => None
-        })
-        .filter(|(_, index)| index.as_str().chars().any(|c| c.is_alphabetic()))
-        .map(|(full, index)|  {
-            MDTag {
-                tag_ref: index.as_str().into(),
-                range: range_to_position(&Rope::from_str(text), full.range())
-            }
-        })
-        .collect_vec();
-
-    return tagged_blocks
-}
 
 fn range_to_position(rope: &Rope, range: Range<usize>) -> tower_lsp::lsp_types::Range {
     // convert from byte offset to char offset
@@ -243,12 +149,173 @@ fn range_to_position(rope: &Rope, range: Range<usize>) -> tower_lsp::lsp_types::
     }
 }
 
+pub trait Parseable {
+    type Output;
+    fn parse(text: &str) -> Self::Output;
+}
 
+
+
+#[derive(Debug, PartialEq, Eq, Default)]
+pub struct MDFile {
+    references: Vec<Reference>,
+    headings: Vec<MDHeading>,
+    indexed_blocks: Vec<MDIndexedBlock>,
+    tags: Vec<MDTag>
+}
+
+impl Parseable for MDFile {
+    type Output = MDFile;
+    fn parse(text: &str) -> MDFile {
+
+        let links = Reference::parse(text);
+        let headings = MDHeading::parse(text);
+        let indexed_blocks = MDIndexedBlock::parse(text);
+        let tags = MDTag::parse(text);
+
+        return MDFile { references: links, headings, indexed_blocks, tags }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
+pub struct Reference {
+    pub reference_text: String,
+    pub display_text: Option<String>,
+    pub range: tower_lsp::lsp_types::Range
+}
+
+impl Parseable for Reference {
+    type Output = Vec<Reference>;
+    /// Parse out the references to referenceables in each file. This will have links to files and tags
+    fn parse(text: &str) -> Vec<Reference> {
+        static LINK_RE: Lazy<Regex> = Lazy::new(|| 
+            Regex::new(r"\[\[(?<referencetext>[^\[\]\|\.]+)(\|(?<display>[^\[\]\.\|]+))?\]\]").unwrap()
+        ); // A [[link]] that does not have any [ or ] in it
+
+        let links: Vec<Reference> = LINK_RE.captures_iter(text)
+            .flat_map(|capture| match (capture.get(0), capture.name("referencetext"), capture.name("display")) {
+                (Some(full), Some(reference_text), display) => Some((full, reference_text, display)),
+                _ => None
+            })
+            .map(|(outer, re_match, display)| {
+                Reference {
+                    reference_text: re_match.as_str().into(),
+                    range: range_to_position(&Rope::from_str(text), outer.range()),
+                    display_text: display.map(|d| d.as_str().into())
+                }})
+            .collect_vec();
+
+        let tags: Vec<Reference> = MDTag::parse(text).iter().map(|tag| Reference {display_text: None, range: tag.range, reference_text: format!("#{}", tag.tag_ref)}).collect();
+
+        return links.into_iter().chain(tags.into_iter()).collect_vec()
+    }
+}
+
+
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct MDHeading {
+    heading_text: String,
+    range: tower_lsp::lsp_types::Range
+}
+
+impl Parseable for MDHeading {
+    type Output = Vec<MDHeading>;
+    fn parse(text: &str) -> Vec<MDHeading> {
+
+        static HEADING_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"#+ (?<heading_text>.+)").unwrap());
+
+        let headings: Vec<MDHeading> = HEADING_RE.captures_iter(text)
+            .flat_map(|c| match (c.get(0), c.name("heading_text")) {
+                (Some(full), Some(text)) => Some((full, text)),
+                _ => None
+            })
+            .map(|(full_heading, heading_match)| {
+
+                return MDHeading {
+                    heading_text: heading_match.as_str().trim_end().into(),
+                    range: range_to_position(&Rope::from_str(text), full_heading.range())
+                }
+
+            })
+            .collect_vec();
+
+        return headings
+    }
+
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct MDIndexedBlock {
+    index: String,
+    range: tower_lsp::lsp_types::Range
+}
+
+impl Parseable for MDIndexedBlock {
+    type Output = Vec<MDIndexedBlock>;
+    fn parse(text: &str) -> Vec<MDIndexedBlock> {
+
+        static INDEXED_BLOCK_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r".+ (\^(?<index>\w+))").unwrap());
+
+        let indexed_blocks: Vec<MDIndexedBlock> = INDEXED_BLOCK_RE.captures_iter(&text.to_string())
+            .flat_map(|c| match (c.get(1), c.name("index")) {
+                (Some(full), Some(index)) => Some((full, index)),
+                _ => None
+            })
+            .map(|(full, index)|  {
+                MDIndexedBlock {
+                    index: index.as_str().into(),
+                    range: range_to_position(&Rope::from_str(text), full.range())
+                }
+            })
+            .collect_vec();
+
+        return indexed_blocks
+    } // Make this better identify the full blocks
+
+}
+
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct MDTag {
+    tag_ref: String,
+    range: tower_lsp::lsp_types::Range
+}
+
+impl Parseable for MDTag {
+    type Output = Vec<MDTag>;
+    fn parse(text: &str) -> Vec<MDTag> {
+        static TAG_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(\n|\A| )(?<full>#(?<tag>[.[^ \n\#]]+))(\n|\z| )").unwrap());
+
+
+        let tagged_blocks = TAG_RE.captures_iter(&text.to_string())
+            .flat_map(|c| match (c.name("full"), c.name("tag")) {
+                (Some(full), Some(index)) => Some((full, index)),
+                _ => None
+            })
+            .filter(|(_, index)| index.as_str().chars().any(|c| c.is_alphabetic()))
+            .map(|(full, index)|  {
+                MDTag {
+                    tag_ref: index.as_str().into(),
+                    range: range_to_position(&Rope::from_str(text), full.range())
+                }
+            })
+            .collect_vec();
+
+        return tagged_blocks
+    }
+}
 
 
 #[derive(Debug, Clone)]
-/// Linkable algebreic type that easily allows for new linkable nodes to be added if necessary and everything in it should live the same amount because it is all from vault
-/// These will also use the current obsidian syntax to come up with reference names for the linkables. These are the things that are using in links ([[Refname]])
+/**
+An Algebreic type for methods for all referenceables, which are anything able to be referenced through obsidian link or tag. These include
+Files, headings, indexed blocks, tags, ...
+
+I chose to use an enum instead of a trait as (1) I dislike the ergonomics with dynamic dyspatch, (2) It is sometimes necessary to differentiate between members of this abstraction, (3) it was convienient for this abstraction to hold the path of the referenceable for use in matching link names etc...
+
+The vault struct is focused on presenting data from the obsidian vault through a good usable interface. The vault module as whole, however, is in change in interfacting with the obsidian syntax, which is where the methods on this enum are applicable. Obsidian has a specific linking style, and the methods on this enum provide a way to work with this syntax in a way that decouples the interpretation from other modules. The most common one method is the `is_reference` which tells if a piece of text is a refence to a particular referenceable (which is implemented differently for each type of referenceable). As a whole, this provides an abstraction around interpreting obsidian syntax; when obsidian updates syntax, code here changes and not in other places; when new referenceables are added and code is needed to interpret/match its links, code here changes and not elsewhere.
+*/
 pub enum Referenceable<'a> {
     File(&'a PathBuf, &'a MDFile),
     Heading(&'a PathBuf, &'a MDHeading),
@@ -256,12 +323,13 @@ pub enum Referenceable<'a> {
     Tag(&'a PathBuf, &'a MDTag)
 }
 
+/// Utility function
 fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
     diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(|refname| String::from(refname)))
 }
 
 impl Referenceable<'_> {
-    /// Gets the default reference name for a referenceable. If comparing to a reference text, use the is_reference function
+    /// Gets the generic reference name for a referenceable. This will not include any display text. If trying to determine if text is a reference of a particular referenceable, use the `is_reference` function
     pub fn get_refname(&self, root_dir: &Path) -> Option<String> {
         match self {
             &Referenceable::File(path, _) => get_obsidian_ref_path(root_dir, path),
@@ -298,39 +366,6 @@ impl Referenceable<'_> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Default)]
-pub struct MDFile {
-    references: Vec<Reference>,
-    headings: Vec<MDHeading>,
-    indexed_blocks: Vec<MDIndexedBlock>,
-    tags: Vec<MDTag>
-}
-
-#[derive(Debug, PartialEq, Eq, Default, Clone)]
-pub struct Reference {
-    pub reference_text: String,
-    pub display_text: Option<String>,
-    pub range: tower_lsp::lsp_types::Range
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct MDHeading {
-    heading_text: String,
-    range: tower_lsp::lsp_types::Range
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct MDIndexedBlock {
-    index: String,
-    range: tower_lsp::lsp_types::Range
-}
-
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct MDTag {
-    tag_ref: String,
-    range: tower_lsp::lsp_types::Range
-}
 
 // tests
 #[cfg(test)]
@@ -339,15 +374,16 @@ mod vault_tests {
 
     use tower_lsp::lsp_types::{Position, Range, Location, Url};
 
-    use crate::{vault::{parse_obsidian_headings, parse_obsidian_tags}, gotodef::goto_definition};
+    use crate::vault::Parseable;
+    use crate::{gotodef::goto_definition};
 
-    use super::{Reference, parse_obsidian_references, MDHeading, parse_obsidian_indexed_blocks, MDIndexedBlock, Referenceable, MDFile, MDTag};
+    use super::{Reference,  MDHeading,  MDIndexedBlock, Referenceable, MDFile, MDTag};
     use super::Vault;
 
     #[test]
     fn link_parsing() {
         let text = "This is a [[link]] [[link 2]]\n[[link 3]]";
-        let parsed = parse_obsidian_references(text);
+        let parsed = Reference::parse(text);
 
         let expected = vec![
             Reference {
@@ -373,7 +409,7 @@ mod vault_tests {
     #[test]
     fn link_parsin_with_display_text() {
         let text = "This is a [[link|but called different]] [[link 2|222]]\n[[link 3|333]]";
-        let parsed = parse_obsidian_references(text);
+        let parsed = Reference::parse(text);
 
         let expected = vec![
             Reference {
@@ -399,7 +435,7 @@ mod vault_tests {
     #[test]
     fn link_parsing_with_png() {
         let text = "This is a png [[link.png]] [[link|display.png]]";
-        let parsed = parse_obsidian_references(text);
+        let parsed = Reference::parse(text);
 
         assert_eq!(parsed, vec![])
     }
@@ -421,7 +457,7 @@ more text
 
 ## This shoudl be a heading!";
 
-        let parsed = parse_obsidian_headings(text);
+        let parsed = MDHeading::parse(text);
 
         let expected = vec![
             MDHeading {
@@ -453,7 +489,7 @@ more text
         some mroe text
         more text";
 
-        let parsed = parse_obsidian_indexed_blocks(text);
+        let parsed = MDIndexedBlock::parse(text);
 
         assert_eq!(parsed[0].index, "12345")
     }
@@ -503,7 +539,7 @@ more text
     #[test]
     fn parsing_special_text() {
         let text = "’’’󰌶 is a [[link]] [[link 2]]\n[[link 3]]";
-        let parsed = parse_obsidian_references(text);
+        let parsed = Reference::parse(text);
 
         let expected = vec![
             Reference {
@@ -560,7 +596,7 @@ more text
             start: Position { line: 0, character: 0 }, 
             end: Position { line: 0, character: 1 }
             }
-        }]);
+            }]);
         assert_eq!(result, proper);
 
         let position = Position {line: 6, character: 27};
@@ -573,10 +609,10 @@ more text
         let proper = Some(vec![Location{
             uri: Url::from_file_path(result_path.to_str().unwrap()).unwrap(),
             range: Range { 
-                start: Position { line: 2, character: 0 }, 
-                end: Position { line: 2, character: 24 }
+            start: Position { line: 2, character: 0 }, 
+            end: Position { line: 2, character: 24 }
             }
-        }]);
+            }]);
         assert_eq!(result, proper);
     }
 
@@ -585,7 +621,7 @@ more text
         let text = r"# This is a heading
 
 This is a #tag
-  
+
 and another #tag/ttagg
 
 and a third tag#notatag [[link#not a tag]]
@@ -594,30 +630,30 @@ and a third tag#notatag [[link#not a tag]]
 ";
         let expected: Vec<MDTag> = vec![
             MDTag {
-                tag_ref: "tag".into(),
-                range: Range {
-                    start: Position { line: 2, character: 10 },
-                    end: Position { line: 2, character: 14 }
-                }
-            },
-            MDTag {
-                tag_ref: "tag/ttagg".into(),
-                range: Range {
-                    start: Position { line: 4, character: 12 },
-                    end: Position { line: 4, character: 22 }
-                }
-            },
-            MDTag {
-                tag_ref: "MapOfContext/apworld".into(),
-                range: Range {
-                    start: Position { line: 8, character: 0 },
-                    end: Position { line: 8, character: 21 }
-                }
+            tag_ref: "tag".into(),
+            range: Range {
+            start: Position { line: 2, character: 10 },
+            end: Position { line: 2, character: 14 }
             }
-                    
+            },
+            MDTag {
+            tag_ref: "tag/ttagg".into(),
+            range: Range {
+            start: Position { line: 4, character: 12 },
+            end: Position { line: 4, character: 22 }
+            }
+            },
+            MDTag {
+            tag_ref: "MapOfContext/apworld".into(),
+            range: Range {
+            start: Position { line: 8, character: 0 },
+            end: Position { line: 8, character: 21 }
+            }
+            }
+
         ];
 
-        let parsed = parse_obsidian_tags(&text);
+        let parsed = MDTag::parse(&text);
 
         assert_eq!(parsed, expected)
     }
