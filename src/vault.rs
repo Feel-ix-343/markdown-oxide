@@ -154,7 +154,8 @@ pub struct MDFile {
     references: Vec<Reference>,
     headings: Vec<MDHeading>,
     indexed_blocks: Vec<MDIndexedBlock>,
-    tags: Vec<MDTag>
+    tags: Vec<MDTag>,
+    footnotes: Vec<MDFootnote>
 }
 
 impl MDFile {
@@ -164,8 +165,9 @@ impl MDFile {
         let headings = MDHeading::new(text);
         let indexed_blocks = MDIndexedBlock::new(text);
         let tags = MDTag::new(text);
+        let footnotes = MDFootnote::new(text);
 
-        return MDFile { references: links, headings, indexed_blocks, tags }
+        return MDFile { references: links, headings, indexed_blocks, tags, footnotes }
     }
 }
 
@@ -261,6 +263,37 @@ impl MDIndexedBlock {
         return indexed_blocks
     } // Make this better identify the full blocks
 
+}
+
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct MDFootnote {
+    index: String,
+    footnote_text: String,
+    range: tower_lsp::lsp_types::Range
+}
+
+impl MDFootnote {
+    fn new(text: &str) -> Vec<MDFootnote> {
+        // static FOOTNOTE_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r".+ (\^(?<index>\w+))").unwrap());
+        static FOOTNOTE_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\[(?<index>[^ \[\]]+)\]\:(?<text>.+)").unwrap());
+
+        let footnotes: Vec<MDFootnote> = FOOTNOTE_RE.captures_iter(&text.to_string())
+            .flat_map(|c| match (c.get(0), c.name("index"), c.name("text")) {
+                (Some(full), Some(index), Some(footnote_text)) => Some((full, index, footnote_text)),
+                _ => None
+            })
+            .map(|(full, index, footnote_text)|  {
+                MDFootnote {
+                    footnote_text: footnote_text.as_str().trim_start().into(),
+                    index: index.as_str().into(),
+                    range: range_to_position(&Rope::from_str(text), full.range())
+                }
+            })
+            .collect_vec();
+
+        return footnotes
+    }
 }
 
 
@@ -361,10 +394,9 @@ mod vault_tests {
 
     use tower_lsp::lsp_types::{Position, Range, Location, Url};
 
-    use crate::vault::Parseable;
     use crate::{gotodef::goto_definition};
 
-    use super::{Reference,  MDHeading,  MDIndexedBlock, Referenceable, MDFile, MDTag};
+    use super::{Reference,  MDHeading,  MDIndexedBlock, Referenceable, MDFile, MDTag, MDFootnote};
     use super::Vault;
 
     #[test]
@@ -641,6 +673,68 @@ and a third tag#notatag [[link#not a tag]]
         ];
 
         let parsed = MDTag::new(&text);
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn test_obsidian_footnote() {
+        let text = "[^1]: This is a footnote";
+        let parsed = MDFootnote::new(text);
+        let expected = vec![
+            MDFootnote {
+                index: "^1".into(),
+                footnote_text: "This is a footnote".into(),
+                range: Range {
+                    start: Position { line: 0, character: 0 },
+                    end: Position { line: 0, character: 24 }
+                }
+            }
+        ];
+
+        assert_eq!(parsed, expected);
+
+
+
+        let text = 
+r"# This is a heading
+
+Referenced[^1]
+
+[^1]: Footnote here
+
+Continued
+
+[^2]: Another footnote
+[^a]:Third footnot3
+";
+        let parsed = MDFootnote::new(text);
+        let expected = vec![
+            MDFootnote {
+                index: "^1".into(),
+                footnote_text: "Footnote here".into(),
+                range: Range {
+                    start: Position { line: 4, character: 0 },
+                    end: Position { line: 4, character: 19 }
+                }
+            },
+            MDFootnote {
+                index: "^2".into(),
+                footnote_text: "Another footnote".into(),
+                range: Range {
+                    start: Position { line: 8, character: 0 },
+                    end: Position { line: 8, character: 22 }
+                }
+            },
+            MDFootnote {
+                index: "^a".into(),
+                footnote_text: "Third footnot3".into(),
+                range: Range {
+                    start: Position { line: 9, character: 0 },
+                    end: Position { line: 9, character: 19 }
+                }
+            }
+        ];
 
         assert_eq!(parsed, expected)
     }
