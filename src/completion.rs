@@ -15,7 +15,7 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
 
     if selected_line.get(character-2..character) == Some(&vec!['[', '[']) { // we have a link
 
-        let all_links = vault.select_linkable_nodes()
+        let all_links = vault.select_referenceable_nodes()
             .into_iter()
             .filter(|referenceable| !matches!(referenceable, Referenceable::Tag(_, _)));
 
@@ -25,7 +25,7 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
     } else if selected_line.get(character-1..character) == Some(&vec!['#']) {
 
         // Initial Tag completion
-        let tag_refereneables = vault.select_linkable_nodes()
+        let tag_refereneables = vault.select_referenceable_nodes()
             .into_iter()
             .flat_map(|referenceable| match referenceable {
                 tag @ Referenceable::Tag(_, _) => Some(tag),

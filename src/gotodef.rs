@@ -16,9 +16,9 @@ pub fn goto_definition(vault: &Vault, cursor_position: Position, path: &Path) ->
     let reference_text = &cursors_link.1.reference_text;
 
     // Now we have the reference text. We need to find where this is actually referencing, or if it is referencing anything.
-    // Lets get all of the linkable nodes
+    // Lets get all of the referenceable nodes
 
-    let positions = vault.select_linkable_nodes();
+    let positions = vault.select_referenceable_nodes();
     let referenced_linkables = positions.iter().filter(|i| i.get_refname(&vault.root_dir()).as_ref() == Some(&reference_text));
 
     return Some(referenced_linkables.filter_map(|linkable| Some(Location{uri: Url::from_file_path(linkable.get_path().to_str()?).unwrap(), range: linkable.get_range()})).collect());

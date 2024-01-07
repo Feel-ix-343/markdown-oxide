@@ -6,7 +6,7 @@ use tower_lsp::lsp_types::{Position, Location, Url};
 use crate::vault::{Vault, Referenceable};
 
 pub fn references(vault: &Vault, cursor_position: Position, path: &Path) -> Option<Vec<Location>> {
-    // First we need to get the linkable node under the cursor
+    // First we need to get the referenceable node under the cursor
     let path = path.to_path_buf();
     let linkable_nodes = vault.select_linkable_nodes_for_path(&path)?;
     let linkable = linkable_nodes

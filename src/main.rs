@@ -10,7 +10,7 @@ use gotodef::goto_definition;
 use tower_lsp::jsonrpc::{Result, Error, ErrorCode};
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
-use vault::{Vault, construct_vault, reconstruct_vault};
+use vault::Vault;
 
 mod vault;
 mod gotodef;
@@ -42,11 +42,11 @@ impl Backend {
             return;
         };
         let text = &params.text;
-        reconstruct_vault(vault, (&path, text));
+        Vault::reconstruct_vault(vault, (&path, text));
 
         // Diagnostics
         // get all links for changed file
-        let referenceables = vault.select_linkable_nodes();
+        let referenceables = vault.select_referenceable_nodes();
         let Some(pathreferences) = vault.select_references(Some(&path)) else {
             return
         };
@@ -82,7 +82,7 @@ impl LanguageServer for Backend {
             return Err(Error::new(ErrorCode::InvalidParams));
         };
         let root_dir = Path::new(root_uri.path());
-        let Ok(vault) = construct_vault(root_dir) else {
+        let Ok(vault) = Vault::construct_vault(root_dir) else {
             return Err(Error::new(ErrorCode::ServerError(0)))
         };
         let mut value = self.vault.write().await;
