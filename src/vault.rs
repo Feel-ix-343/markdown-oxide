@@ -34,7 +34,7 @@ impl Vault {
             .par_iter()
             .flat_map(|p| {
                 let text = std::fs::read_to_string(p.path())?;
-                let md_file = MDFile::parse(&text);
+                let md_file = MDFile::new(&text);
 
                 return Ok::<(PathBuf, MDFile), std::io::Error>((p.path().into(), md_file))
             })
@@ -58,7 +58,7 @@ impl Vault {
     }
 
     pub fn reconstruct_vault(old: &mut Vault, new_file: (&PathBuf, &str)) {
-        let new_md_file = MDFile::parse(new_file.1);
+        let new_md_file = MDFile::new(new_file.1);
         let new = old.md_files.get_mut(new_file.0);
 
         match new {
@@ -151,7 +151,7 @@ fn range_to_position(rope: &Rope, range: Range<usize>) -> tower_lsp::lsp_types::
 
 pub trait Parseable {
     type Output;
-    fn parse(text: &str) -> Self::Output;
+    fn new(text: &str) -> Self::Output;
 }
 
 
@@ -164,14 +164,13 @@ pub struct MDFile {
     tags: Vec<MDTag>
 }
 
-impl Parseable for MDFile {
-    type Output = MDFile;
-    fn parse(text: &str) -> MDFile {
+impl MDFile {
+    fn new(text: &str) -> MDFile {
 
-        let links = Reference::parse(text);
-        let headings = MDHeading::parse(text);
-        let indexed_blocks = MDIndexedBlock::parse(text);
-        let tags = MDTag::parse(text);
+        let links = Reference::new(text);
+        let headings = MDHeading::new(text);
+        let indexed_blocks = MDIndexedBlock::new(text);
+        let tags = MDTag::new(text);
 
         return MDFile { references: links, headings, indexed_blocks, tags }
     }
@@ -184,10 +183,8 @@ pub struct Reference {
     pub range: tower_lsp::lsp_types::Range
 }
 
-impl Parseable for Reference {
-    type Output = Vec<Reference>;
-    /// Parse out the references to referenceables in each file. This will have links to files and tags
-    fn parse(text: &str) -> Vec<Reference> {
+impl Reference {
+    fn new(text: &str) -> Vec<Reference> {
         static LINK_RE: Lazy<Regex> = Lazy::new(|| 
             Regex::new(r"\[\[(?<referencetext>[^\[\]\|\.]+)(\|(?<display>[^\[\]\.\|]+))?\]\]").unwrap()
         ); // A [[link]] that does not have any [ or ] in it
@@ -205,7 +202,7 @@ impl Parseable for Reference {
                 }})
             .collect_vec();
 
-        let tags: Vec<Reference> = MDTag::parse(text).iter().map(|tag| Reference {display_text: None, range: tag.range, reference_text: format!("#{}", tag.tag_ref)}).collect();
+        let tags: Vec<Reference> = MDTag::new(text).iter().map(|tag| Reference {display_text: None, range: tag.range, reference_text: format!("#{}", tag.tag_ref)}).collect();
 
         return links.into_iter().chain(tags.into_iter()).collect_vec()
     }
@@ -219,9 +216,8 @@ pub struct MDHeading {
     range: tower_lsp::lsp_types::Range
 }
 
-impl Parseable for MDHeading {
-    type Output = Vec<MDHeading>;
-    fn parse(text: &str) -> Vec<MDHeading> {
+impl MDHeading {
+    fn new(text: &str) -> Vec<MDHeading> {
 
         static HEADING_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"#+ (?<heading_text>.+)").unwrap());
 
@@ -251,9 +247,8 @@ pub struct MDIndexedBlock {
     range: tower_lsp::lsp_types::Range
 }
 
-impl Parseable for MDIndexedBlock {
-    type Output = Vec<MDIndexedBlock>;
-    fn parse(text: &str) -> Vec<MDIndexedBlock> {
+impl MDIndexedBlock {
+    fn new(text: &str) -> Vec<MDIndexedBlock> {
 
         static INDEXED_BLOCK_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r".+ (\^(?<index>\w+))").unwrap());
 
@@ -282,9 +277,8 @@ pub struct MDTag {
     range: tower_lsp::lsp_types::Range
 }
 
-impl Parseable for MDTag {
-    type Output = Vec<MDTag>;
-    fn parse(text: &str) -> Vec<MDTag> {
+impl MDTag {
+    fn new(text: &str) -> Vec<MDTag> {
         static TAG_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(\n|\A| )(?<full>#(?<tag>[.[^ \n\#]]+))(\n|\z| )").unwrap());
 
 
@@ -383,7 +377,7 @@ mod vault_tests {
     #[test]
     fn link_parsing() {
         let text = "This is a [[link]] [[link 2]]\n[[link 3]]";
-        let parsed = Reference::parse(text);
+        let parsed = Reference::new(text);
 
         let expected = vec![
             Reference {
@@ -409,7 +403,7 @@ mod vault_tests {
     #[test]
     fn link_parsin_with_display_text() {
         let text = "This is a [[link|but called different]] [[link 2|222]]\n[[link 3|333]]";
-        let parsed = Reference::parse(text);
+        let parsed = Reference::new(text);
 
         let expected = vec![
             Reference {
@@ -435,7 +429,7 @@ mod vault_tests {
     #[test]
     fn link_parsing_with_png() {
         let text = "This is a png [[link.png]] [[link|display.png]]";
-        let parsed = Reference::parse(text);
+        let parsed = Reference::new(text);
 
         assert_eq!(parsed, vec![])
     }
@@ -457,7 +451,7 @@ more text
 
 ## This shoudl be a heading!";
 
-        let parsed = MDHeading::parse(text);
+        let parsed = MDHeading::new(text);
 
         let expected = vec![
             MDHeading {
@@ -489,7 +483,7 @@ more text
         some mroe text
         more text";
 
-        let parsed = MDIndexedBlock::parse(text);
+        let parsed = MDIndexedBlock::new(text);
 
         assert_eq!(parsed[0].index, "12345")
     }
@@ -539,7 +533,7 @@ more text
     #[test]
     fn parsing_special_text() {
         let text = "’’’󰌶 is a [[link]] [[link 2]]\n[[link 3]]";
-        let parsed = Reference::parse(text);
+        let parsed = Reference::new(text);
 
         let expected = vec![
             Reference {
@@ -653,7 +647,7 @@ and a third tag#notatag [[link#not a tag]]
 
         ];
 
-        let parsed = MDTag::parse(&text);
+        let parsed = MDTag::new(&text);
 
         assert_eq!(parsed, expected)
     }
