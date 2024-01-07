@@ -6,7 +6,7 @@ use pathdiff::diff_paths;
 use rayon::prelude::*;
 use regex::Regex;
 use ropey::Rope;
-use tower_lsp::lsp_types::{Position};
+use tower_lsp::lsp_types::Position;
 use walkdir::WalkDir;
 
 
@@ -100,9 +100,15 @@ impl Vault {
             .flat_map(|(path, md)| md.tags.iter().map(move |tag| (path, tag)))
             .map(|(path, tag)| Referenceable::Tag(path, tag));
 
-        return files.into_iter().chain(headings).chain(indexed_blocks).chain(tags).collect()
+
+        let footnotes = self.md_files.iter()
+            .flat_map(|(path, md)| md.footnotes.iter().map(move |footnote| (path, footnote)))
+            .map(|(path, footnote)| Referenceable::Footnote(path, footnote));
+
+        return files.into_iter().chain(headings).chain(indexed_blocks).chain(tags).chain(footnotes).collect()
     }
 
+    // TODO: FIX TEH DAMN DUPLICATION. It ruined me again! (for 2 hours)
     pub fn select_linkable_nodes_for_path<'a>(&'a self, path: &'a PathBuf) -> Option<Vec<Referenceable<'a>>> {
         let file = self.md_files.get(path)?;
         let file_linkable = Referenceable::File(path, file);
@@ -113,7 +119,12 @@ impl Vault {
 
         let tags = file.tags.iter().map(|tag| Referenceable::Tag(path, tag));
 
-        return Some(vec![file_linkable].into_iter().chain(headings).chain(indexed_blocks).chain(tags).collect())
+
+        let footnotes = self.md_files.iter()
+            .flat_map(|(path, md)| md.footnotes.iter().map(move |footnote| (path, footnote)))
+            .map(|(path, footnote)| Referenceable::Footnote(path, footnote));
+
+        return Some(vec![file_linkable].into_iter().chain(headings).chain(indexed_blocks).chain(tags).chain(footnotes).collect())
     } // TODO: Fix this design. Duplication is bad and I want to require that all references for all types of Referenceable are searched for. 
 
     pub fn select_line(&self, path: &PathBuf, line: usize) -> Option<Vec<char>> {
@@ -199,7 +210,25 @@ impl Reference {
 
         let tags: Vec<Reference> = MDTag::new(text).iter().map(|tag| Reference {display_text: None, range: tag.range, reference_text: format!("#{}", tag.tag_ref)}).collect();
 
-        return links.into_iter().chain(tags.into_iter()).collect_vec()
+
+        // TODO: HOnestly, it is just a work around to have tag and footnote in here. A better system is needed. 
+        static FOOTNOTE_LINK_RE: Lazy<Regex> = Lazy::new(|| 
+            Regex::new(r"[^\[](?<full>\[(?<index>[^\[\] ]+)\])[^\:]").unwrap()
+        );
+        let footnote_references: Vec<Reference> = FOOTNOTE_LINK_RE.captures_iter(text)
+            .flat_map(|capture| match (capture.name("full"), capture.name("index")) {
+                (Some(full), Some(index)) => Some((full, index)),
+                _ => None
+            })
+            .map(|(outer, index)| {
+                Reference {
+                    reference_text: index.as_str().into(),
+                    range: range_to_position(&Rope::from_str(text), outer.range()),
+                    display_text: None
+                }})
+            .collect_vec();
+
+        return links.into_iter().chain(tags.into_iter()).chain(footnote_references).collect_vec()
     }
 }
 
@@ -341,6 +370,7 @@ pub enum Referenceable<'a> {
     Heading(&'a PathBuf, &'a MDHeading),
     IndexedBlock(&'a PathBuf, &'a MDIndexedBlock),
     Tag(&'a PathBuf, &'a MDTag),
+    Footnote(&'a PathBuf, &'a MDFootnote)
 }
 
 /// Utility function
@@ -355,14 +385,16 @@ impl Referenceable<'_> {
             &Referenceable::File(path, _) => get_obsidian_ref_path(root_dir, path),
             &Referenceable::Heading(path, heading) => get_obsidian_ref_path(root_dir, path).and_then(|refpath| Some(format!("{}#{}", refpath, heading.heading_text))),
             &Referenceable::IndexedBlock(path, heading) => get_obsidian_ref_path(root_dir, path).and_then(|refpath| Some(format!("{}#^{}", refpath, heading.index))),
-            &Referenceable::Tag(_, tag) => Some(format!("#{}", tag.tag_ref))
+            &Referenceable::Tag(_, tag) => Some(format!("#{}", tag.tag_ref)),
+            &Referenceable::Footnote(_, footnote) => Some(footnote.index.clone())
         }
     }
 
-    pub fn is_reference(&self, root_dir: &Path, reference: &Reference) -> bool {
+    pub fn is_reference(&self, root_dir: &Path, reference: &Reference, file_path: &Path) -> bool {
         let text = &reference.reference_text;
         match self {
             &Referenceable::Tag(_, _) => self.get_refname(root_dir).is_some_and(|refname| text.starts_with(&refname)),
+            &Referenceable::Footnote(path, _footnote) => self.get_refname(root_dir).as_ref() == Some(text) && path.as_path() == file_path,
             _ => self.get_refname(root_dir) == Some(text.to_string())
         }
     }
@@ -372,7 +404,8 @@ impl Referenceable<'_> {
             &Referenceable::File(path, _) => path,
             &Referenceable::Heading(path, _) => path,
             &Referenceable::IndexedBlock(path, _) => path,
-            &Referenceable::Tag(path, _) => path
+            &Referenceable::Tag(path, _) => path,
+            &Referenceable::Footnote(path, _) => path
         }
     }
 
@@ -381,7 +414,8 @@ impl Referenceable<'_> {
             &Referenceable::File(_, _) => tower_lsp::lsp_types::Range { start: Position { line: 0, character: 0 }, end: Position { line: 0, character: 1} },
             &Referenceable::Heading(_, heading) => heading.range,
             &Referenceable::IndexedBlock(_, indexed_block) => indexed_block.range,
-            &Referenceable::Tag(_, tag) => tag.range
+            &Referenceable::Tag(_, tag) => tag.range,
+            &Referenceable::Footnote(_, footnote) => footnote.range
         }
     }
 }
@@ -394,7 +428,7 @@ mod vault_tests {
 
     use tower_lsp::lsp_types::{Position, Range, Location, Url};
 
-    use crate::{gotodef::goto_definition};
+    use crate::gotodef::goto_definition;
 
     use super::{Reference,  MDHeading,  MDIndexedBlock, Referenceable, MDFile, MDTag, MDFootnote};
     use super::Vault;
@@ -449,6 +483,23 @@ mod vault_tests {
         ];
 
         assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn footnote_link_parsing() {
+        let text = "This is a footnote[^1]
+
+[^1]: This is not";
+        let parsed = Reference::new(text);
+        let expected = vec![
+            Reference {
+                reference_text: "^1".into(),
+                range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 0, character: 18 }, end: tower_lsp::lsp_types::Position { line: 0, character: 22 } },
+                ..Reference::default()
+            }
+        ];
+
+        assert_eq!(parsed,expected)
     }
 
     #[test]

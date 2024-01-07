@@ -4,20 +4,8 @@ fj dalkfdj
 
 [[Another Test]]
 
-This file is popppinnng, 2 links to it. 
+This file is popppinnng, 2 links to it.[^1]
 
-[[This]]
 
-[[Completion]]
 
-[[folder/File#Heading]]
-
-[[Test#Heading 1 2]]
-[[Test#Heading 1 2]]
-[[Test#Heading 1 2]]
-
-[[folder/File#Heading]]
-[[Test#Heading 1 2]]
-[[Test#Heading 1 2]]
-
-#tag/test
+[^1]: Footntoe

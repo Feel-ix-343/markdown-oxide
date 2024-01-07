@@ -55,15 +55,15 @@ impl Backend {
         };
         let unresolved = pathreferences
             .into_par_iter()
-            .filter(|(_, reference)| !referenceables.iter().any(|referenceable| referenceable.is_reference(&vault.root_dir(), reference) ));
+            .filter(|(path, reference)| !referenceables.iter().any(|referenceable| referenceable.is_reference(&vault.root_dir(), reference, path) ));
 
 
         let diags: Vec<Diagnostic> = unresolved
             .map(|(_, reference)| Diagnostic {
                 range: reference.range,
-                message: match allreferences.iter().filter(|(_, otherreference)| otherreference.reference_text == reference.reference_text).count() {
-                    num if num > 1 => format!("Unresolved Link used {} times", num),
-                    _ => format!("Unresolved Link")
+                message: match allreferences.iter().filter(|(_, otherreference)| otherreference.reference_text == reference.reference_text).count() { // TODO: Fix bug with footnote
+                    num if num > 1 => format!("Unresolved Reference used {} times", num),
+                    _ => format!("Unresolved Reference")
                 },
                 source: Some("Obsidian LS".into()),
                 ..Default::default()

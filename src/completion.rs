@@ -17,7 +17,7 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
 
         let all_links = vault.select_referenceable_nodes()
             .into_iter()
-            .filter(|referenceable| !matches!(referenceable, Referenceable::Tag(_, _)));
+            .filter(|referenceable| !matches!(referenceable, Referenceable::Tag(_, _)) && !matches!(referenceable, Referenceable::Footnote(_, _)));
 
         return Some(CompletionResponse::Array(
             all_links.map(|tag| tag.get_refname(&vault.root_dir()).map(|root| CompletionItem { kind: Some(CompletionItemKind::FILE), label: root, ..Default::default()})).flatten().unique_by(|c| c.label.to_owned()).collect_vec()
@@ -38,6 +38,19 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
                 .map(|tag| tag.get_refname(&vault.root_dir()).map(|root| CompletionItem { kind: Some(CompletionItemKind::CONSTANT), label: root, ..Default::default()})).flatten().unique_by(|c| c.label.to_owned()).collect_vec()
         )
         )
+    } else if selected_line.get(character-1..character) == Some(&vec!['[']) {
+        let footnote_referenceables = vault.select_linkable_nodes_for_path(&path)?
+            .into_iter()
+            .flat_map(|referenceable| match referenceable {
+                Referenceable::Footnote(footnote_path, _) if footnote_path.as_path() == path.as_path() => Some(referenceable),
+                _ => None
+            });
+
+
+        return Some(CompletionResponse::Array(
+            footnote_referenceables
+                .map(|footnote| footnote.get_refname(&vault.root_dir()).map(|root| CompletionItem { kind: Some(CompletionItemKind::REFERENCE), label: root, ..Default::default()})).flatten().unique_by(|c| c.label.to_owned()).collect_vec()
+        ))
     } else {
         return None
     }
