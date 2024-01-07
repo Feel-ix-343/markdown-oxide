@@ -149,13 +149,6 @@ fn range_to_position(rope: &Rope, range: Range<usize>) -> tower_lsp::lsp_types::
     }
 }
 
-pub trait Parseable {
-    type Output;
-    fn new(text: &str) -> Self::Output;
-}
-
-
-
 #[derive(Debug, PartialEq, Eq, Default)]
 pub struct MDFile {
     references: Vec<Reference>,
@@ -314,7 +307,7 @@ pub enum Referenceable<'a> {
     File(&'a PathBuf, &'a MDFile),
     Heading(&'a PathBuf, &'a MDHeading),
     IndexedBlock(&'a PathBuf, &'a MDIndexedBlock),
-    Tag(&'a PathBuf, &'a MDTag)
+    Tag(&'a PathBuf, &'a MDTag),
 }
 
 /// Utility function
