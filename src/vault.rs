@@ -76,7 +76,7 @@ fn parse_obsidian_md(text: &str) -> MDFile {
 /// Parse out the references to linkables in each file. This will have links to files and tags
 fn parse_obsidian_references(text: &str) -> Vec<Reference> {
     static LINK_RE: Lazy<Regex> = Lazy::new(|| 
-        Regex::new(r"\[\[(?<referencetext>[.[^\[\]\|]]+)(\|(?<display>[.[^\[\]|]]+))?\]\]").unwrap()
+        Regex::new(r"\[\[(?<referencetext>[^\[\]\|\.]+)(\|(?<display>[^\[\]\.\|]+))?\]\]").unwrap()
     ); // A [[link]] that does not have any [ or ] in it
 
     let links: Vec<Reference> = LINK_RE.captures_iter(text)
@@ -390,6 +390,14 @@ mod vault_tests {
         ];
 
         assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn link_parsing_with_png() {
+        let text = "This is a png [[link.png]] [[link|display.png]]";
+        let parsed = parse_obsidian_references(text);
+
+        assert_eq!(parsed, vec![])
     }
 
 
