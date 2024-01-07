@@ -2,9 +2,9 @@ use std::ops::Deref;
 use std::path::Path;
 
 use completion::get_completions;
-use itertools::Itertools;
 use references::references;
 use tokio::sync::RwLock;
+use rayon::prelude::*;
 
 use gotodef::goto_definition;
 use tower_lsp::jsonrpc::{Result, Error, ErrorCode};
@@ -47,25 +47,28 @@ impl Backend {
         // Diagnostics
         // get all links for changed file
         let referenceables = vault.select_linkable_nodes();
-        let Some(references) = vault.select_references(Some(&path)) else {
+        let Some(pathreferences) = vault.select_references(Some(&path)) else {
             return
         };
-        let unresolved = references
-            .into_iter()
-            .filter(|(_, reference)| !referenceables.iter().any(|referenceable| referenceable.is_reference(&vault.root_dir(), reference) ))
-            .collect_vec();
+        let Some(allreferences) = vault.select_references(None) else {
+            return
+        };
+        let unresolved = pathreferences
+            .into_par_iter()
+            .filter(|(_, reference)| !referenceables.iter().any(|referenceable| referenceable.is_reference(&vault.root_dir(), reference) ));
 
-        let diags: Vec<Diagnostic> = unresolved.iter()
+
+        let diags: Vec<Diagnostic> = unresolved
             .map(|(_, reference)| Diagnostic {
                 range: reference.range,
-                message: match unresolved.iter().filter(|un| un.1.reference_text == reference.reference_text).count() {
+                message: match allreferences.iter().filter(|(_, otherreference)| otherreference.reference_text == reference.reference_text).count() {
                     num if num > 1 => format!("Unresolved Link used {} times", num),
                     _ => format!("Unresolved Link")
                 },
                 source: Some("Obsidian LS".into()),
                 ..Default::default()
             })
-            .collect_vec();
+            .collect();
 
 
         self.client.publish_diagnostics(params.uri, diags, None).await;
