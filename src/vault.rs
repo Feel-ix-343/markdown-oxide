@@ -10,6 +10,124 @@ use tower_lsp::lsp_types::{Position};
 use walkdir::WalkDir;
 
 
+#[derive(Debug, PartialEq, Eq)]
+/// The in memory representation of the obsidian vault files. This data is exposed through an interface of methods to select the vaults data.
+/// These methods do not do any interpretation or analysis of the data. That is up to the consumer of this struct. The methods are analogous to selecting on a database. 
+pub struct Vault {
+    md_files: HashMap<PathBuf, MDFile>,
+    ropes: HashMap<PathBuf, Rope>,
+    root_dir: PathBuf,
+}
+
+
+impl Vault {
+    pub fn construct_vault(root_dir: &Path) -> Result<Vault, std::io::Error> {
+
+        let md_file_paths = WalkDir::new(root_dir)
+            .into_iter()
+            .filter_entry(|e| !e.file_name().to_str().map(|s| s.starts_with(".")).unwrap_or(false))
+            .flatten()
+            .filter(|f| f.path().extension().and_then(|e| e.to_str()) == Some("md"))
+            .collect_vec();
+
+        let md_files: HashMap<PathBuf, MDFile> = md_file_paths
+            .par_iter()
+            .flat_map(|p| {
+                let text = std::fs::read_to_string(p.path())?;
+                let md_file = parse_obsidian_md(&text);
+
+                return Ok::<(PathBuf, MDFile), std::io::Error>((p.path().into(), md_file))
+            })
+            .collect();
+
+        let ropes = md_file_paths
+            .par_iter()
+            .flat_map(|p| {
+                let text = std::fs::read_to_string(p.path())?;
+                let rope = Rope::from_str(&text);
+
+                return Ok::<(PathBuf, Rope), std::io::Error>((p.path().into(), rope))
+            })
+            .collect();
+
+        return Ok(Vault {
+            ropes,
+            md_files,
+            root_dir: root_dir.into()
+        })
+    }
+
+    pub fn reconstruct_vault(old: &mut Vault, new_file: (&PathBuf, &str)) {
+        let new_md_file = parse_obsidian_md(new_file.1);
+        let new = old.md_files.get_mut(new_file.0);
+
+        match new {
+            Some(file) => { *file = new_md_file; }
+            None => { old.md_files.insert(new_file.0.into(), new_md_file); }
+        };
+
+        let new_rope = Rope::from_str(new_file.1);
+        let rope_entry = old.ropes.get_mut(new_file.0);
+
+        match rope_entry {
+            Some(rope) => { *rope = new_rope; },
+            None => { old.ropes.insert(new_file.0.into(), new_rope); }
+        }
+    }
+    /// Select all references ([[link]] or #tag) in a file if path is some, else select all references in the vault.
+    pub fn select_references<'a>(&'a self, path: Option<&'a Path>) -> Option<Vec<(&'a Path, &'a Reference)>> {
+        match path {
+            Some(path) => self.md_files.get(path).map(|md| &md.references).map(|vec| vec.iter().map(|i| (path, i)).collect()),
+            None => Some(self.md_files.iter().map(|(path, md)| md.references.iter().map(|link| (path.as_path(), link))).flatten().collect())
+        }
+        
+    } // TODO: less cloning?
+
+    /// Select all linkable positions in the vault
+    pub fn select_referenceable_nodes<'a>(&'a self) -> Vec<Referenceable<'a>> {
+        let files = self.md_files.iter()
+            .map(|(path, md)| Referenceable::File(path, md));
+
+        let headings = self.md_files.iter()
+            .flat_map(|(path, md)| md.headings.iter().map(move |h| (path, h)))
+            .map(|(path, h)| Referenceable::Heading(path, h));
+
+        let indexed_blocks = self.md_files.iter()
+            .flat_map(|(path, md)| md.indexed_blocks.iter().map(move |ib| (path, ib)))
+            .map(|(path, ib)| Referenceable::IndexedBlock(path, ib));
+
+        let tags = self.md_files.iter()
+            .flat_map(|(path, md)| md.tags.iter().map(move |tag| (path, tag)))
+            .map(|(path, tag)| Referenceable::Tag(path, tag));
+
+        return files.into_iter().chain(headings).chain(indexed_blocks).chain(tags).collect()
+    }
+
+    pub fn select_linkable_nodes_for_path<'a>(&'a self, path: &'a PathBuf) -> Option<Vec<Referenceable<'a>>> {
+        let file = self.md_files.get(path)?;
+        let file_linkable = Referenceable::File(path, file);
+
+        let headings = file.headings.iter().map(|h| Referenceable::Heading(path, h));
+
+        let indexed_blocks = file.indexed_blocks.iter().map(|ib| Referenceable::IndexedBlock(path, ib));
+
+        let tags = file.tags.iter().map(|tag| Referenceable::Tag(path, tag));
+
+        return Some(vec![file_linkable].into_iter().chain(headings).chain(indexed_blocks).chain(tags).collect())
+    } // TODO: Fix this design. Duplication is bad and I want to require that all references for all types of Referenceable are searched for. 
+
+    pub fn select_line(&self, path: &PathBuf, line: usize) -> Option<Vec<char>> {
+        let rope = self.ropes.get(path)?;
+
+        rope.get_line(line).and_then(|slice| Some(slice.chars().collect_vec()))
+    }
+
+    pub fn root_dir(&self) -> &PathBuf {
+        &self.root_dir
+    }
+}
+
+
 fn parse_obsidian_md(text: &str) -> MDFile {
 
     let links = parse_obsidian_references(text);
@@ -127,122 +245,6 @@ fn range_to_position(rope: &Rope, range: Range<usize>) -> tower_lsp::lsp_types::
 
 
 
-#[derive(Debug, PartialEq, Eq)]
-/// The in memory representation of the obsidian vault files. This data is exposed through an interface of methods to select the vaults data.
-/// These methods do not do any interpretation or analysis of the data. That is up to the consumer of this struct. The methods are analogous to selecting on a database. 
-pub struct Vault {
-    md_files: HashMap<PathBuf, MDFile>,
-    ropes: HashMap<PathBuf, Rope>,
-    root_dir: PathBuf,
-}
-
-
-impl Vault {
-    pub fn construct_vault(root_dir: &Path) -> Result<Vault, std::io::Error> {
-
-        let md_file_paths = WalkDir::new(root_dir)
-            .into_iter()
-            .filter_entry(|e| !e.file_name().to_str().map(|s| s.starts_with(".")).unwrap_or(false))
-            .flatten()
-            .filter(|f| f.path().extension().and_then(|e| e.to_str()) == Some("md"))
-            .collect_vec();
-
-        let md_files: HashMap<PathBuf, MDFile> = md_file_paths
-            .par_iter()
-            .flat_map(|p| {
-                let text = std::fs::read_to_string(p.path())?;
-                let md_file = parse_obsidian_md(&text);
-
-                return Ok::<(PathBuf, MDFile), std::io::Error>((p.path().into(), md_file))
-            })
-            .collect();
-
-        let ropes = md_file_paths
-            .par_iter()
-            .flat_map(|p| {
-                let text = std::fs::read_to_string(p.path())?;
-                let rope = Rope::from_str(&text);
-
-                return Ok::<(PathBuf, Rope), std::io::Error>((p.path().into(), rope))
-            })
-            .collect();
-
-        return Ok(Vault {
-            ropes,
-            md_files,
-            root_dir: root_dir.into()
-        })
-    }
-
-    pub fn reconstruct_vault(old: &mut Vault, new_file: (&PathBuf, &str)) {
-        let new_md_file = parse_obsidian_md(new_file.1);
-        let new = old.md_files.get_mut(new_file.0);
-
-        match new {
-            Some(file) => { *file = new_md_file; }
-            None => { old.md_files.insert(new_file.0.into(), new_md_file); }
-        };
-
-        let new_rope = Rope::from_str(new_file.1);
-        let rope_entry = old.ropes.get_mut(new_file.0);
-
-        match rope_entry {
-            Some(rope) => { *rope = new_rope; },
-            None => { old.ropes.insert(new_file.0.into(), new_rope); }
-        }
-    }
-    /// Select all references ([[link]] or #tag) in a file if path is some, else select all references in the vault.
-    pub fn select_references<'a>(&'a self, path: Option<&'a Path>) -> Option<Vec<(&'a Path, &'a Reference)>> {
-        match path {
-            Some(path) => self.md_files.get(path).map(|md| &md.references).map(|vec| vec.iter().map(|i| (path, i)).collect()),
-            None => Some(self.md_files.iter().map(|(path, md)| md.references.iter().map(|link| (path.as_path(), link))).flatten().collect())
-        }
-        
-    } // TODO: less cloning?
-
-    /// Select all linkable positions in the vault
-    pub fn select_referenceable_nodes<'a>(&'a self) -> Vec<Referenceable<'a>> {
-        let files = self.md_files.iter()
-            .map(|(path, md)| Referenceable::File(path, md));
-
-        let headings = self.md_files.iter()
-            .flat_map(|(path, md)| md.headings.iter().map(move |h| (path, h)))
-            .map(|(path, h)| Referenceable::Heading(path, h));
-
-        let indexed_blocks = self.md_files.iter()
-            .flat_map(|(path, md)| md.indexed_blocks.iter().map(move |ib| (path, ib)))
-            .map(|(path, ib)| Referenceable::IndexedBlock(path, ib));
-
-        let tags = self.md_files.iter()
-            .flat_map(|(path, md)| md.tags.iter().map(move |tag| (path, tag)))
-            .map(|(path, tag)| Referenceable::Tag(path, tag));
-
-        return files.into_iter().chain(headings).chain(indexed_blocks).chain(tags).collect()
-    }
-
-    pub fn select_linkable_nodes_for_path<'a>(&'a self, path: &'a PathBuf) -> Option<Vec<Referenceable<'a>>> {
-        let file = self.md_files.get(path)?;
-        let file_linkable = Referenceable::File(path, file);
-
-        let headings = file.headings.iter().map(|h| Referenceable::Heading(path, h));
-
-        let indexed_blocks = file.indexed_blocks.iter().map(|ib| Referenceable::IndexedBlock(path, ib));
-
-        let tags = file.tags.iter().map(|tag| Referenceable::Tag(path, tag));
-
-        return Some(vec![file_linkable].into_iter().chain(headings).chain(indexed_blocks).chain(tags).collect())
-    } // TODO: Fix this design. Duplication is bad and I want to require that all references for all types of Referenceable are searched for. 
-
-    pub fn select_line(&self, path: &PathBuf, line: usize) -> Option<Vec<char>> {
-        let rope = self.ropes.get(path)?;
-
-        rope.get_line(line).and_then(|slice| Some(slice.chars().collect_vec()))
-    }
-
-    pub fn root_dir(&self) -> &PathBuf {
-        &self.root_dir
-    }
-}
 
 #[derive(Debug, Clone)]
 /// Linkable algebreic type that easily allows for new linkable nodes to be added if necessary and everything in it should live the same amount because it is all from vault
