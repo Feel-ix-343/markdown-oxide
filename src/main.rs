@@ -65,8 +65,7 @@ impl Backend {
                     otherreference.matches_type(reference) && 
                     (!matches!(reference, vault::Reference::Footnote(_)) || *other_path == path) &&
                     otherreference.data().reference_text == reference.data().reference_text
-                ).count()
-                { // TODO: Fix bug with footnote
+                ).count() {
                     num if num > 1 => format!("Unresolved Reference used {} times", num),
                     _ => format!("Unresolved Reference")
                 },
