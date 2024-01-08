@@ -18,6 +18,7 @@ mod references;
 mod completion;
 mod diagnostics;
 mod hover;
+mod ui;
 
 
 #[derive(Debug)]
