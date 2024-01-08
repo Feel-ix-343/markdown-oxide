@@ -43,6 +43,21 @@ pub fn hover(vault: &Vault, params: HoverParams, path: &Path) -> Option<Hover> {
                 }),
                 range: None
             })
+        },
+        Reference::Footnote(_) => {
+            let positions = vault.select_referenceable_nodes(None);
+            let referenceable = positions.iter().find(|i| i.is_reference(&vault.root_dir(), &reference, &refpath))?;
+
+            let range = referenceable.get_range();
+            let text: String = String::from_iter(vault.select_line(&referenceable.get_path(), range.start.line as usize)?);
+
+            return Some(Hover {
+                contents: HoverContents::Markup(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: format!("Footnote Preview:\n---\n\n{}", text),
+                }),
+                range: None
+            })
         }
         _ => None
     }
