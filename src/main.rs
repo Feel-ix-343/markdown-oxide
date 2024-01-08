@@ -17,6 +17,7 @@ mod gotodef;
 mod references;
 mod completion;
 mod diagnostics;
+mod hover;
 
 
 #[derive(Debug)]
@@ -79,11 +80,13 @@ impl LanguageServer for Backend {
                 definition_provider: Some(OneOf::Left(true)),
                 references_provider: Some(OneOf::Left(true)),
                 rename_provider: Some(OneOf::Left(true)),
+                hover_provider: Some(HoverProviderCapability::Simple(true)),
                 ..Default::default()
-
             }
         })
     }
+
+    
 
     async fn shutdown(&self) -> Result<()> {
         Ok(())
@@ -151,6 +154,18 @@ impl LanguageServer for Backend {
             self.client.log_message(MessageType::INFO, format!("No completions for: {:?}", params)).await;
         }
         Ok(completions)
+    }
+
+
+    async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
+        let bad_vault = self.vault.read().await;
+        let Some(vault) = bad_vault.deref() else {
+            return Err(Error::new(ErrorCode::ServerError(0)))
+        };
+        let Ok(path) = params.text_document_position_params.text_document.uri.to_file_path() else {
+            return Err(Error::new(ErrorCode::ServerError(0)));
+        };
+        return Ok(hover::hover(&vault, params, &path))
     }
 }
 

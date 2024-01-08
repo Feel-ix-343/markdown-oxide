@@ -111,7 +111,7 @@ impl Vault {
         return files.into_iter().chain(headings).chain(indexed_blocks).chain(tags).chain(footnotes).collect()
     }
 
-    pub fn select_line(&self, path: &PathBuf, line: usize) -> Option<Vec<char>> {
+    pub fn select_line(&self, path: &Path, line: usize) -> Option<Vec<char>> {
         let rope = self.ropes.get(path)?;
 
         rope.get_line(line).and_then(|slice| Some(slice.chars().collect_vec()))
