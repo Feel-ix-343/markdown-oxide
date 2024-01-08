@@ -60,7 +60,16 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
 
         return Some(CompletionResponse::Array(
             footnote_referenceables
-                .map(|footnote| footnote.get_refname(&vault.root_dir()).map(|root| CompletionItem { kind: Some(CompletionItemKind::REFERENCE), label: root, ..Default::default()})).flatten().unique_by(|c| c.label.to_owned()).collect_vec()
+                .map(|footnote| footnote.get_refname(&vault.root_dir())
+                    .map(|root| CompletionItem { 
+                        kind: Some(CompletionItemKind::REFERENCE), 
+                        label: root, 
+                        documentation: preview_referenceable(vault, &footnote).and_then(|markup| Some(Documentation::MarkupContent(markup))),
+                        ..Default::default()
+                    }))
+                .flatten()
+                .unique_by(|c| c.label.to_owned())
+                .collect_vec()
         ))
     } else {
         return None
