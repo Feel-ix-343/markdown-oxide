@@ -5,7 +5,7 @@
 #tag
 
 
-more footntoe[^1]
+more footntoe[^2]
 
 [^2]: This is a different footntoe
 
