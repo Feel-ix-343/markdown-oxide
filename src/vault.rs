@@ -197,6 +197,14 @@ impl Reference {
         }
     }
 
+    pub fn matches_type(&self, other: &Reference) -> bool {
+        match &other {
+            Tag(_) => matches!(self, Tag(_)),
+            Link(_) => matches!(self, Link(_)),
+            Footnote(_) => matches!(self, Footnote(_)),
+        }
+    }
+
     fn new(text: &str) -> Vec<Reference> {
         static LINK_RE: Lazy<Regex> = Lazy::new(|| 
             Regex::new(r"\[\[(?<referencetext>[^\[\]\|\.]+)(\|(?<display>[^\[\]\.\|]+))?\]\]").unwrap()
@@ -403,9 +411,9 @@ impl Referenceable<'_> {
     pub fn is_reference(&self, root_dir: &Path, reference: &Reference, file_path: &Path) -> bool {
         let text = &reference.data().reference_text;
         match self {
-            &Referenceable::Tag(_, _) => self.get_refname(root_dir).is_some_and(|refname| text.starts_with(&refname)),
-            &Referenceable::Footnote(path, _footnote) => self.get_refname(root_dir).as_ref() == Some(text) && path.as_path() == file_path,
-            _ => self.get_refname(root_dir) == Some(text.to_string())
+            &Referenceable::Tag(_, _) => matches!(reference, Tag(_)) && self.get_refname(root_dir).is_some_and(|refname| text.starts_with(&refname)),
+            &Referenceable::Footnote(path, _footnote) => matches!(reference, Footnote(_)) && self.get_refname(root_dir).as_ref() == Some(text) && path.as_path() == file_path,
+            _ => matches!(reference, Link(_)) && self.get_refname(root_dir) == Some(text.to_string())
         }
     }
 

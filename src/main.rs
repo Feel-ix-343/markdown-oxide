@@ -59,9 +59,13 @@ impl Backend {
 
 
         let diags: Vec<Diagnostic> = unresolved
-            .map(|(_, reference)| Diagnostic {
+            .map(|(path, reference)| Diagnostic {
                 range: reference.data().range,
-                message: match allreferences.iter().filter(|(_, otherreference)| otherreference.data().reference_text == reference.data().reference_text).count() { // TODO: Fix bug with footnote
+                message: match allreferences.iter().filter(|(other_path, otherreference)| 
+                    otherreference.matches_type(reference) && 
+                    (!matches!(reference, vault::Reference::Footnote(_)) || *other_path == path) &&
+                    otherreference.data().reference_text == reference.data().reference_text).count()
+                { // TODO: Fix bug with footnote
                     num if num > 1 => format!("Unresolved Reference used {} times", num),
                     _ => format!("Unresolved Reference")
                 },
