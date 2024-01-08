@@ -8,7 +8,7 @@ use crate::vault::{Vault, Referenceable};
 pub fn references(vault: &Vault, cursor_position: Position, path: &Path) -> Option<Vec<Location>> {
     // First we need to get the referenceable node under the cursor
     let path = path.to_path_buf();
-    let linkable_nodes = vault.select_linkable_nodes_for_path(&path)?;
+    let linkable_nodes = vault.select_referenceable_nodes(Some(&path));
     let linkable = linkable_nodes
         .iter()
         .find(|&l| 

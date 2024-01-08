@@ -84,9 +84,12 @@ impl Vault {
     } // TODO: less cloning?
 
     /// Select all linkable positions in the vault
-    pub fn select_referenceable_nodes<'a>(&'a self) -> Vec<Referenceable<'a>> {
-        let files = self.md_files.iter()
-            .map(|(path, md)| Referenceable::File(path, md));
+    pub fn select_referenceable_nodes<'a>(&'a self, path: Option<&'a PathBuf>) -> Vec<Referenceable<'a>> {
+
+        let files = match path {
+            None => self.md_files.iter().map(|(path, md)| Referenceable::File(path, md)).collect_vec(),
+            Some(path) => vec![self.md_files.get(path).map(|md| Referenceable::File(path, md))].into_iter().flatten().collect_vec()
+        };
 
         let headings = self.md_files.iter()
             .flat_map(|(path, md)| md.headings.iter().map(move |h| (path, h)))
@@ -107,25 +110,6 @@ impl Vault {
 
         return files.into_iter().chain(headings).chain(indexed_blocks).chain(tags).chain(footnotes).collect()
     }
-
-    // TODO: FIX TEH DAMN DUPLICATION. It ruined me again! (for 2 hours)
-    pub fn select_linkable_nodes_for_path<'a>(&'a self, path: &'a PathBuf) -> Option<Vec<Referenceable<'a>>> {
-        let file = self.md_files.get(path)?;
-        let file_linkable = Referenceable::File(path, file);
-
-        let headings = file.headings.iter().map(|h| Referenceable::Heading(path, h));
-
-        let indexed_blocks = file.indexed_blocks.iter().map(|ib| Referenceable::IndexedBlock(path, ib));
-
-        let tags = file.tags.iter().map(|tag| Referenceable::Tag(path, tag));
-
-
-        let footnotes = self.md_files.iter()
-            .flat_map(|(path, md)| md.footnotes.iter().map(move |footnote| (path, footnote)))
-            .map(|(path, footnote)| Referenceable::Footnote(path, footnote));
-
-        return Some(vec![file_linkable].into_iter().chain(headings).chain(indexed_blocks).chain(tags).chain(footnotes).collect())
-    } // TODO: Fix this design. Duplication is bad and I want to require that all references for all types of Referenceable are searched for. 
 
     pub fn select_line(&self, path: &PathBuf, line: usize) -> Option<Vec<char>> {
         let rope = self.ropes.get(path)?;
@@ -493,9 +477,9 @@ mod vault_tests {
         let parsed = Reference::new(text);
         let expected = vec![
             Reference {
-                reference_text: "^1".into(),
-                range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 0, character: 18 }, end: tower_lsp::lsp_types::Position { line: 0, character: 22 } },
-                ..Reference::default()
+            reference_text: "^1".into(),
+            range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 0, character: 18 }, end: tower_lsp::lsp_types::Position { line: 0, character: 22 } },
+            ..Reference::default()
             }
         ];
 
@@ -734,12 +718,12 @@ and a third tag#notatag [[link#not a tag]]
         let parsed = MDFootnote::new(text);
         let expected = vec![
             MDFootnote {
-                index: "^1".into(),
-                footnote_text: "This is a footnote".into(),
-                range: Range {
-                    start: Position { line: 0, character: 0 },
-                    end: Position { line: 0, character: 24 }
-                }
+            index: "^1".into(),
+            footnote_text: "This is a footnote".into(),
+            range: Range {
+            start: Position { line: 0, character: 0 },
+            end: Position { line: 0, character: 24 }
+            }
             }
         ];
 
@@ -748,7 +732,7 @@ and a third tag#notatag [[link#not a tag]]
 
 
         let text = 
-r"# This is a heading
+        r"# This is a heading
 
 Referenced[^1]
 
@@ -762,28 +746,28 @@ Continued
         let parsed = MDFootnote::new(text);
         let expected = vec![
             MDFootnote {
-                index: "^1".into(),
-                footnote_text: "Footnote here".into(),
-                range: Range {
-                    start: Position { line: 4, character: 0 },
-                    end: Position { line: 4, character: 19 }
-                }
+            index: "^1".into(),
+            footnote_text: "Footnote here".into(),
+            range: Range {
+            start: Position { line: 4, character: 0 },
+            end: Position { line: 4, character: 19 }
+            }
             },
             MDFootnote {
-                index: "^2".into(),
-                footnote_text: "Another footnote".into(),
-                range: Range {
-                    start: Position { line: 8, character: 0 },
-                    end: Position { line: 8, character: 22 }
-                }
+            index: "^2".into(),
+            footnote_text: "Another footnote".into(),
+            range: Range {
+            start: Position { line: 8, character: 0 },
+            end: Position { line: 8, character: 22 }
+            }
             },
             MDFootnote {
-                index: "^a".into(),
-                footnote_text: "Third footnot3".into(),
-                range: Range {
-                    start: Position { line: 9, character: 0 },
-                    end: Position { line: 9, character: 19 }
-                }
+            index: "^a".into(),
+            footnote_text: "Third footnot3".into(),
+            range: Range {
+            start: Position { line: 9, character: 0 },
+            end: Position { line: 9, character: 19 }
+            }
             }
         ];
 

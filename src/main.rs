@@ -46,7 +46,7 @@ impl Backend {
 
         // Diagnostics
         // get all links for changed file
-        let referenceables = vault.select_referenceable_nodes();
+        let referenceables = vault.select_referenceable_nodes(None);
         let Some(pathreferences) = vault.select_references(Some(&path)) else {
             return
         };
@@ -66,6 +66,7 @@ impl Backend {
                     _ => format!("Unresolved Reference")
                 },
                 source: Some("Obsidian LS".into()),
+                severity: Some(DiagnosticSeverity::INFORMATION),
                 ..Default::default()
             })
             .collect();

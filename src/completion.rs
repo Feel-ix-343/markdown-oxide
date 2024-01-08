@@ -15,7 +15,7 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
 
     if selected_line.get(character-2..character) == Some(&vec!['[', '[']) { // we have a link
 
-        let all_links = vault.select_referenceable_nodes()
+        let all_links = vault.select_referenceable_nodes(None)
             .into_iter()
             .filter(|referenceable| !matches!(referenceable, Referenceable::Tag(_, _)) && !matches!(referenceable, Referenceable::Footnote(_, _)));
 
@@ -25,7 +25,7 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
     } else if selected_line.get(character-1..character) == Some(&vec!['#']) {
 
         // Initial Tag completion
-        let tag_refereneables = vault.select_referenceable_nodes()
+        let tag_refereneables = vault.select_referenceable_nodes(None)
             .into_iter()
             .flat_map(|referenceable| match referenceable {
                 tag @ Referenceable::Tag(_, _) => Some(tag),
@@ -39,7 +39,7 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
         )
         )
     } else if selected_line.get(character-1..character) == Some(&vec!['[']) {
-        let footnote_referenceables = vault.select_linkable_nodes_for_path(&path)?
+        let footnote_referenceables = vault.select_referenceable_nodes(Some(&path))
             .into_iter()
             .flat_map(|referenceable| match referenceable {
                 Referenceable::Footnote(footnote_path, _) if footnote_path.as_path() == path.as_path() => Some(referenceable),
