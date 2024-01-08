@@ -229,7 +229,6 @@ impl Reference {
         let tags: Vec<Reference> = MDTag::new(text).iter().map(|tag| Tag(ReferenceData {display_text: None, range: tag.range, reference_text: format!("#{}", tag.tag_ref)})).collect();
 
 
-        // TODO: HOnestly, it is just a work around to have tag and footnote in here. A better system is needed. 
         static FOOTNOTE_LINK_RE: Lazy<Regex> = Lazy::new(|| 
             Regex::new(r"[^\[](?<full>\[(?<index>\^[^\[\] ]+)\])[^\:]").unwrap()
         );
