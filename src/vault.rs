@@ -167,13 +167,36 @@ impl MDFile {
 }
 
 #[derive(Debug, PartialEq, Eq, Default, Clone)]
-pub struct Reference {
+pub struct ReferenceData {
     pub reference_text: String,
     pub display_text: Option<String>,
     pub range: tower_lsp::lsp_types::Range
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum Reference {
+    Tag(ReferenceData),
+    Link(ReferenceData),
+    Footnote(ReferenceData)
+}
+
+impl Default for Reference {
+    fn default() -> Self {
+        Link(ReferenceData::default())
+    }
+}
+
+use Reference::*;
+
 impl Reference {
+    pub fn data(&self) -> &ReferenceData {
+        match &self {
+            Tag(data) => data,
+            Link(data) => data,
+            Footnote(data) => data
+        }
+    }
+
     fn new(text: &str) -> Vec<Reference> {
         static LINK_RE: Lazy<Regex> = Lazy::new(|| 
             Regex::new(r"\[\[(?<referencetext>[^\[\]\|\.]+)(\|(?<display>[^\[\]\.\|]+))?\]\]").unwrap()
@@ -185,14 +208,17 @@ impl Reference {
                 _ => None
             })
             .map(|(outer, re_match, display)| {
-                Reference {
+
+                return Link(ReferenceData {
                     reference_text: re_match.as_str().into(),
                     range: range_to_position(&Rope::from_str(text), outer.range()),
                     display_text: display.map(|d| d.as_str().into())
-                }})
+                })
+
+            })
             .collect_vec();
 
-        let tags: Vec<Reference> = MDTag::new(text).iter().map(|tag| Reference {display_text: None, range: tag.range, reference_text: format!("#{}", tag.tag_ref)}).collect();
+        let tags: Vec<Reference> = MDTag::new(text).iter().map(|tag| Tag(ReferenceData {display_text: None, range: tag.range, reference_text: format!("#{}", tag.tag_ref)})).collect();
 
 
         // TODO: HOnestly, it is just a work around to have tag and footnote in here. A better system is needed. 
@@ -205,11 +231,11 @@ impl Reference {
                 _ => None
             })
             .map(|(outer, index)| {
-                Reference {
+                Footnote(ReferenceData {
                     reference_text: index.as_str().into(),
                     range: range_to_position(&Rope::from_str(text), outer.range()),
                     display_text: None
-                }})
+                })})
             .collect_vec();
 
         return links.into_iter().chain(tags.into_iter()).chain(footnote_references).collect_vec()
@@ -375,7 +401,7 @@ impl Referenceable<'_> {
     }
 
     pub fn is_reference(&self, root_dir: &Path, reference: &Reference, file_path: &Path) -> bool {
-        let text = &reference.reference_text;
+        let text = &reference.data().reference_text;
         match self {
             &Referenceable::Tag(_, _) => self.get_refname(root_dir).is_some_and(|refname| text.starts_with(&refname)),
             &Referenceable::Footnote(path, _footnote) => self.get_refname(root_dir).as_ref() == Some(text) && path.as_path() == file_path,
@@ -413,9 +439,11 @@ mod vault_tests {
     use tower_lsp::lsp_types::{Position, Range, Location, Url};
 
     use crate::gotodef::goto_definition;
+    use crate::vault::ReferenceData;
 
     use super::{Reference,  MDHeading,  MDIndexedBlock, Referenceable, MDFile, MDTag, MDFootnote};
     use super::Vault;
+    use super::Reference::*;
 
     #[test]
     fn link_parsing() {
@@ -423,21 +451,21 @@ mod vault_tests {
         let parsed = Reference::new(text);
 
         let expected = vec![
-            Reference {
+            Link(ReferenceData {
             reference_text: "link".into(),
             range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 0, character: 10 }, end: tower_lsp::lsp_types::Position { line: 0, character: 18 } },
-            ..Reference::default()
-            },
-            Reference {
+            ..ReferenceData::default()
+            }),
+            Link(ReferenceData {
             reference_text: "link 2".into(),
             range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 0, character: 19 }, end: tower_lsp::lsp_types::Position { line: 0, character: 29} },
-            ..Reference::default()
-            },
-            Reference {
+            ..ReferenceData::default()
+            }),
+            Link(ReferenceData {
             reference_text: "link 3".into(),
             range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 1, character: 0 }, end: tower_lsp::lsp_types::Position { line: 1, character: 10 } },
-            ..Reference::default()
-            }
+            ..ReferenceData::default()
+            })
         ];
 
         assert_eq!(parsed, expected)
@@ -449,21 +477,21 @@ mod vault_tests {
         let parsed = Reference::new(text);
 
         let expected = vec![
-            Reference {
+            Link(ReferenceData {
             reference_text: "link".into(),
             range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 0, character: 10 }, end: tower_lsp::lsp_types::Position { line: 0, character: 39 } },
             display_text: Some("but called different".into()),
-            },
-            Reference {
+            }),
+            Link(ReferenceData {
             reference_text: "link 2".into(),
             range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 0, character: 40 }, end: tower_lsp::lsp_types::Position { line: 0, character: 54} },
             display_text: Some("222".into()),
-            },
-            Reference {
+            }),
+            Link(ReferenceData {
             reference_text: "link 3".into(),
             range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 1, character: 0 }, end: tower_lsp::lsp_types::Position { line: 1, character: 14 } },
             display_text: Some("333".into()),
-            }
+            })
         ];
 
         assert_eq!(parsed, expected)
@@ -476,11 +504,11 @@ mod vault_tests {
 [^1]: This is not";
         let parsed = Reference::new(text);
         let expected = vec![
-            Reference {
+            Footnote(ReferenceData {
             reference_text: "^1".into(),
             range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 0, character: 18 }, end: tower_lsp::lsp_types::Position { line: 0, character: 22 } },
-            ..Reference::default()
-            }
+            ..ReferenceData::default()
+            })
         ];
 
         assert_eq!(parsed,expected)
@@ -596,21 +624,21 @@ more text
         let parsed = Reference::new(text);
 
         let expected = vec![
-            Reference {
+            Link(ReferenceData {
             reference_text: "link".into(),
             range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 0, character: 10 }, end: tower_lsp::lsp_types::Position { line: 0, character: 18 } },
-            ..Reference::default()
-            },
-            Reference {
+            ..ReferenceData::default()
+            }),
+            Link(ReferenceData {
             reference_text: "link 2".into(),
             range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 0, character: 19 }, end: tower_lsp::lsp_types::Position { line: 0, character: 29} },
-            ..Reference::default()
-            },
-            Reference {
+            ..ReferenceData::default()
+            }),
+            Link(ReferenceData {
             reference_text: "link 3".into(),
             range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 1, character: 0 }, end: tower_lsp::lsp_types::Position { line: 1, character: 10 } },
-            ..Reference::default()
-            }
+            ..ReferenceData::default()
+            })
         ];
 
         assert_eq!(parsed, expected)

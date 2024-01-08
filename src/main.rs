@@ -60,8 +60,8 @@ impl Backend {
 
         let diags: Vec<Diagnostic> = unresolved
             .map(|(_, reference)| Diagnostic {
-                range: reference.range,
-                message: match allreferences.iter().filter(|(_, otherreference)| otherreference.reference_text == reference.reference_text).count() { // TODO: Fix bug with footnote
+                range: reference.data().range,
+                message: match allreferences.iter().filter(|(_, otherreference)| otherreference.data().reference_text == reference.data().reference_text).count() { // TODO: Fix bug with footnote
                     num if num > 1 => format!("Unresolved Reference used {} times", num),
                     _ => format!("Unresolved Reference")
                 },
