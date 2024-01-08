@@ -1,7 +1,7 @@
 use itertools::Itertools;
-use tower_lsp::lsp_types::{CompletionResponse, CompletionParams, CompletionItem, CompletionItemKind};
+use tower_lsp::lsp_types::{CompletionResponse, CompletionParams, CompletionItem, CompletionItemKind, Documentation};
 
-use crate::vault::{Vault, Referenceable};
+use crate::{vault::{Vault, Referenceable}, ui::{preview_reference, preview_referenceable}};
 
 pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<CompletionResponse> {
     let Ok(path) = params.text_document_position.text_document.uri.to_file_path() else {
@@ -19,8 +19,19 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
             .into_iter()
             .filter(|referenceable| !matches!(referenceable, Referenceable::Tag(_, _)) && !matches!(referenceable, Referenceable::Footnote(_, _)));
 
-        return Some(CompletionResponse::Array(
-            all_links.map(|tag| tag.get_refname(&vault.root_dir()).map(|root| CompletionItem { kind: Some(CompletionItemKind::FILE), label: root, ..Default::default()})).flatten().unique_by(|c| c.label.to_owned()).collect_vec()
+        return Some(
+            CompletionResponse::Array(
+                all_links
+                    .map(|referenceable| referenceable.get_refname(&vault.root_dir())
+                        .map(|root| CompletionItem { 
+                            kind: Some(CompletionItemKind::FILE), 
+                            label: root, 
+                            documentation: preview_referenceable(vault, &referenceable).and_then(|markup| Some(Documentation::MarkupContent(markup))),
+                            ..Default::default()
+                        }))
+                    .flatten()
+                    .unique_by(|c| c.label.to_owned())
+                    .collect_vec()
         ))
     } else if selected_line.get(character-1..character) == Some(&vec!['#']) {
 
