@@ -2,9 +2,9 @@ use std::ops::Deref;
 use std::path::Path;
 
 use completion::get_completions;
+use diagnostics::diagnostics;
 use references::references;
 use tokio::sync::RwLock;
-use rayon::prelude::*;
 
 use gotodef::goto_definition;
 use tower_lsp::jsonrpc::{Result, Error, ErrorCode};
@@ -16,6 +16,7 @@ mod vault;
 mod gotodef;
 mod references;
 mod completion;
+mod diagnostics;
 
 
 #[derive(Debug)]
@@ -44,39 +45,7 @@ impl Backend {
         let text = &params.text;
         Vault::reconstruct_vault(vault, (&path, text));
 
-        // Diagnostics
-        // get all links for changed file
-        let referenceables = vault.select_referenceable_nodes(None);
-        let Some(pathreferences) = vault.select_references(Some(&path)) else {
-            return
-        };
-        let Some(allreferences) = vault.select_references(None) else {
-            return
-        };
-        let unresolved = pathreferences
-            .into_par_iter()
-            .filter(|(path, reference)| !referenceables.iter().any(|referenceable| referenceable.is_reference(&vault.root_dir(), reference, path) ));
-
-
-        let diags: Vec<Diagnostic> = unresolved
-            .map(|(path, reference)| Diagnostic {
-                range: reference.data().range,
-                message: match allreferences.iter().filter(|(other_path, otherreference)| 
-                    otherreference.matches_type(reference) && 
-                    (!matches!(reference, vault::Reference::Footnote(_)) || *other_path == path) &&
-                    otherreference.data().reference_text == reference.data().reference_text
-                ).count() {
-                    num if num > 1 => format!("Unresolved Reference used {} times", num),
-                    _ => format!("Unresolved Reference")
-                },
-                source: Some("Obsidian LS".into()),
-                severity: Some(DiagnosticSeverity::INFORMATION),
-                ..Default::default()
-            })
-            .collect();
-
-
-        self.client.publish_diagnostics(params.uri, diags, None).await;
+        diagnostics(&vault, (&path, &params.uri, text), &self.client).await;
     }
 }
 
