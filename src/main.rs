@@ -9,6 +9,7 @@ use tokio::sync::RwLock;
 use gotodef::goto_definition;
 use tower_lsp::jsonrpc::{Result, Error, ErrorCode};
 use tower_lsp::lsp_types::*;
+use tower_lsp::lsp_types::notification::{Notification, Progress};
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 use vault::Vault;
 
@@ -64,6 +65,7 @@ impl LanguageServer for Backend {
         let mut value = self.vault.write().await;
         *value = Some(vault);
 
+
         return Ok(InitializeResult {
             server_info: None,
             capabilities: ServerCapabilities {
@@ -94,9 +96,10 @@ impl LanguageServer for Backend {
     }
 
     async fn initialized(&self, _: InitializedParams) {
-        self.client
-            .log_message(MessageType::INFO, "Obsidian_ls initialized")
-            .await;
+        self.client.send_notification::<Progress>(ProgressParams {
+            token: NumberOrString::Number(1),
+            value: ProgressParamsValue::WorkDone(WorkDoneProgress::End(WorkDoneProgressEnd { message: Some("Initialized".into()) }))
+        }).await;
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
@@ -146,15 +149,35 @@ impl LanguageServer for Backend {
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+        self.client.send_notification::<Progress>(ProgressParams {
+            token: NumberOrString::Number(2),
+            value: ProgressParamsValue::WorkDone(WorkDoneProgress::Begin(WorkDoneProgressBegin { 
+                title: "Getting Completions".into(), 
+                cancellable: None, 
+                message: None, 
+                percentage: None })
+            )
+        }).await;
+
         let bad_vault = self.vault.read().await;
         let Some(vault) = bad_vault.deref() else {
             return Err(Error::new(ErrorCode::ServerError(0)))
         };
         let completions = get_completions(vault, &params);
         if completions == None {
-            self.client.log_message(MessageType::INFO, format!("No completions for: {:?}", params)).await;
+            self.client.send_notification::<Progress>(ProgressParams {
+                token: NumberOrString::Number(2),
+                value: ProgressParamsValue::WorkDone(WorkDoneProgress::End(WorkDoneProgressEnd { message: Some("No Completions".into()) }))
+            }).await;
         }
+
+        self.client.send_notification::<Progress>(ProgressParams {
+            token: NumberOrString::Number(2),
+            value: ProgressParamsValue::WorkDone(WorkDoneProgress::End(WorkDoneProgressEnd { message: Some("Got Completions".into()) }))
+        }).await;
+
         Ok(completions)
+
     }
 
 
