@@ -96,10 +96,6 @@ impl LanguageServer for Backend {
     }
 
     async fn initialized(&self, _: InitializedParams) {
-        self.client.send_notification::<Progress>(ProgressParams {
-            token: NumberOrString::Number(1),
-            value: ProgressParamsValue::WorkDone(WorkDoneProgress::End(WorkDoneProgressEnd { message: Some("Initialized".into()) }))
-        }).await;
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
@@ -149,32 +145,18 @@ impl LanguageServer for Backend {
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
-        self.client.send_notification::<Progress>(ProgressParams {
-            token: NumberOrString::Number(2),
-            value: ProgressParamsValue::WorkDone(WorkDoneProgress::Begin(WorkDoneProgressBegin { 
-                title: "Getting Completions".into(), 
-                cancellable: None, 
-                message: None, 
-                percentage: None })
-            )
-        }).await;
+        let progress = self.client.progress(ProgressToken::Number(1), "Calculating Completions").begin().await;
+        let timer = std::time::Instant::now();
 
         let bad_vault = self.vault.read().await;
         let Some(vault) = bad_vault.deref() else {
             return Err(Error::new(ErrorCode::ServerError(0)))
         };
         let completions = get_completions(vault, &params);
-        if completions == None {
-            self.client.send_notification::<Progress>(ProgressParams {
-                token: NumberOrString::Number(2),
-                value: ProgressParamsValue::WorkDone(WorkDoneProgress::End(WorkDoneProgressEnd { message: Some("No Completions".into()) }))
-            }).await;
-        }
 
-        self.client.send_notification::<Progress>(ProgressParams {
-            token: NumberOrString::Number(2),
-            value: ProgressParamsValue::WorkDone(WorkDoneProgress::End(WorkDoneProgressEnd { message: Some("Got Completions".into()) }))
-        }).await;
+        let elapsed = timer.elapsed();
+
+        progress.finish_with_message(format!("Finished in {}ms", elapsed.as_millis())).await;
 
         Ok(completions)
 

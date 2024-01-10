@@ -805,8 +805,7 @@ checksum = "c20c8dbed6283a09604c3e69b4b7eeb54e298b8a600d4d5ecb5ad39de609f1d0"
 [[package]]
 name = "tower-lsp"
 version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4ba052b54a6627628d9b3c34c176e7eda8359b7da9acd497b9f20998d118508"
+source = "git+https://github.com/Feel-ix-343/tower-lsp#a27868bf5c6b5bb6a106cfbb41c0624ce7bb6f42"
 dependencies = [
  "async-trait",
  "auto_impl",
@@ -828,8 +827,7 @@ dependencies = [
 [[package]]
 name = "tower-lsp-macros"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84fd902d4e0b9a4b27f2f440108dc034e1758628a9b702f8ec61ad66355422fa"
+source = "git+https://github.com/Feel-ix-343/tower-lsp#a27868bf5c6b5bb6a106cfbb41c0624ce7bb6f42"
 dependencies = [
  "proc-macro2",
  "quote",
