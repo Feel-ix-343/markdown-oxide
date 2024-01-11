@@ -1,5 +1,6 @@
 use itertools::Itertools;
 use tower_lsp::lsp_types::{CompletionResponse, CompletionParams, CompletionItem, CompletionItemKind, Documentation};
+use rayon::prelude::*;
 
 use crate::{vault::{Vault, Referenceable}, ui::{preview_reference, preview_referenceable}};
 
@@ -16,7 +17,7 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
     if selected_line.get(character-2..character) == Some(&vec!['[', '[']) { // we have a link
 
         let all_links = vault.select_referenceable_nodes(None)
-            .into_iter()
+            .into_par_iter()
             .filter(|referenceable| !matches!(referenceable, Referenceable::Tag(_, _)) && !matches!(referenceable, Referenceable::Footnote(_, _)));
 
         return Some(
@@ -30,8 +31,7 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
                             ..Default::default()
                         }))
                     .flatten()
-                    .unique_by(|c| c.label.to_owned())
-                    .collect_vec()
+                    .collect::<Vec<_>>()
         ))
     } else if selected_line.get(character-1..character) == Some(&vec!['#']) {
 
