@@ -127,13 +127,22 @@ impl Vault {
                 let range = referenceable.get_range();
                 Some(String::from_iter(self.select_line(&referenceable.get_path(), range.start.line as usize)?))
             },
-            Referenceable::File(_, _) | Referenceable::Heading(_, _) | Referenceable::IndexedBlock(_, _) => {
+            Referenceable::Heading(_, _) => {
                 let range = referenceable.get_range();
                 Some((range.start.line..=range.end.line + 10)
                     .map(|ln| self.select_line(&referenceable.get_path(), ln as usize))
                     .flatten() // flatten those options!
                     .map(|vec| String::from_iter(vec))
                     .join(""))
+
+            },
+            Referenceable::IndexedBlock(_, _) => {
+                let range = referenceable.get_range();
+                self.select_line(&referenceable.get_path(), range.start.line as usize).map(String::from_iter)
+            },
+            Referenceable::File(_, _) => {
+                let file_text = self.ropes.get(referenceable.get_path()).unwrap();
+                Some(String::from(file_text))
             }
             _ => return None
         }
@@ -434,7 +443,7 @@ impl Referenceable<'_> {
         }
     }
 
-    pub fn get_path(&self) -> &PathBuf {
+    pub fn get_path(&self) -> &Path {
         match self {
             &Referenceable::File(path, _) => path,
             &Referenceable::Heading(path, _) => path,
