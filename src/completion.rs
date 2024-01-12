@@ -26,8 +26,12 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
                     .map(|referenceable| referenceable.get_refname(&vault.root_dir())
                         .map(|root| CompletionItem { 
                             kind: Some(CompletionItemKind::FILE), 
-                            label: root, 
+                            label: root.clone(), 
                             documentation: preview_referenceable(vault, &referenceable).and_then(|markup| Some(Documentation::MarkupContent(markup))),
+                            filter_text: match referenceable{
+                                Referenceable::IndexedBlock(_, _) => vault.select_referenceable_preview(&referenceable).map(|text| root + &text),
+                                _ => None
+                            },
                             ..Default::default()
                         }))
                     .flatten()
@@ -63,8 +67,9 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
                 .map(|footnote| footnote.get_refname(&vault.root_dir())
                     .map(|root| CompletionItem { 
                         kind: Some(CompletionItemKind::REFERENCE), 
-                        label: root, 
+                        label: root.clone(), 
                         documentation: preview_referenceable(vault, &footnote).and_then(|markup| Some(Documentation::MarkupContent(markup))),
+                        filter_text: vault.select_referenceable_preview(&footnote).map(|preview_string| root + &preview_string),
                         ..Default::default()
                     }))
                 .flatten()
