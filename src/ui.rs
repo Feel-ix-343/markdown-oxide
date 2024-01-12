@@ -6,28 +6,14 @@ use tower_lsp::lsp_types::{MarkupContent, MarkupKind};
 use crate::vault::{Vault, Reference, Referenceable};
 
 fn referenceable_string(vault: &Vault, referenceable: &Referenceable) -> Option<String> {
-    let links_text = match referenceable {
-        Referenceable::Footnote(_, _) => {
-            let range = referenceable.get_range();
-            String::from_iter(vault.select_line(&referenceable.get_path(), range.start.line as usize)?)
-        },
-        Referenceable::File(_, _) | Referenceable::Heading(_, _) | Referenceable::IndexedBlock(_, _) => {
-            let range = referenceable.get_range();
-            (range.start.line..=range.end.line + 10)
-                .map(|ln| vault.select_line(&referenceable.get_path(), ln as usize))
-                .flatten() // flatten those options!
-                .map(|vec| String::from_iter(vec))
-                .join("")
-        }
-        _ => return None
-    }; 
+    let preview = vault.select_referenceable_preview(referenceable)?;
 
     Some(match referenceable {
-        Referenceable::File(_, _) => format!("File Preview:\n---\n\n{}", links_text),
-        Referenceable::Heading(_, _) => format!("Heading Preview:\n---\n\n{}", links_text),
-        Referenceable::IndexedBlock(_, _) => format!("Block Preview:\n---\n\n{}", links_text),
-        Referenceable::Footnote(_, _) => format!("Footnote Preview:\n---\n\n{}", links_text),
-        _ => format!("Preview:\n---\n\n{}", links_text),
+        Referenceable::File(_, _) => format!("File Preview:\n---\n\n{}", preview),
+        Referenceable::Heading(_, _) => format!("Heading Preview:\n---\n\n{}", preview),
+        Referenceable::IndexedBlock(_, _) => format!("Block Preview:\n---\n\n{}", preview),
+        Referenceable::Footnote(_, _) => format!("Footnote Preview:\n---\n\n{}", preview),
+        _ => format!("Preview:\n---\n\n{}", preview),
     })
 
 }

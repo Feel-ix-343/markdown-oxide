@@ -120,6 +120,24 @@ impl Vault {
     pub fn root_dir(&self) -> &PathBuf {
         &self.root_dir
     }
+
+    pub fn select_referenceable_preview(&self, referenceable: &Referenceable) -> Option<String> {
+        match referenceable {
+            Referenceable::Footnote(_, _) => {
+                let range = referenceable.get_range();
+                Some(String::from_iter(self.select_line(&referenceable.get_path(), range.start.line as usize)?))
+            },
+            Referenceable::File(_, _) | Referenceable::Heading(_, _) | Referenceable::IndexedBlock(_, _) => {
+                let range = referenceable.get_range();
+                Some((range.start.line..=range.end.line + 10)
+                    .map(|ln| self.select_line(&referenceable.get_path(), ln as usize))
+                    .flatten() // flatten those options!
+                    .map(|vec| String::from_iter(vec))
+                    .join(""))
+            }
+            _ => return None
+        }
+    }
 }
 
 
@@ -403,7 +421,7 @@ impl Referenceable<'_> {
             &Referenceable::Heading(path, heading) => get_obsidian_ref_path(root_dir, path).and_then(|refpath| Some(format!("{}#{}", refpath, heading.heading_text))),
             &Referenceable::IndexedBlock(path, heading) => get_obsidian_ref_path(root_dir, path).and_then(|refpath| Some(format!("{}#^{}", refpath, heading.index))),
             &Referenceable::Tag(_, tag) => Some(format!("#{}", tag.tag_ref)),
-            &Referenceable::Footnote(_, footnote) => Some(footnote.index.clone())
+            &Referenceable::Footnote(_, footnote) => Some(footnote.index.clone()),
         }
     }
 
