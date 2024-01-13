@@ -9,17 +9,6 @@ use ropey::Rope;
 use tower_lsp::lsp_types::Position;
 use walkdir::WalkDir;
 
-
-#[derive(Debug, PartialEq, Eq)]
-/// The in memory representation of the obsidian vault files. This data is exposed through an interface of methods to select the vaults data.
-/// These methods do not do any interpretation or analysis of the data. That is up to the consumer of this struct. The methods are analogous to selecting on a database. 
-pub struct Vault {
-    md_files: HashMap<PathBuf, MDFile>,
-    ropes: HashMap<PathBuf, Rope>,
-    root_dir: PathBuf,
-}
-
-
 impl Vault {
     pub fn construct_vault(root_dir: &Path) -> Result<Vault, std::io::Error> {
 
@@ -74,6 +63,21 @@ impl Vault {
             None => { old.ropes.insert(new_file.0.into(), new_rope); }
         }
     }
+}
+
+
+#[derive(Debug, PartialEq, Eq)]
+/// The in memory representation of the obsidian vault files. This data is exposed through an interface of methods to select the vaults data.
+/// These methods do not do any interpretation or analysis of the data. That is up to the consumer of this struct. The methods are analogous to selecting on a database. 
+pub struct Vault {
+    md_files: HashMap<PathBuf, MDFile>,
+    ropes: HashMap<PathBuf, Rope>,
+    root_dir: PathBuf,
+}
+
+
+/// Methods using vaults data
+impl Vault {
     /// Select all references ([[link]] or #tag) in a file if path is some, else select all references in the vault.
     pub fn select_references<'a>(&'a self, path: Option<&'a Path>) -> Option<Vec<(&'a Path, &'a Reference)>> {
         match path {
