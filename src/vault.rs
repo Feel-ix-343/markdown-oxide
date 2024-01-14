@@ -121,6 +121,12 @@ impl Vault {
         rope.get_line(line).and_then(|slice| Some(slice.chars().collect_vec()))
     }
 
+    pub fn select_headings(&self, path: &Path) -> Option<&Vec<MDHeading>> {
+        let md_file = self.md_files.get(path)?;
+        let headings = &md_file.headings;
+        return Some(headings)
+    }
+
     pub fn root_dir(&self) -> &PathBuf {
         &self.root_dir
     }
@@ -281,28 +287,39 @@ impl Reference {
 }
 
 
+#[derive(Eq, PartialEq, Debug, PartialOrd, Ord, Clone)]
+pub struct HeadingLevel(pub usize);
 
-#[derive(Debug, PartialEq, Eq)]
+impl Default for HeadingLevel {
+    fn default() -> Self {
+        HeadingLevel(1)
+    }
+}
+
+
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct MDHeading {
-    heading_text: String,
-    range: tower_lsp::lsp_types::Range
+    pub heading_text: String,
+    pub range: tower_lsp::lsp_types::Range,
+    pub level: HeadingLevel
 }
 
 impl MDHeading {
     fn new(text: &str) -> Vec<MDHeading> {
 
-        static HEADING_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"#+ (?<heading_text>.+)").unwrap());
+        static HEADING_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?<starter>#+) (?<heading_text>.+)").unwrap());
 
         let headings: Vec<MDHeading> = HEADING_RE.captures_iter(text)
-            .flat_map(|c| match (c.get(0), c.name("heading_text")) {
-                (Some(full), Some(text)) => Some((full, text)),
+            .flat_map(|c| match (c.get(0), c.name("heading_text"), c.name("starter")) {
+                (Some(full), Some(text), Some(starter)) => Some((full, text, starter)),
                 _ => None
             })
-            .map(|(full_heading, heading_match)| {
+            .map(|(full_heading, heading_match, starter)| {
 
                 return MDHeading {
                     heading_text: heading_match.as_str().trim_end().into(),
-                    range: range_to_position(&Rope::from_str(text), full_heading.range())
+                    range: range_to_position(&Rope::from_str(text), full_heading.range()),
+                    level: HeadingLevel(starter.as_str().len())
                 }
 
             })
@@ -477,7 +494,7 @@ mod vault_tests {
     use tower_lsp::lsp_types::{Position, Range, Location, Url};
 
     use crate::gotodef::goto_definition;
-    use crate::vault::ReferenceData;
+    use crate::vault::{ReferenceData, HeadingLevel};
 
     use super::{Reference,  MDHeading,  MDIndexedBlock, Referenceable, MDFile, MDTag, MDFootnote};
     use super::Vault;
@@ -582,11 +599,13 @@ more text
         let expected = vec![
             MDHeading {
             heading_text: "This is a heading".into(),
-            range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 0, character: 0 }, end: tower_lsp::lsp_types::Position { line: 0, character: 19} }
+            range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 0, character: 0 }, end: tower_lsp::lsp_types::Position { line: 0, character: 19} },
+            ..Default::default()
             },
             MDHeading {
             heading_text: "This shoudl be a heading!".into(),
-            range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 11, character: 0 }, end: tower_lsp::lsp_types::Position { line: 11, character: 28} }
+            range: tower_lsp::lsp_types::Range { start: tower_lsp::lsp_types::Position { line: 11, character: 0 }, end: tower_lsp::lsp_types::Position { line: 11, character: 28} },
+            level: HeadingLevel(2)
             }
         ];
 
@@ -631,7 +650,7 @@ more text
     fn test_linkable_reference_heading() {
         let path = Path::new("/home/vault/test.md");
         let path_buf = path.to_path_buf();
-        let md_heading = MDHeading{heading_text: "Test Heading".into(), range: tower_lsp::lsp_types::Range::default()};
+        let md_heading = MDHeading{heading_text: "Test Heading".into(), range: tower_lsp::lsp_types::Range::default(), ..Default::default()};
         let linkable: Referenceable = Referenceable::Heading(&path_buf, &md_heading);
 
         let root_dir = Path::new("/home/vault");

@@ -58,7 +58,7 @@ then adjust your nvim-cmp source settings for the following. Note that this will
     - [X] to tag (explained above)
     - [X] Footnotes
     - [ ] Metadata tag
-- [.] Completions
+- [ ] Completions
     - [X] File completions (requires extra nvim cmp configuration)
     - [X] Heading Completions (requires extra nvim cmp config)
     - [X] Indexed block completions. Somehow using Ripgrep to find the paragraphs/blocks in the vault, then appending an index in the file, then inserting a link (workaround supported; using "_" instead of any non_word characters)
@@ -80,7 +80,7 @@ then adjust your nvim-cmp source settings for the following. Note that this will
 - [X] Diagnostics
     - [X] Missing reference
 - [ ] Outline
-    - [ ] Headings and subheadings
+    - [X] Headings and subheadings
     - [ ] Headings and subheadings of links
 - [ ] Rename
     - [ ] File
