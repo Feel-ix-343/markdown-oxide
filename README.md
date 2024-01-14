@@ -81,7 +81,6 @@ then adjust your nvim-cmp source settings for the following. Note that this will
     - [X] Missing reference
 - [ ] Outline
     - [X] Headings and subheadings
-    - [ ] Headings and subheadings of links
 - [ ] Rename
     - [ ] File
     - [ ] Headings
