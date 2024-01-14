@@ -79,7 +79,7 @@ then adjust your nvim-cmp source settings for the following. Note that this will
     - [ ] Refactoring: Move headers or selections to a new file
 - [X] Diagnostics
     - [X] Missing reference
-- [ ] Outline
+- [X] Outline
     - [X] Headings and subheadings
 - [ ] Rename
     - [ ] File
