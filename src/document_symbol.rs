@@ -9,7 +9,7 @@ pub fn document_symbol(vault: &Vault, params: DocumentSymbolParams, path: &Path)
 
     let headings = vault.select_headings(path)?;
 
-    let tree = construct_tree(&headings);
+    let tree = construct_tree(&headings)?;
     let lsp = map_to_lsp_tree(tree);
 
     return Some(DocumentSymbolResponse::Nested(lsp))
@@ -22,51 +22,38 @@ struct Node {
     children: Option<Vec<Node>>
 }
 
-fn construct_tree(headings: &[ MDHeading ]) -> Vec<Node> {
+fn construct_tree(headings: &[ MDHeading ]) -> Option<Vec<Node>> {
     match &headings {
+        [only] => {
+            let node = Node {
+                heading: only.clone(),
+                children: None
+            };
+            return Some(vec![node])
+        },
         [first, rest @ ..]  => {
 
             let break_index = rest.iter().find_position(|heading| first.level >= heading.level);
 
-            match break_index {
-                Some((index, _)) if index != 0 => {
-                    let to_next = &rest[..index];
-
+            match break_index.map(|(index, _)| (&rest[..index], &rest[index..])) {
+                Some((to_next, rest)) => { // to_next is could be an empty list and rest has at least one item
                     let node = Node {
                         heading: first.clone(),
-                        children: Some(construct_tree(to_next))
+                        children: construct_tree(to_next) // if to_next is empty, this will return none
                     };
 
-                    return iter::once(node).chain(construct_tree(&rest[index..])).collect()
-                },
-                None if rest.len() != 0 => {
-                    let node = Node {
-                        heading: first.clone(),
-                        children: Some(construct_tree(rest))
-                    };
-
-                    return vec![node]
-                },
-                Some((_, _)) => { // this is when the index is 0
-                    let node = Node {
-                        heading: first.clone(),
-                        children: None
-                    };
-
-                    return iter::once(node).chain(construct_tree(rest)).collect()
+                    return Some(iter::once(node).chain(construct_tree(rest).into_iter().flatten()).collect())
                 },
                 None => {
                     let node = Node {
                         heading: first.clone(),
-                        children: None
+                        children: construct_tree(rest)
                     };
-                    return vec![node]
-
+                    return Some(vec![node])
                 }
             }
-
         },
-        [] => panic!("This should never happen")
+        [] => None
     }
 }
 
@@ -134,38 +121,38 @@ mod test {
 
         let expected = vec![
             super::Node {
-                heading: MDHeading {
-                    level: HeadingLevel(1),
-                    heading_text: "First".to_string(),
-                    range: Default::default()
-                },
-                children: Some(vec![
-                    super::Node {
-                        heading: MDHeading {
-                        level: HeadingLevel(2),
-                        heading_text: "Second".to_string(),
-                        range: Default::default()
-                    },
-                    children: Some(vec![
-                        super::Node {
-                            heading: MDHeading {
-                            level: HeadingLevel(3),
-                            heading_text: "Third".to_string(),
-                            range: Default::default()
-                        },
-                        children: None
-                        }
-                    ])
-                    },
-                        super::Node {
-                        heading: MDHeading {
-                        level: HeadingLevel(2),
-                        heading_text: "Second".to_string(),
-                        range: Default::default()
-                        },
-                        children: None
-                    }
-                ])
+            heading: MDHeading {
+            level: HeadingLevel(1),
+            heading_text: "First".to_string(),
+            range: Default::default()
+            },
+            children: Some(vec![
+            super::Node {
+            heading: MDHeading {
+            level: HeadingLevel(2),
+            heading_text: "Second".to_string(),
+            range: Default::default()
+            },
+            children: Some(vec![
+            super::Node {
+            heading: MDHeading {
+            level: HeadingLevel(3),
+            heading_text: "Third".to_string(),
+            range: Default::default()
+            },
+            children: None
+            }
+            ])
+            },
+            super::Node {
+            heading: MDHeading {
+            level: HeadingLevel(2),
+            heading_text: "Second".to_string(),
+            range: Default::default()
+            },
+            children: None
+            }
+            ])
             },
             super::Node {
             heading: MDHeading {
@@ -185,7 +172,7 @@ mod test {
             }
         ];
 
-        assert_eq!(tree, expected)
+        assert_eq!(tree, Some(expected))
     }
 
     #[test]
@@ -222,49 +209,49 @@ mod test {
 
         let expected = vec![
             super::Node {
-                heading: MDHeading {
-                    level: HeadingLevel(1),
-                    heading_text: "First".to_string(),
-                    range: Default::default()
-                },
-                children: Some(vec![
-                    super::Node {
-                        heading: MDHeading {
-                        level: HeadingLevel(2),
-                        heading_text: "Second".to_string(),
-                        range: Default::default()
-                    },
-                    children: Some(vec![
-                        super::Node {
-                            heading: MDHeading {
-                            level: HeadingLevel(3),
-                            heading_text: "Third".to_string(),
-                            range: Default::default()
-                        },
-                        children: None
-                        }
-                    ])
-                    },
-                ])
+            heading: MDHeading {
+            level: HeadingLevel(1),
+            heading_text: "First".to_string(),
+            range: Default::default()
+            },
+            children: Some(vec![
+            super::Node {
+            heading: MDHeading {
+            level: HeadingLevel(2),
+            heading_text: "Second".to_string(),
+            range: Default::default()
+            },
+            children: Some(vec![
+            super::Node {
+            heading: MDHeading {
+            level: HeadingLevel(3),
+            heading_text: "Third".to_string(),
+            range: Default::default()
+            },
+            children: None
+            }
+            ])
+            },
+            ])
             },
             super::Node {
-                heading: MDHeading {
-                    level: HeadingLevel(1),
-                    heading_text: "First".to_string(),
-                    range: Default::default()
-                },
-                children: None
+            heading: MDHeading {
+            level: HeadingLevel(1),
+            heading_text: "First".to_string(),
+            range: Default::default()
+            },
+            children: None
             },
             super::Node {
-                heading: MDHeading {
-                    level: HeadingLevel(1),
-                    heading_text: "First".to_string(),
-                    range: Default::default()
-                },
-                children: None
+            heading: MDHeading {
+            level: HeadingLevel(1),
+            heading_text: "First".to_string(),
+            range: Default::default()
+            },
+            children: None
             }
         ];
 
-        assert_eq!(tree, expected)
+        assert_eq!(tree, Some(expected))
     }
 }
