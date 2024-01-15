@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::{Path, PathBuf}, ops::Range};
+use std::{collections::HashMap, path::{Path, PathBuf}, ops::Range, iter};
 
 use itertools::Itertools;
 use once_cell::sync::Lazy;
@@ -23,7 +23,7 @@ impl Vault {
             .par_iter()
             .flat_map(|p| {
                 let text = std::fs::read_to_string(p.path())?;
-                let md_file = MDFile::new(&text);
+                let md_file = MDFile::new(&text, PathBuf::from(p.path().clone()));
 
                 return Ok::<(PathBuf, MDFile), std::io::Error>((p.path().into(), md_file))
             })
@@ -47,7 +47,7 @@ impl Vault {
     }
 
     pub fn reconstruct_vault(old: &mut Vault, new_file: (&PathBuf, &str)) {
-        let new_md_file = MDFile::new(new_file.1);
+        let new_md_file = MDFile::new(new_file.1, new_file.0.clone());
         let new = old.md_files.get_mut(new_file.0);
 
         match new {
@@ -90,29 +90,18 @@ impl Vault {
     /// Select all linkable positions in the vault
     pub fn select_referenceable_nodes<'a>(&'a self, path: Option<&'a PathBuf>) -> Vec<Referenceable<'a>> {
 
-        let files = match path {
-            None => self.md_files.iter().map(|(path, md)| Referenceable::File(path, md)).collect_vec(),
-            Some(path) => vec![self.md_files.get(path).map(|md| Referenceable::File(path, md))].into_iter().flatten().collect_vec()
-        };
 
-        let headings = self.md_files.iter()
-            .flat_map(|(path, md)| md.headings.iter().map(move |h| (path, h)))
-            .map(|(path, h)| Referenceable::Heading(path, h));
-
-        let indexed_blocks = self.md_files.iter()
-            .flat_map(|(path, md)| md.indexed_blocks.iter().map(move |ib| (path, ib)))
-            .map(|(path, ib)| Referenceable::IndexedBlock(path, ib));
-
-        let tags = self.md_files.iter()
-            .flat_map(|(path, md)| md.tags.iter().map(move |tag| (path, tag)))
-            .map(|(path, tag)| Referenceable::Tag(path, tag));
-
-
-        let footnotes = self.md_files.iter()
-            .flat_map(|(path, md)| md.footnotes.iter().map(move |footnote| (path, footnote)))
-            .map(|(path, footnote)| Referenceable::Footnote(path, footnote));
-
-        return files.into_iter().chain(headings).chain(indexed_blocks).chain(tags).chain(footnotes).collect()
+        match path {
+            Some(path) => {
+                return iter::once(self.md_files.get(path).map(|md| md.get_referenceables())).flatten().flatten().collect_vec()
+            },
+            None => {
+                return self.md_files.values()
+                    .map(|file| file.get_referenceables())
+                    .flatten()
+                    .collect_vec()
+            }
+        }
     }
 
     pub fn select_line(&self, path: &Path, line: usize) -> Option<Vec<char>> {
@@ -187,11 +176,12 @@ pub struct MDFile {
     headings: Vec<MDHeading>,
     indexed_blocks: Vec<MDIndexedBlock>,
     tags: Vec<MDTag>,
-    footnotes: Vec<MDFootnote>
+    footnotes: Vec<MDFootnote>,
+    path: PathBuf
 }
 
 impl MDFile {
-    fn new(text: &str) -> MDFile {
+    fn new(text: &str, path: PathBuf) -> MDFile {
 
         let links = Reference::new(text);
         let headings = MDHeading::new(text);
@@ -199,9 +189,32 @@ impl MDFile {
         let tags = MDTag::new(text);
         let footnotes = MDFootnote::new(text);
 
-        return MDFile { references: links, headings, indexed_blocks, tags, footnotes }
+        return MDFile { references: links, headings, indexed_blocks, tags, footnotes, path }
     }
 }
+
+impl MDFile {
+    fn get_referenceables(&self) -> Vec<Referenceable> {
+        let MDFile { references: _, headings, indexed_blocks, tags, footnotes, path: _ } = self; // This is good becuase it will ensure I handle new fields and referenceables added
+
+        iter::once(Referenceable::File(&self.path, &self))
+            .chain( headings.iter()
+                .map(|heading| Referenceable::Heading(&self.path, &heading))
+            )
+            .chain(indexed_blocks.iter()
+                .map(|block| Referenceable::IndexedBlock(&self.path, &block))
+            )
+            .chain(tags.iter()
+                .map(|tag| Referenceable::Tag(&self.path, &tag))
+            )
+            .chain(footnotes.iter()
+                .map(|footnote| Referenceable::Footnote(&self.path, &footnote))
+            )
+            .collect()
+
+    }
+}
+
 
 #[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct ReferenceData {
