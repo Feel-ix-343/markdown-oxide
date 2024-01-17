@@ -79,8 +79,9 @@ then adjust your nvim-cmp source settings for the following. Note that this will
     - [ ] Refactoring: Move headers or selections to a new file
 - [X] Diagnostics
     - [X] Missing reference
-- [X] Outline
-    - [X] Headings and subheadings
+- [X] Symbols
+    - [X] File symbols: Headings and subheadings
+    - [ ] Workspace headings: everythign linkable: files, headings, tags, ... Like a good search feature
 - [ ] Rename
     - [ ] File
     - [ ] Headings
