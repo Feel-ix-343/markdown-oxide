@@ -82,8 +82,9 @@ then adjust your nvim-cmp source settings for the following. Note that this will
 - [X] Symbols
     - [X] File symbols: Headings and subheadings
     - [X] Workspace headings: everythign linkable: files, headings, tags, ... Like a good search feature
+    - [ ] Lists and indented lists
 - [ ] Rename
     - [ ] File
     - [ ] Headings
-    - [ ] Tags
+    - [ ] Tags.
 - [ ] Dataview support?- [ ] 
