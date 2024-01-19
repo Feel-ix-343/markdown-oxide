@@ -5,7 +5,7 @@ use std::path::Path;
 
 use completion::get_completions;
 use diagnostics::diagnostics;
-use document_symbol::document_symbol;
+use symbol::{document_symbol, workspace_symbol};
 use references::references;
 use tokio::sync::RwLock;
 
@@ -23,7 +23,7 @@ mod completion;
 mod diagnostics;
 mod hover;
 mod ui;
-mod document_symbol;
+mod symbol;
 
 
 #[derive(Debug)]
@@ -89,6 +89,7 @@ impl LanguageServer for Backend {
                 rename_provider: Some(OneOf::Left(true)),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 document_symbol_provider: Some(OneOf::Left(true)),
+                workspace_symbol_provider: Some(OneOf::Left(true)),
                 ..Default::default()
             }
         })
@@ -191,6 +192,17 @@ impl LanguageServer for Backend {
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
         return Ok(document_symbol(vault, params, &path))
+    }
+
+    async fn symbol(
+        &self,
+        params: WorkspaceSymbolParams
+    ) -> Result<Option<Vec<SymbolInformation>>> {
+        let bad_vault = self.vault.read().await;
+        let Some(vault) = bad_vault.deref() else {
+            return Err(Error::new(ErrorCode::ServerError(0)))
+        };
+        return Ok(workspace_symbol(vault, params))
     }
 }
 

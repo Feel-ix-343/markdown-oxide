@@ -1,9 +1,29 @@
 use std::{path::{Path, Iter}, iter};
 
 use itertools::Itertools;
-use tower_lsp::lsp_types::{DocumentSymbolParams, DocumentSymbolResponse, SymbolInformation, SymbolKind, Location, DocumentSymbol};
+use tower_lsp::lsp_types::{DocumentSymbolParams, DocumentSymbolResponse, SymbolInformation, SymbolKind, Location, DocumentSymbol, WorkspaceSymbolParams, WorkspaceSymbolResponse, Url};
 
-use crate::vault::{Vault, MDHeading};
+use crate::vault::{Vault, MDHeading, Referenceable};
+
+pub fn workspace_symbol(vault: &Vault, params: WorkspaceSymbolParams) -> Option<Vec<SymbolInformation>> {
+    let referenceables = vault.select_referenceable_nodes(None);
+    let symbol_informations = referenceables.into_iter()
+        .filter_map(|referenceable| Some(SymbolInformation {
+            name: referenceable.get_refname(&vault.root_dir())?,
+            kind: match referenceable {
+                Referenceable::File(_, _) => SymbolKind::FILE,
+                Referenceable::Tag(_, _) => SymbolKind::CONSTANT,
+                _ => SymbolKind::KEY
+            },
+            location: Location { uri: Url::from_file_path(referenceable.get_path()).ok()?, range: referenceable.get_range() },
+            container_name: None,
+            tags: None,
+            deprecated: None
+        }))
+        .collect_vec();
+
+    return Some(symbol_informations)
+}
 
 pub fn document_symbol(vault: &Vault, params: DocumentSymbolParams, path: &Path) -> Option<DocumentSymbolResponse> {
 
@@ -120,21 +140,21 @@ mod test {
         let tree = super::construct_tree(&headings);
 
         let expected = vec![
-            super::Node {
+            symbol::Node {
             heading: MDHeading {
             level: HeadingLevel(1),
             heading_text: "First".to_string(),
             range: Default::default()
             },
             children: Some(vec![
-            super::Node {
+            symbol::Node {
             heading: MDHeading {
             level: HeadingLevel(2),
             heading_text: "Second".to_string(),
             range: Default::default()
             },
             children: Some(vec![
-            super::Node {
+            symbol::Node {
             heading: MDHeading {
             level: HeadingLevel(3),
             heading_text: "Third".to_string(),
@@ -144,7 +164,7 @@ mod test {
             }
             ])
             },
-            super::Node {
+            symbol::Node {
             heading: MDHeading {
             level: HeadingLevel(2),
             heading_text: "Second".to_string(),
@@ -154,7 +174,7 @@ mod test {
             }
             ])
             },
-            super::Node {
+            symbol::Node {
             heading: MDHeading {
             level: HeadingLevel(1),
             heading_text: "First".to_string(),
@@ -162,7 +182,7 @@ mod test {
             },
             children: None
             },
-            super::Node {
+            symbol::Node {
             heading: MDHeading {
             level: HeadingLevel(1),
             heading_text: "First".to_string(),
@@ -208,21 +228,21 @@ mod test {
         let tree = super::construct_tree(&headings);
 
         let expected = vec![
-            super::Node {
+            symbol::Node {
             heading: MDHeading {
             level: HeadingLevel(1),
             heading_text: "First".to_string(),
             range: Default::default()
             },
             children: Some(vec![
-            super::Node {
+            symbol::Node {
             heading: MDHeading {
             level: HeadingLevel(2),
             heading_text: "Second".to_string(),
             range: Default::default()
             },
             children: Some(vec![
-            super::Node {
+            symbol::Node {
             heading: MDHeading {
             level: HeadingLevel(3),
             heading_text: "Third".to_string(),
@@ -234,7 +254,7 @@ mod test {
             },
             ])
             },
-            super::Node {
+            symbol::Node {
             heading: MDHeading {
             level: HeadingLevel(1),
             heading_text: "First".to_string(),
@@ -242,7 +262,7 @@ mod test {
             },
             children: None
             },
-            super::Node {
+            symbol::Node {
             heading: MDHeading {
             level: HeadingLevel(1),
             heading_text: "First".to_string(),
