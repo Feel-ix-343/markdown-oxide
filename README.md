@@ -81,7 +81,7 @@ then adjust your nvim-cmp source settings for the following. Note that this will
     - [X] Missing reference
 - [X] Symbols
     - [X] File symbols: Headings and subheadings
-    - [ ] Workspace headings: everythign linkable: files, headings, tags, ... Like a good search feature
+    - [X] Workspace headings: everythign linkable: files, headings, tags, ... Like a good search feature
 - [ ] Rename
     - [ ] File
     - [ ] Headings
