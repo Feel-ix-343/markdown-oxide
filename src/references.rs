@@ -13,13 +13,8 @@ pub fn references(vault: &Vault, cursor_position: Position, path: &Path) -> Opti
     Some(vault.select_references_for_referenceable(&referenceable)
         .into_iter()
         .flatten()
-        .map(|link| Url::from_file_path(link.0).map(|good| Location {uri: good, range: link.1.data().range}))
-        .flat_map(|l| match l.is_ok() {
-            true => Some(l),
-            false => None
-        })
-        .flatten()
-        .collect_vec())
+        .filter_map(|link| Some(Url::from_file_path(link.0).map(|good| Location {uri: good, range: link.1.data().range}).ok()?))
+        .collect::<Vec<_>>())
 
     
 }
