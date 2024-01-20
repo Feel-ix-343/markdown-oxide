@@ -14,7 +14,7 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
 
     let selected_line = vault.select_line(&path.to_path_buf(), line)?;
 
-    if selected_line.get(character-2..character) == Some(&vec!['[', '[']) { // we have a link
+    if character.checked_sub(2).and_then(|start| selected_line.get(start..character)) == Some(&vec!['[', '[']) { // we have a link
 
         let all_links = vault.select_referenceable_nodes(None)
             .into_par_iter()
@@ -37,7 +37,7 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
                     .flatten()
                     .collect::<Vec<_>>()
         ))
-    } else if selected_line.get(character-1..character) == Some(&vec!['#']) {
+    } else if character.checked_sub(2).and_then(|start| selected_line.get(start..character)) == Some(&vec!['#']) {
 
         // Initial Tag completion
         let tag_refereneables = vault.select_referenceable_nodes(None)
