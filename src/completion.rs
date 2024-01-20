@@ -89,7 +89,11 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
                 .unique_by(|c| c.label.to_owned())
                 .collect_vec(),
         ));
-    } else if character.checked_sub(1).and_then(|start| selected_line.get(start..character)) == Some(&['[']) {
+    } else if character
+        .checked_sub(1)
+        .and_then(|start| selected_line.get(start..character))
+        == Some(&['['])
+    {
         let footnote_referenceables = vault
             .select_referenceable_nodes(Some(&path))
             .into_iter()

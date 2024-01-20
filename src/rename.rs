@@ -56,7 +56,7 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
             Referenceable::Tag(path, tag) => {
                 let new_ref_name = params.new_name.clone();
 
-            let new_tag = format!("#{}", new_ref_name);
+                let new_tag = format!("#{}", new_ref_name);
 
                 (None, new_ref_name)
             }
@@ -101,21 +101,28 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                             new_text,
                         })],
                     })
-                },
+                }
                 Reference::Tag(data) => {
-                    let new_text = format!("#{}", data.reference_text.replacen(&referenceable.get_refname(&vault.root_dir())?, &new_ref_name, 1));
+                    let new_text = format!(
+                        "#{}",
+                        data.reference_text.replacen(
+                            &referenceable.get_refname(&vault.root_dir())?,
+                            &new_ref_name,
+                            1
+                        )
+                    );
 
-                    Some(TextDocumentEdit{
+                    Some(TextDocumentEdit {
                         text_document: OptionalVersionedTextDocumentIdentifier {
                             uri: Url::from_file_path(path).ok()?,
-                            version: None
+                            version: None,
                         },
                         edits: vec![OneOf::Left(TextEdit {
-                        range: data.range,
-                        new_text
-                        })]
+                            range: data.range,
+                            new_text,
+                        })],
                     })
-                },
+                }
                 _ => None,
             }
         })
