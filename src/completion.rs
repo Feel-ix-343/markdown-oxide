@@ -5,7 +5,7 @@ use tower_lsp::lsp_types::{
 };
 
 use crate::{
-    ui::{preview_referenceable},
+    ui::preview_referenceable,
     vault::{Referenceable, Vault},
 };
 
