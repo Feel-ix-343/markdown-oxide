@@ -12,7 +12,7 @@ pub async fn diagnostics(vault: &Vault, (path, uri, _): (&PathBuf, &Url, &str), 
     // Diagnostics
     // get all links for changed file
     let referenceables = vault.select_referenceable_nodes(None);
-    let Some(pathreferences) = vault.select_references(Some(&path)) else {
+    let Some(pathreferences) = vault.select_references(Some(path)) else {
         return;
     };
     let Some(allreferences) = vault.select_references(None) else {
@@ -20,7 +20,7 @@ pub async fn diagnostics(vault: &Vault, (path, uri, _): (&PathBuf, &Url, &str), 
     };
     let unresolved = pathreferences.par_iter().filter(|(path, reference)| {
         !referenceables.iter().any(|referenceable| {
-            referenceable.matches_reference(&vault.root_dir(), reference, path)
+            referenceable.matches_reference(vault.root_dir(), reference, path)
         })
     });
 
@@ -38,7 +38,7 @@ pub async fn diagnostics(vault: &Vault, (path, uri, _): (&PathBuf, &Url, &str), 
                 .count()
             {
                 num if num > 1 => format!("Unresolved Reference used {} times", num),
-                _ => format!("Unresolved Reference"),
+                _ => "Unresolved Reference".to_string(),
             },
             source: Some("Obsidian LS".into()),
             severity: Some(DiagnosticSeverity::INFORMATION),

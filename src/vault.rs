@@ -21,7 +21,7 @@ impl Vault {
             .filter_entry(|e| {
                 !e.file_name()
                     .to_str()
-                    .map(|s| s.starts_with("."))
+                    .map(|s| s.starts_with('.'))
                     .unwrap_or(false)
             })
             .flatten()
@@ -32,7 +32,7 @@ impl Vault {
             .par_iter()
             .flat_map(|p| {
                 let text = std::fs::read_to_string(p.path())?;
-                let md_file = MDFile::new(&text, PathBuf::from(p.path().clone()));
+                let md_file = MDFile::new(&text, PathBuf::from(p.path()));
 
                 return Ok::<(PathBuf, MDFile), std::io::Error>((p.path().into(), md_file));
             })
@@ -48,11 +48,11 @@ impl Vault {
             })
             .collect();
 
-        return Ok(Vault {
+        Ok(Vault {
             ropes,
             md_files,
             root_dir: root_dir.into(),
-        });
+        })
     }
 
     pub fn reconstruct_vault(old: &mut Vault, new_file: (&PathBuf, &str)) {
@@ -107,8 +107,7 @@ impl Vault {
             None => Some(
                 self.md_files
                     .iter()
-                    .map(|(path, md)| md.references.iter().map(|link| (path.as_path(), link)))
-                    .flatten()
+                    .flat_map(|(path, md)| md.references.iter().map(|link| (path.as_path(), link)))
                     .collect(),
             ),
         }
@@ -127,7 +126,7 @@ impl Vault {
                 && l.get_range().end.character >= position.character
         })?;
 
-        return Some(linkable);
+        Some(linkable)
     }
 
     /// Select all linkable positions in the vault
@@ -146,8 +145,7 @@ impl Vault {
                 return self
                     .md_files
                     .values()
-                    .map(|file| file.get_referenceables())
-                    .flatten()
+                    .flat_map(|file| file.get_referenceables())
                     .collect_vec()
             }
         }
@@ -156,14 +154,13 @@ impl Vault {
     pub fn select_line(&self, path: &Path, line: usize) -> Option<Vec<char>> {
         let rope = self.ropes.get(path)?;
 
-        rope.get_line(line)
-            .and_then(|slice| Some(slice.chars().collect_vec()))
+        rope.get_line(line).map(|slice| slice.chars().collect_vec())
     }
 
     pub fn select_headings(&self, path: &Path) -> Option<&Vec<MDHeading>> {
         let md_file = self.md_files.get(path)?;
         let headings = &md_file.headings;
-        return Some(headings);
+        Some(headings)
     }
 
     pub fn root_dir(&self) -> &PathBuf {
@@ -175,7 +172,7 @@ impl Vault {
             Referenceable::Footnote(_, _) => {
                 let range = referenceable.get_range();
                 Some(String::from_iter(self.select_line(
-                    &referenceable.get_path(),
+                    referenceable.get_path(),
                     range.start.line as usize,
                 )?))
             }
@@ -183,22 +180,21 @@ impl Vault {
                 let range = referenceable.get_range();
                 Some(
                     (range.start.line..=range.end.line + 10)
-                        .map(|ln| self.select_line(&referenceable.get_path(), ln as usize))
-                        .flatten() // flatten those options!
-                        .map(|vec| String::from_iter(vec))
+                        .filter_map(|ln| self.select_line(referenceable.get_path(), ln as usize)) // flatten those options!
+                        .map(String::from_iter)
                         .join(""),
                 )
             }
             Referenceable::IndexedBlock(_, _) => {
                 let range = referenceable.get_range();
-                self.select_line(&referenceable.get_path(), range.start.line as usize)
+                self.select_line(referenceable.get_path(), range.start.line as usize)
                     .map(String::from_iter)
             }
             Referenceable::File(_, _) => {
                 let file_text = self.ropes.get(referenceable.get_path()).unwrap();
                 Some(String::from(file_text))
             }
-            _ => return None,
+            _ => None,
         }
     }
 
@@ -234,7 +230,7 @@ fn range_to_position(rope: &Rope, range: Range<usize>) -> tower_lsp::lsp_types::
     let end_line = rope.char_to_line(char_end);
     let end_offset = char_end - rope.line_to_char(end_line);
 
-    return tower_lsp::lsp_types::Range {
+    tower_lsp::lsp_types::Range {
         start: Position {
             line: start_line as u32,
             character: start_offset as u32,
@@ -243,7 +239,7 @@ fn range_to_position(rope: &Rope, range: Range<usize>) -> tower_lsp::lsp_types::
             line: end_line as u32,
             character: end_offset as u32,
         },
-    };
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Default)]
@@ -264,14 +260,14 @@ impl MDFile {
         let tags = MDTag::new(text);
         let footnotes = MDFootnote::new(text);
 
-        return MDFile {
+        MDFile {
             references: links,
             headings,
             indexed_blocks,
             tags,
             footnotes,
             path,
-        };
+        }
     }
 }
 
@@ -286,22 +282,22 @@ impl MDFile {
             path: _,
         } = self; // This is good becuase it will ensure I handle new fields and referenceables added
 
-        iter::once(Referenceable::File(&self.path, &self))
+        iter::once(Referenceable::File(&self.path, self))
             .chain(
                 headings
                     .iter()
-                    .map(|heading| Referenceable::Heading(&self.path, &heading)),
+                    .map(|heading| Referenceable::Heading(&self.path, heading)),
             )
             .chain(
                 indexed_blocks
                     .iter()
-                    .map(|block| Referenceable::IndexedBlock(&self.path, &block)),
+                    .map(|block| Referenceable::IndexedBlock(&self.path, block)),
             )
-            .chain(tags.iter().map(|tag| Referenceable::Tag(&self.path, &tag)))
+            .chain(tags.iter().map(|tag| Referenceable::Tag(&self.path, tag)))
             .chain(
                 footnotes
                     .iter()
-                    .map(|footnote| Referenceable::Footnote(&self.path, &footnote)),
+                    .map(|footnote| Referenceable::Footnote(&self.path, footnote)),
             )
             .collect()
     }
@@ -405,11 +401,11 @@ impl Reference {
             })
             .collect_vec();
 
-        return links
+        links
             .into_iter()
-            .chain(tags.into_iter())
+            .chain(tags)
             .chain(footnote_references)
-            .collect_vec();
+            .collect_vec()
     }
 
     pub fn references(
@@ -475,7 +471,7 @@ impl MDHeading {
             })
             .collect_vec();
 
-        return headings;
+        headings
     }
 }
 
@@ -491,7 +487,7 @@ impl MDIndexedBlock {
             Lazy::new(|| Regex::new(r".+ (\^(?<index>\w+))").unwrap());
 
         let indexed_blocks: Vec<MDIndexedBlock> = INDEXED_BLOCK_RE
-            .captures_iter(&text.to_string())
+            .captures_iter(text)
             .flat_map(|c| match (c.get(1), c.name("index")) {
                 (Some(full), Some(index)) => Some((full, index)),
                 _ => None,
@@ -502,7 +498,7 @@ impl MDIndexedBlock {
             })
             .collect_vec();
 
-        return indexed_blocks;
+        indexed_blocks
     } // Make this better identify the full blocks
 }
 
@@ -520,7 +516,7 @@ impl MDFootnote {
             Lazy::new(|| Regex::new(r"\[(?<index>\^[^ \[\]]+)\]\:(?<text>.+)").unwrap());
 
         let footnotes: Vec<MDFootnote> = FOOTNOTE_RE
-            .captures_iter(&text.to_string())
+            .captures_iter(text)
             .flat_map(|c| match (c.get(0), c.name("index"), c.name("text")) {
                 (Some(full), Some(index), Some(footnote_text)) => {
                     Some((full, index, footnote_text))
@@ -534,7 +530,7 @@ impl MDFootnote {
             })
             .collect_vec();
 
-        return footnotes;
+        footnotes
     }
 }
 
@@ -550,7 +546,7 @@ impl MDTag {
             Lazy::new(|| Regex::new(r"(\n|\A| )(?<full>#(?<tag>[.[^ \n\#]]+))(\n|\z| )").unwrap());
 
         let tagged_blocks = TAG_RE
-            .captures_iter(&text.to_string())
+            .captures_iter(text)
             .flat_map(|c| match (c.name("full"), c.name("tag")) {
                 (Some(full), Some(index)) => Some((full, index)),
                 _ => None,
@@ -562,7 +558,7 @@ impl MDTag {
             })
             .collect_vec();
 
-        return tagged_blocks;
+        tagged_blocks
     }
 }
 
@@ -588,7 +584,7 @@ fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
     diff_paths(path, root_dir).and_then(|diff| {
         diff.with_extension("")
             .to_str()
-            .map(|refname| String::from(refname))
+            .map(String::from)
     })
 }
 
@@ -597,10 +593,8 @@ impl Referenceable<'_> {
     pub fn get_refname(&self, root_dir: &Path) -> Option<String> {
         match self {
             &Referenceable::File(path, _) => get_obsidian_ref_path(root_dir, path),
-            &Referenceable::Heading(path, heading) => get_obsidian_ref_path(root_dir, path)
-                .and_then(|refpath| Some(format!("{}#{}", refpath, heading.heading_text))),
-            &Referenceable::IndexedBlock(path, heading) => get_obsidian_ref_path(root_dir, path)
-                .and_then(|refpath| Some(format!("{}#^{}", refpath, heading.index))),
+            &Referenceable::Heading(path, heading) => get_obsidian_ref_path(root_dir, path).map(|refpath| format!("{}#{}", refpath, heading.heading_text)),
+            &Referenceable::IndexedBlock(path, heading) => get_obsidian_ref_path(root_dir, path).map(|refpath| format!("{}#^{}", refpath, heading.index)),
             &Referenceable::Tag(_, tag) => Some(format!("#{}", tag.tag_ref)),
             &Referenceable::Footnote(_, footnote) => Some(footnote.index.clone()),
         }
@@ -625,13 +619,13 @@ impl Referenceable<'_> {
                     && self.get_refname(root_dir).as_ref() == Some(text)
                     && path.as_path() == file_path
             }
-            &Referenceable::File(path, file) => {
+            &Referenceable::File(_path, _file) => {
                 matches!(reference, Link(_))
                     && (self.get_refname(root_dir) == Some(text.to_string())
                         || self.get_refname(root_dir)
                             == text
                                 .to_string()
-                                .split_once("#")
+                                .split_once('#')
                                 .map(|(file_ref, _)| String::from(file_ref)))
             }
             _ => {
@@ -1117,7 +1111,7 @@ and a third tag#notatag [[link#not a tag]]
             },
         ];
 
-        let parsed = MDTag::new(&text);
+        let parsed = MDTag::new(text);
 
         assert_eq!(parsed, expected)
     }

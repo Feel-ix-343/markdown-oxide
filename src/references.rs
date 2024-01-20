@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use itertools::Itertools;
+
 use tower_lsp::lsp_types::{Location, Position, Url};
 
 use crate::vault::Vault;
@@ -15,14 +15,12 @@ pub fn references(vault: &Vault, cursor_position: Position, path: &Path) -> Opti
             .into_iter()
             .flatten()
             .filter_map(|link| {
-                Some(
-                    Url::from_file_path(link.0)
+                Url::from_file_path(link.0)
                         .map(|good| Location {
                             uri: good,
                             range: link.1.data().range,
                         })
-                        .ok()?,
-                )
+                        .ok()
             })
             .collect::<Vec<_>>(),
     )

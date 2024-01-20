@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use itertools::Itertools;
+
 use tower_lsp::lsp_types::{MarkupContent, MarkupKind};
 
 use crate::vault::{Reference, Referenceable, Vault};
@@ -23,10 +23,10 @@ pub fn preview_referenceable(
 ) -> Option<MarkupContent> {
     let display = referenceable_string(vault, referenceable)?;
 
-    return Some(MarkupContent {
+    Some(MarkupContent {
         kind: MarkupKind::Markdown,
         value: display,
-    });
+    })
 }
 
 pub fn preview_reference(
@@ -39,14 +39,14 @@ pub fn preview_reference(
             let positions = vault.select_referenceable_nodes(None);
             let referenceable = positions
                 .iter()
-                .find(|i| i.matches_reference(&vault.root_dir(), &reference, &reference_path))?;
+                .find(|i| i.matches_reference(vault.root_dir(), reference, reference_path))?;
 
             let display = referenceable_string(vault, referenceable)?;
 
-            return Some(MarkupContent {
+            Some(MarkupContent {
                 kind: MarkupKind::Markdown,
                 value: display,
-            });
+            })
         }
         _ => None,
     }

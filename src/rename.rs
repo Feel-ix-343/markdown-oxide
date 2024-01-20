@@ -1,13 +1,13 @@
 use std::iter;
 use std::path::Path;
 
-use tower_lsp::jsonrpc::Result;
+
 use tower_lsp::lsp_types::{
-    DocumentChangeOperation, DocumentChanges, OneOf, RenameFile, RenameFileOptions, RenameParams,
+    DocumentChangeOperation, DocumentChanges, OneOf, RenameFile, RenameParams,
     ResourceOp, TextDocumentEdit, TextEdit, Url, WorkspaceEdit,
 };
 
-use crate::vault::{MDHeading, Reference, ReferenceData, Referenceable, Vault};
+use crate::vault::{MDHeading, Reference, Referenceable, Vault};
 
 pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<WorkspaceEdit> {
     let position = params.text_document_position.position;
@@ -36,7 +36,7 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                         ..heading.clone()
                     },
                 )
-                .get_refname(&vault.root_dir())?;
+                .get_refname(vault.root_dir())?;
 
                 (change_op, name)
             }
@@ -50,7 +50,7 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                     annotation_id: None,
                 }));
 
-                let name = Referenceable::File(&new_path, file).get_refname(&vault.root_dir())?;
+                let name = Referenceable::File(&new_path, file).get_refname(vault.root_dir())?;
 
                 (change_op, name)
             }
@@ -66,8 +66,8 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
 
             match reference {
                 Reference::Link(data) => {
-                    let new_ref_name = match data.reference_text.split_once("#") {
-                        Some((file, rest))
+                    let new_ref_name = match data.reference_text.split_once('#') {
+                        Some((_file, rest))
                             if matches!(referenceable, Referenceable::File(_, _)) =>
                         {
                             format!("{}#{}", new_ref_name, rest)
@@ -84,7 +84,7 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                             .unwrap_or_else(|| String::from(""))
                     );
 
-                    return Some(TextDocumentEdit {
+                    Some(TextDocumentEdit {
                         text_document:
                             tower_lsp::lsp_types::OptionalVersionedTextDocumentIdentifier {
                                 uri: Url::from_file_path(path).ok()?,
@@ -92,21 +92,21 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                             },
                         edits: vec![OneOf::Left(TextEdit {
                             range: data.range,
-                            new_text: new_text,
+                            new_text,
                         })],
-                    });
+                    })
                 }
                 _ => None,
             }
         })
-        .map(|edit| DocumentChangeOperation::Edit(edit));
+        .map(DocumentChangeOperation::Edit);
 
-    return Some(WorkspaceEdit {
+    Some(WorkspaceEdit {
         document_changes: Some(DocumentChanges::Operations(
             references_changes
                 .chain(iter::once(referenceable_document_change))
                 .collect(), // order matters here
         )),
         ..Default::default()
-    });
+    })
 }

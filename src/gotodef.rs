@@ -10,7 +10,7 @@ pub fn goto_definition(
     path: &Path,
 ) -> Option<Vec<Location>> {
     // First, find the link that the cursor is in. Get a links for the file and match the cursor position up to one of them
-    let links = vault.select_references(Some(&path))?;
+    let links = vault.select_references(Some(path))?;
     let (path, reference) = links.iter().find(|&l| {
         l.1.data().range.start.line <= cursor_position.line
             && l.1.data().range.end.line >= cursor_position.line
@@ -24,9 +24,9 @@ pub fn goto_definition(
     let positions = vault.select_referenceable_nodes(None);
     let referenced_referenceables = positions
         .iter()
-        .filter(|i| reference.references(&vault.root_dir(), path, i));
+        .filter(|i| reference.references(vault.root_dir(), path, i));
 
-    return Some(
+    Some(
         referenced_referenceables
             .filter_map(|linkable| {
                 Some(Location {
@@ -35,5 +35,5 @@ pub fn goto_definition(
                 })
             })
             .collect(),
-    );
+    )
 }

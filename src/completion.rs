@@ -5,7 +5,7 @@ use tower_lsp::lsp_types::{
 };
 
 use crate::{
-    ui::{preview_reference, preview_referenceable},
+    ui::{preview_referenceable},
     vault::{Referenceable, Vault},
 };
 
@@ -27,7 +27,7 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
     if character
         .checked_sub(2)
         .and_then(|start| selected_line.get(start..character))
-        == Some(&vec!['[', '['])
+        == Some(&['[', '['])
     {
         // we have a link
 
@@ -43,12 +43,11 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
             all_links
                 .map(|referenceable| {
                     referenceable
-                        .get_refname(&vault.root_dir())
+                        .get_refname(vault.root_dir())
                         .map(|root| CompletionItem {
                             kind: Some(CompletionItemKind::FILE),
                             label: root.clone(),
-                            documentation: preview_referenceable(vault, &referenceable)
-                                .and_then(|markup| Some(Documentation::MarkupContent(markup))),
+                            documentation: preview_referenceable(vault, &referenceable).map(Documentation::MarkupContent),
                             filter_text: match referenceable {
                                 Referenceable::IndexedBlock(_, _) => vault
                                     .select_referenceable_preview(&referenceable)
@@ -64,7 +63,7 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
     } else if character
         .checked_sub(2)
         .and_then(|start| selected_line.get(start..character))
-        == Some(&vec!['#'])
+        == Some(&['#'])
     {
         // Initial Tag completion
         let tag_refereneables =
@@ -78,19 +77,18 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
 
         return Some(CompletionResponse::Array(
             tag_refereneables
-                .map(|tag| {
-                    tag.get_refname(&vault.root_dir())
+                .filter_map(|tag| {
+                    tag.get_refname(vault.root_dir())
                         .map(|root| CompletionItem {
                             kind: Some(CompletionItemKind::CONSTANT),
                             label: root,
                             ..Default::default()
                         })
                 })
-                .flatten()
                 .unique_by(|c| c.label.to_owned())
                 .collect_vec(),
         ));
-    } else if selected_line.get(character - 1..character) == Some(&vec!['[']) {
+    } else if selected_line.get(character - 1..character) == Some(&['[']) {
         let footnote_referenceables = vault
             .select_referenceable_nodes(Some(&path))
             .into_iter()
@@ -105,21 +103,19 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
 
         return Some(CompletionResponse::Array(
             footnote_referenceables
-                .map(|footnote| {
+                .filter_map(|footnote| {
                     footnote
-                        .get_refname(&vault.root_dir())
+                        .get_refname(vault.root_dir())
                         .map(|root| CompletionItem {
                             kind: Some(CompletionItemKind::REFERENCE),
                             label: root.clone(),
-                            documentation: preview_referenceable(vault, &footnote)
-                                .and_then(|markup| Some(Documentation::MarkupContent(markup))),
+                            documentation: preview_referenceable(vault, &footnote).map(Documentation::MarkupContent),
                             filter_text: vault
                                 .select_referenceable_preview(&footnote)
                                 .map(|preview_string| root + &preview_string),
                             ..Default::default()
                         })
                 })
-                .flatten()
                 .unique_by(|c| c.label.to_owned())
                 .collect_vec(),
         ));

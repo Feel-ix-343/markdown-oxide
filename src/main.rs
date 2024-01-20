@@ -11,7 +11,7 @@ use tokio::sync::RwLock;
 
 use gotodef::goto_definition;
 use tower_lsp::jsonrpc::{Error, ErrorCode, Result};
-use tower_lsp::lsp_types::notification::{Notification, Progress};
+
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 use vault::Vault;
@@ -55,7 +55,7 @@ impl Backend {
         let text = &params.text;
         Vault::reconstruct_vault(vault, (&path, text));
 
-        diagnostics(&vault, (&path, &params.uri, text), &self.client).await;
+        diagnostics(vault, (&path, &params.uri, text), &self.client).await;
     }
 }
 
@@ -137,9 +137,9 @@ impl LanguageServer for Backend {
         else {
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
-        let result = goto_definition(&vault, position, &path);
+        let result = goto_definition(vault, position, &path);
 
-        return Ok(result.map(|l| GotoDefinitionResponse::Array(l)));
+        return Ok(result.map(GotoDefinitionResponse::Array));
     }
 
     async fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>> {
@@ -198,7 +198,7 @@ impl LanguageServer for Backend {
         else {
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
-        return Ok(hover::hover(&vault, params, &path));
+        return Ok(hover::hover(vault, params, &path));
     }
 
     async fn document_symbol(
@@ -240,7 +240,7 @@ impl LanguageServer for Backend {
         else {
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
-        return Ok(rename::rename(&vault, &params, &path));
+        return Ok(rename::rename(vault, &params, &path));
     }
 }
 

@@ -1,26 +1,26 @@
 use std::{
     iter,
-    path::{Iter, Path},
+    path::{Path},
 };
 
 use itertools::Itertools;
 use tower_lsp::lsp_types::{
     DocumentSymbol, DocumentSymbolParams, DocumentSymbolResponse, Location, SymbolInformation,
-    SymbolKind, Url, WorkspaceSymbolParams, WorkspaceSymbolResponse,
+    SymbolKind, Url, WorkspaceSymbolParams,
 };
 
 use crate::vault::{MDHeading, Referenceable, Vault};
 
 pub fn workspace_symbol(
     vault: &Vault,
-    params: WorkspaceSymbolParams,
+    _params: WorkspaceSymbolParams,
 ) -> Option<Vec<SymbolInformation>> {
     let referenceables = vault.select_referenceable_nodes(None);
     let symbol_informations = referenceables
         .into_iter()
         .filter_map(|referenceable| {
             Some(SymbolInformation {
-                name: referenceable.get_refname(&vault.root_dir())?,
+                name: referenceable.get_refname(vault.root_dir())?,
                 kind: match referenceable {
                     Referenceable::File(_, _) => SymbolKind::FILE,
                     Referenceable::Tag(_, _) => SymbolKind::CONSTANT,
@@ -37,20 +37,20 @@ pub fn workspace_symbol(
         })
         .collect_vec();
 
-    return Some(symbol_informations);
+    Some(symbol_informations)
 }
 
 pub fn document_symbol(
     vault: &Vault,
-    params: DocumentSymbolParams,
+    _params: DocumentSymbolParams,
     path: &Path,
 ) -> Option<DocumentSymbolResponse> {
     let headings = vault.select_headings(path)?;
 
-    let tree = construct_tree(&headings)?;
+    let tree = construct_tree(headings)?;
     let lsp = map_to_lsp_tree(tree);
 
-    return Some(DocumentSymbolResponse::Nested(lsp));
+    Some(DocumentSymbolResponse::Nested(lsp))
 }
 
 #[derive(PartialEq, Debug)]
@@ -66,7 +66,7 @@ fn construct_tree(headings: &[MDHeading]) -> Option<Vec<Node>> {
                 heading: only.clone(),
                 children: None,
             };
-            return Some(vec![node]);
+            Some(vec![node])
         }
         [first, rest @ ..] => {
             let break_index = rest
@@ -81,18 +81,18 @@ fn construct_tree(headings: &[MDHeading]) -> Option<Vec<Node>> {
                         children: construct_tree(to_next), // if to_next is empty, this will return none
                     };
 
-                    return Some(
+                    Some(
                         iter::once(node)
                             .chain(construct_tree(rest).into_iter().flatten())
                             .collect(),
-                    );
+                    )
                 }
                 None => {
                     let node = Node {
                         heading: first.clone(),
                         children: construct_tree(rest),
                     };
-                    return Some(vec![node]);
+                    Some(vec![node])
                 }
             }
         }
@@ -110,7 +110,7 @@ fn map_to_lsp_tree(tree: Vec<Node>) -> Vec<DocumentSymbol> {
             range: node.heading.range,
             detail: None,
             selection_range: node.heading.range,
-            children: node.children.map(|children| map_to_lsp_tree(children)),
+            children: node.children.map(map_to_lsp_tree),
         })
         .collect()
 }
