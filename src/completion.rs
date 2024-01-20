@@ -47,7 +47,8 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
                         .map(|root| CompletionItem {
                             kind: Some(CompletionItemKind::FILE),
                             label: root.clone(),
-                            documentation: preview_referenceable(vault, &referenceable).map(Documentation::MarkupContent),
+                            documentation: preview_referenceable(vault, &referenceable)
+                                .map(Documentation::MarkupContent),
                             filter_text: match referenceable {
                                 Referenceable::IndexedBlock(_, _) => vault
                                     .select_referenceable_preview(&referenceable)
@@ -61,7 +62,7 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
                 .collect::<Vec<_>>(),
         ));
     } else if character
-        .checked_sub(2)
+        .checked_sub(1)
         .and_then(|start| selected_line.get(start..character))
         == Some(&['#'])
     {
@@ -88,7 +89,7 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
                 .unique_by(|c| c.label.to_owned())
                 .collect_vec(),
         ));
-    } else if selected_line.get(character - 1..character) == Some(&['[']) {
+    } else if character.checked_sub(1).and_then(|start| selected_line.get(start..character)) == Some(&['[']) {
         let footnote_referenceables = vault
             .select_referenceable_nodes(Some(&path))
             .into_iter()
@@ -109,7 +110,8 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
                         .map(|root| CompletionItem {
                             kind: Some(CompletionItemKind::REFERENCE),
                             label: root.clone(),
-                            documentation: preview_referenceable(vault, &footnote).map(Documentation::MarkupContent),
+                            documentation: preview_referenceable(vault, &footnote)
+                                .map(Documentation::MarkupContent),
                             filter_text: vault
                                 .select_referenceable_preview(&footnote)
                                 .map(|preview_string| root + &preview_string),

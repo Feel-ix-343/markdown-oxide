@@ -581,11 +581,7 @@ pub enum Referenceable<'a> {
 
 /// Utility function
 fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
-    diff_paths(path, root_dir).and_then(|diff| {
-        diff.with_extension("")
-            .to_str()
-            .map(String::from)
-    })
+    diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(String::from))
 }
 
 impl Referenceable<'_> {
@@ -593,8 +589,10 @@ impl Referenceable<'_> {
     pub fn get_refname(&self, root_dir: &Path) -> Option<String> {
         match self {
             &Referenceable::File(path, _) => get_obsidian_ref_path(root_dir, path),
-            &Referenceable::Heading(path, heading) => get_obsidian_ref_path(root_dir, path).map(|refpath| format!("{}#{}", refpath, heading.heading_text)),
-            &Referenceable::IndexedBlock(path, heading) => get_obsidian_ref_path(root_dir, path).map(|refpath| format!("{}#^{}", refpath, heading.index)),
+            &Referenceable::Heading(path, heading) => get_obsidian_ref_path(root_dir, path)
+                .map(|refpath| format!("{}#{}", refpath, heading.heading_text)),
+            &Referenceable::IndexedBlock(path, heading) => get_obsidian_ref_path(root_dir, path)
+                .map(|refpath| format!("{}#^{}", refpath, heading.index)),
             &Referenceable::Tag(_, tag) => Some(format!("#{}", tag.tag_ref)),
             &Referenceable::Footnote(_, footnote) => Some(footnote.index.clone()),
         }

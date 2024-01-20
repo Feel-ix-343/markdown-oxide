@@ -1,6 +1,5 @@
 use std::path::Path;
 
-
 use tower_lsp::lsp_types::{MarkupContent, MarkupKind};
 
 use crate::vault::{Reference, Referenceable, Vault};

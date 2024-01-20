@@ -2,7 +2,7 @@
 
 # Heading
 
-#tag
+#tag/subtag
 
 
 more footntoe[^2]

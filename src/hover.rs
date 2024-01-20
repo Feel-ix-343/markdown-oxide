@@ -16,7 +16,7 @@ pub fn hover(vault: &Vault, params: HoverParams, path: &Path) -> Option<Hover> {
     })?;
 
     preview_reference(vault, refpath, reference).map(|markup| Hover {
-            contents: HoverContents::Markup(markup),
-            range: None,
-        })
+        contents: HoverContents::Markup(markup),
+        range: None,
+    })
 }

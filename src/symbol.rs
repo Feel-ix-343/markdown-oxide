@@ -1,7 +1,4 @@
-use std::{
-    iter,
-    path::{Path},
-};
+use std::{iter, path::Path};
 
 use itertools::Itertools;
 use tower_lsp::lsp_types::{
