@@ -53,10 +53,10 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
 
                 (Some(change_op), name)
             }
-            Referenceable::Tag(path, tag) => {
+            Referenceable::Tag(_path, _tag) => {
                 let new_ref_name = params.new_name.clone();
 
-                let new_tag = format!("#{}", new_ref_name);
+                let _new_tag = format!("#{}", new_ref_name);
 
                 (None, new_ref_name)
             }
@@ -106,7 +106,7 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                     let new_text = format!(
                         "#{}",
                         data.reference_text.replacen(
-                            &referenceable.get_refname(&vault.root_dir())?,
+                            &referenceable.get_refname(vault.root_dir())?,
                             &new_ref_name,
                             1
                         )
