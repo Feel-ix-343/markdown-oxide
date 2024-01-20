@@ -6,7 +6,7 @@ use pathdiff::diff_paths;
 use rayon::prelude::*;
 use regex::Regex;
 use ropey::Rope;
-use tower_lsp::lsp_types::Position;
+use tower_lsp::lsp_types::{Position};
 use walkdir::WalkDir;
 
 impl Vault {
@@ -87,8 +87,24 @@ impl Vault {
         
     } // TODO: less cloning?
 
+    pub fn select_referenceable_at_position<'a>(&'a self, path: &'a Path, position: Position) -> Option<Referenceable<'a>> {
+
+        let linkable_nodes = self.select_referenceable_nodes(Some(path));
+        let linkable = linkable_nodes
+            .into_iter()
+            .find(|l| 
+                l.get_range().start.line <= position.line && 
+                l.get_range().end.line >= position.line && 
+                l.get_range().start.character <= position.character &&
+                l.get_range().end.character >= position.character
+            )?;
+
+        return Some(linkable)
+
+    }
+
     /// Select all linkable positions in the vault
-    pub fn select_referenceable_nodes<'a>(&'a self, path: Option<&'a PathBuf>) -> Vec<Referenceable<'a>> {
+    pub fn select_referenceable_nodes<'a>(&'a self, path: Option<&'a Path>) -> Vec<Referenceable<'a>> {
 
 
         match path {
@@ -145,6 +161,16 @@ impl Vault {
             }
             _ => return None
         }
+    }
+
+    pub fn select_references_for_referenceable<'a>(&'a self, referenceable: &'a Referenceable) -> Option<Vec<(&Path, &Reference)>> {
+
+        let references = self.select_references(None)?;
+
+        return Some(references.into_iter()
+            .filter(|(_, reference)| referenceable.is_reference(&self.root_dir, reference, referenceable.get_path()))
+            .collect()
+        )
     }
 }
 
@@ -220,7 +246,7 @@ impl MDFile {
 pub struct ReferenceData {
     pub reference_text: String,
     pub display_text: Option<String>,
-    pub range: tower_lsp::lsp_types::Range
+    pub range: tower_lsp::lsp_types::Range,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -434,7 +460,7 @@ impl MDTag {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 /**
 An Algebreic type for methods for all referenceables, which are anything able to be referenced through obsidian link or tag. These include
 Files, headings, indexed blocks, tags, ...
@@ -497,6 +523,7 @@ impl Referenceable<'_> {
         }
     }
 }
+
 
 
 // tests

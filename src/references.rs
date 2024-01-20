@@ -7,21 +7,14 @@ use crate::vault::{Vault, Referenceable};
 
 pub fn references(vault: &Vault, cursor_position: Position, path: &Path) -> Option<Vec<Location>> {
     // First we need to get the referenceable node under the cursor
-    let path = path.to_path_buf();
-    let linkable_nodes = vault.select_referenceable_nodes(Some(&path));
-    let linkable = linkable_nodes
-        .iter()
-        .find(|&l| 
-            l.get_range().start.line <= cursor_position.line && 
-            l.get_range().end.line >= cursor_position.line && 
-            l.get_range().start.character <= cursor_position.character &&
-            l.get_range().end.character >= cursor_position.character
-        )?;
+    let pathbuf = path.to_path_buf();
+    let linkable_nodes = vault.select_referenceable_nodes(Some(&pathbuf));
+    let linkable = vault.select_referenceable_at_position(path, cursor_position)?;
 
 
-    let references = vault.select_references(None)?;
-    let locations = |referenceable: &Referenceable| references.iter()
-        .filter(|&r| referenceable.is_reference(&vault.root_dir(), &r.1, r.0))
+    let locations = |referenceable: Referenceable| vault.select_references_for_referenceable(&referenceable)
+        .into_iter()
+        .flatten()
         .map(|link| Url::from_file_path(link.0).map(|good| Location {uri: good, range: link.1.data().range}))
         .flat_map(|l| match l.is_ok() {
             true => Some(l),
@@ -32,8 +25,8 @@ pub fn references(vault: &Vault, cursor_position: Position, path: &Path) -> Opti
 
     return match linkable {
         Referenceable::File(_, _) => {
-            return Some(linkable_nodes.iter()
-                .filter(|&referenceable| !matches!(referenceable, &Referenceable::Tag(_, _)) && !matches!(referenceable, &Referenceable::Footnote(_, _)))
+            return Some(linkable_nodes.into_iter()
+                .filter(|referenceable| !matches!(referenceable, Referenceable::Tag(_, _)) && !matches!(referenceable, Referenceable::Footnote(_, _)))
                 .map(|referenceable| locations(referenceable))
                 .flatten()
                 .collect())

@@ -24,6 +24,7 @@ mod diagnostics;
 mod hover;
 mod ui;
 mod symbol;
+mod rename;
 
 
 #[derive(Debug)]
@@ -156,7 +157,7 @@ impl LanguageServer for Backend {
 
         let bad_vault = self.vault.read().await;
         let Some(vault) = bad_vault.deref() else {
-            return Err(Error::new(ErrorCode::ServerError(0)))
+            return Err(Error::new(ErrorCode::ServerError(2)))
         };
         let completions = get_completions(vault, &params);
 
@@ -203,6 +204,19 @@ impl LanguageServer for Backend {
             return Err(Error::new(ErrorCode::ServerError(0)))
         };
         return Ok(workspace_symbol(vault, params))
+    }
+
+    async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
+
+        let bad_vault = self.vault.read().await;
+        let Some(vault) = bad_vault.deref() else {
+            return Err(Error::new(ErrorCode::ServerError(0)))
+        };
+
+        let Ok(path) = params.text_document_position.text_document.uri.to_file_path() else {
+            return Err(Error::new(ErrorCode::ServerError(0)));
+        };
+        return Ok(rename::rename(&vault, &params, &path))
     }
 }
 

@@ -100,7 +100,7 @@ fn map_to_lsp_tree(tree: Vec<Node>) -> Vec<DocumentSymbol> {
 
 #[cfg(test)]
 mod test {
-    use crate::vault::{MDHeading, HeadingLevel};
+    use crate::{vault::{MDHeading, HeadingLevel}, symbol};
 
     #[test]
     fn test_simple_tree() {
