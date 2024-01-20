@@ -31,7 +31,7 @@ pub fn preview_reference(vault: &Vault, reference_path: &Path, reference: &Refer
     match reference {
         Reference::Link(_) | Reference::Footnote(_) => {
             let positions = vault.select_referenceable_nodes(None);
-            let referenceable = positions.iter().find(|i| i.is_reference(&vault.root_dir(), &reference, &reference_path))?;
+            let referenceable = positions.iter().find(|i| i.matches_reference(&vault.root_dir(), &reference, &reference_path))?;
 
             let display = referenceable_string(vault, referenceable)?;
 

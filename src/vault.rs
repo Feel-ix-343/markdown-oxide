@@ -168,7 +168,7 @@ impl Vault {
         let references = self.select_references(None)?;
 
         return Some(references.into_iter()
-            .filter(|(_, reference)| referenceable.is_reference(&self.root_dir, reference, referenceable.get_path()))
+            .filter(|(_, reference)| referenceable.matches_reference(&self.root_dir, reference, referenceable.get_path()))
             .collect()
         )
     }
@@ -504,7 +504,7 @@ impl Referenceable<'_> {
         }
     }
 
-    pub fn is_reference(&self, root_dir: &Path, reference: &Reference, file_path: &Path) -> bool {
+    pub fn matches_reference(&self, root_dir: &Path, reference: &Reference, file_path: &Path) -> bool {
         let text = &reference.data().reference_text;
         match self {
             &Referenceable::Tag(_, _) => matches!(reference, Tag(_)) && self.get_refname(root_dir).is_some_and(|refname| text.starts_with(&refname)),
