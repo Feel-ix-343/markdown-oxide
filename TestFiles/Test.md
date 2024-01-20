@@ -4,8 +4,7 @@
 
 - This is some text 1
 - This is more text 2
-- This is more text 3 [[Another Test#This is a test heading]]
-- This is more text 3 [[Another Test#This is a test heading]]
+- This is more text 3 
 - [[This is another link]]
 - [[This is another link]]
 - [[This is another link]]

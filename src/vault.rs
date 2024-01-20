@@ -323,6 +323,16 @@ impl Reference {
 
         return links.into_iter().chain(tags.into_iter()).chain(footnote_references).collect_vec()
     }
+
+
+    pub fn references(&self, root_dir: &Path, file_path: &Path, referenceable: &Referenceable) -> bool {
+        let text = &self.data().reference_text;
+        match referenceable {
+            &Referenceable::Tag(_, _) => matches!(self, Tag(_)) && referenceable.get_refname(root_dir) == Some(text.to_string()),
+            &Referenceable::Footnote(path, _footnote) => matches!(self, Footnote(_)) && referenceable.get_refname(root_dir).as_ref() == Some(text) && path.as_path() == file_path,
+            _ => matches!(self, Link(_)) && referenceable.get_refname(root_dir) == Some(text.to_string())
+        }
+    }
 }
 
 
@@ -499,6 +509,7 @@ impl Referenceable<'_> {
         match self {
             &Referenceable::Tag(_, _) => matches!(reference, Tag(_)) && self.get_refname(root_dir).is_some_and(|refname| text.starts_with(&refname)),
             &Referenceable::Footnote(path, _footnote) => matches!(reference, Footnote(_)) && self.get_refname(root_dir).as_ref() == Some(text) && path.as_path() == file_path,
+            &Referenceable::File(path, file) => matches!(reference, Link(_)) && (self.get_refname(root_dir) == Some(text.to_string()) || self.get_refname(root_dir) == text.to_string().split_once("#").map(|(file_ref, _)| String::from(file_ref))),
             _ => matches!(reference, Link(_)) && self.get_refname(root_dir) == Some(text.to_string())
         }
     }
