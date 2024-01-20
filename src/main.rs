@@ -5,34 +5,32 @@ use std::path::Path;
 
 use completion::get_completions;
 use diagnostics::diagnostics;
-use symbol::{document_symbol, workspace_symbol};
 use references::references;
+use symbol::{document_symbol, workspace_symbol};
 use tokio::sync::RwLock;
 
 use gotodef::goto_definition;
-use tower_lsp::jsonrpc::{Result, Error, ErrorCode};
-use tower_lsp::lsp_types::*;
+use tower_lsp::jsonrpc::{Error, ErrorCode, Result};
 use tower_lsp::lsp_types::notification::{Notification, Progress};
+use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 use vault::Vault;
 
-mod vault;
-mod gotodef;
-mod references;
 mod completion;
 mod diagnostics;
+mod gotodef;
 mod hover;
-mod ui;
-mod symbol;
+mod references;
 mod rename;
-
+mod symbol;
+mod ui;
+mod vault;
 
 #[derive(Debug)]
 struct Backend {
     client: Client,
-    vault: RwLock<Option<Vault>>
+    vault: RwLock<Option<Vault>>,
 }
-
 
 struct TextDocumentItem {
     uri: Url,
@@ -42,12 +40,16 @@ struct TextDocumentItem {
 impl Backend {
     async fn on_change(&self, params: TextDocumentItem) {
         let Some(ref mut vault) = *self.vault.write().await else {
-            self.client.log_message(MessageType::ERROR, "Vault is not initialized").await;
+            self.client
+                .log_message(MessageType::ERROR, "Vault is not initialized")
+                .await;
             return;
         };
 
         let Ok(path) = params.uri.to_file_path() else {
-            self.client.log_message(MessageType::ERROR, "Failed to parse URI path").await;
+            self.client
+                .log_message(MessageType::ERROR, "Failed to parse URI path")
+                .await;
             return;
         };
         let text = &params.text;
@@ -65,11 +67,10 @@ impl LanguageServer for Backend {
         };
         let root_dir = Path::new(root_uri.path());
         let Ok(vault) = Vault::construct_vault(root_dir) else {
-            return Err(Error::new(ErrorCode::ServerError(0)))
+            return Err(Error::new(ErrorCode::ServerError(0)));
         };
         let mut value = self.vault.write().await;
         *value = Some(vault);
-
 
         return Ok(InitializeResult {
             server_info: None,
@@ -92,49 +93,54 @@ impl LanguageServer for Backend {
                 document_symbol_provider: Some(OneOf::Left(true)),
                 workspace_symbol_provider: Some(OneOf::Left(true)),
                 ..Default::default()
-            }
-        })
+            },
+        });
     }
-
-    
 
     async fn shutdown(&self) -> Result<()> {
         Ok(())
     }
 
-    async fn initialized(&self, _: InitializedParams) {
-    }
+    async fn initialized(&self, _: InitializedParams) {}
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        self.on_change(TextDocumentItem {uri: params.text_document.uri, text: params.text_document.text}).await;
+        self.on_change(TextDocumentItem {
+            uri: params.text_document.uri,
+            text: params.text_document.text,
+        })
+        .await;
     }
 
     async fn did_change(&self, mut params: DidChangeTextDocumentParams) {
-        self.on_change(TextDocumentItem { uri: params.text_document.uri, text: params.content_changes.remove(0).text }).await;
+        self.on_change(TextDocumentItem {
+            uri: params.text_document.uri,
+            text: params.content_changes.remove(0).text,
+        })
+        .await;
     }
-
-
 
     async fn goto_definition(
         &self,
         params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
-
         let position = params.text_document_position_params.position;
 
         let vault_option = self.vault.read().await;
         let Some(vault) = vault_option.deref() else {
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
-        let Ok(path) = params.text_document_position_params.text_document.uri.to_file_path() else {
+        let Ok(path) = params
+            .text_document_position_params
+            .text_document
+            .uri
+            .to_file_path()
+        else {
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
         let result = goto_definition(&vault, position, &path);
 
-
-        return Ok(result.map(|l| GotoDefinitionResponse::Array(l)))
+        return Ok(result.map(|l| GotoDefinitionResponse::Array(l)));
     }
-
 
     async fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>> {
         let position = params.text_document_position.position;
@@ -143,7 +149,12 @@ impl LanguageServer for Backend {
         let Some(vault) = vault_option.deref() else {
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
-        let Ok(path) = params.text_document_position.text_document.uri.to_file_path() else {
+        let Ok(path) = params
+            .text_document_position
+            .text_document
+            .uri
+            .to_file_path()
+        else {
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
 
@@ -152,33 +163,42 @@ impl LanguageServer for Backend {
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
-        let progress = self.client.progress(ProgressToken::Number(1), "Calculating Completions").begin().await;
+        let progress = self
+            .client
+            .progress(ProgressToken::Number(1), "Calculating Completions")
+            .begin()
+            .await;
         let timer = std::time::Instant::now();
 
         let bad_vault = self.vault.read().await;
         let Some(vault) = bad_vault.deref() else {
-            return Err(Error::new(ErrorCode::ServerError(2)))
+            return Err(Error::new(ErrorCode::ServerError(2)));
         };
         let completions = get_completions(vault, &params);
 
         let elapsed = timer.elapsed();
 
-        progress.finish_with_message(format!("Finished in {}ms", elapsed.as_millis())).await;
+        progress
+            .finish_with_message(format!("Finished in {}ms", elapsed.as_millis()))
+            .await;
 
         Ok(completions)
-
     }
-
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         let bad_vault = self.vault.read().await;
         let Some(vault) = bad_vault.deref() else {
-            return Err(Error::new(ErrorCode::ServerError(0)))
-        };
-        let Ok(path) = params.text_document_position_params.text_document.uri.to_file_path() else {
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
-        return Ok(hover::hover(&vault, params, &path))
+        let Ok(path) = params
+            .text_document_position_params
+            .text_document
+            .uri
+            .to_file_path()
+        else {
+            return Err(Error::new(ErrorCode::ServerError(0)));
+        };
+        return Ok(hover::hover(&vault, params, &path));
     }
 
     async fn document_symbol(
@@ -187,36 +207,40 @@ impl LanguageServer for Backend {
     ) -> Result<Option<DocumentSymbolResponse>> {
         let bad_vault = self.vault.read().await;
         let Some(vault) = bad_vault.deref() else {
-            return Err(Error::new(ErrorCode::ServerError(0)))
+            return Err(Error::new(ErrorCode::ServerError(0)));
         };
         let Ok(path) = params.text_document.uri.to_file_path() else {
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
-        return Ok(document_symbol(vault, params, &path))
+        return Ok(document_symbol(vault, params, &path));
     }
 
     async fn symbol(
         &self,
-        params: WorkspaceSymbolParams
+        params: WorkspaceSymbolParams,
     ) -> Result<Option<Vec<SymbolInformation>>> {
         let bad_vault = self.vault.read().await;
         let Some(vault) = bad_vault.deref() else {
-            return Err(Error::new(ErrorCode::ServerError(0)))
+            return Err(Error::new(ErrorCode::ServerError(0)));
         };
-        return Ok(workspace_symbol(vault, params))
+        return Ok(workspace_symbol(vault, params));
     }
 
     async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
-
         let bad_vault = self.vault.read().await;
         let Some(vault) = bad_vault.deref() else {
-            return Err(Error::new(ErrorCode::ServerError(0)))
-        };
-
-        let Ok(path) = params.text_document_position.text_document.uri.to_file_path() else {
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
-        return Ok(rename::rename(&vault, &params, &path))
+
+        let Ok(path) = params
+            .text_document_position
+            .text_document
+            .uri
+            .to_file_path()
+        else {
+            return Err(Error::new(ErrorCode::ServerError(0)));
+        };
+        return Ok(rename::rename(&vault, &params, &path));
     }
 }
 
@@ -225,6 +249,9 @@ async fn main() {
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
-    let (service, socket) = LspService::new(|client| Backend { client, vault: None.into() });
+    let (service, socket) = LspService::new(|client| Backend {
+        client,
+        vault: None.into(),
+    });
     Server::new(stdin, stdout, socket).serve(service).await;
 }

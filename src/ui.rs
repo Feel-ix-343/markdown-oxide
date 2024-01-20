@@ -3,7 +3,7 @@ use std::path::Path;
 use itertools::Itertools;
 use tower_lsp::lsp_types::{MarkupContent, MarkupKind};
 
-use crate::vault::{Vault, Reference, Referenceable};
+use crate::vault::{Reference, Referenceable, Vault};
 
 fn referenceable_string(vault: &Vault, referenceable: &Referenceable) -> Option<String> {
     let preview = vault.select_referenceable_preview(referenceable)?;
@@ -15,31 +15,39 @@ fn referenceable_string(vault: &Vault, referenceable: &Referenceable) -> Option<
         Referenceable::Footnote(_, _) => format!("Footnote Preview:\n---\n\n{}", preview),
         _ => format!("Preview:\n---\n\n{}", preview),
     })
-
 }
 
-pub fn preview_referenceable(vault: &Vault, referenceable: &Referenceable) -> Option<MarkupContent> {
+pub fn preview_referenceable(
+    vault: &Vault,
+    referenceable: &Referenceable,
+) -> Option<MarkupContent> {
     let display = referenceable_string(vault, referenceable)?;
 
     return Some(MarkupContent {
         kind: MarkupKind::Markdown,
-        value: display
-    })
+        value: display,
+    });
 }
 
-pub fn preview_reference(vault: &Vault, reference_path: &Path, reference: &Reference) -> Option<MarkupContent> {
+pub fn preview_reference(
+    vault: &Vault,
+    reference_path: &Path,
+    reference: &Reference,
+) -> Option<MarkupContent> {
     match reference {
         Reference::Link(_) | Reference::Footnote(_) => {
             let positions = vault.select_referenceable_nodes(None);
-            let referenceable = positions.iter().find(|i| i.matches_reference(&vault.root_dir(), &reference, &reference_path))?;
+            let referenceable = positions
+                .iter()
+                .find(|i| i.matches_reference(&vault.root_dir(), &reference, &reference_path))?;
 
             let display = referenceable_string(vault, referenceable)?;
 
             return Some(MarkupContent {
                 kind: MarkupKind::Markdown,
-                value: display           
-            })
-        },
-        _ => None
+                value: display,
+            });
+        }
+        _ => None,
     }
 }
