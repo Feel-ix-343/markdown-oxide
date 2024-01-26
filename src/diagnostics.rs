@@ -21,7 +21,7 @@ pub async fn diagnostics(vault: &Vault, (path, uri, _): (&PathBuf, &Url, &str), 
     let unresolved = pathreferences.par_iter().filter(|(path, reference)| {
         !referenceables
             .iter()
-            .any(|referenceable| referenceable.matches_reference(vault.root_dir(), reference, path))
+            .any(|referenceable| reference.references(&vault.root_dir(), path, referenceable))
     });
 
     let diags: Vec<Diagnostic> = unresolved
