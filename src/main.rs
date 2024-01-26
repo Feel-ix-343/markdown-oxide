@@ -25,6 +25,7 @@ mod rename;
 mod symbol;
 mod ui;
 mod vault;
+mod codeactions;
 
 #[derive(Debug)]
 struct Backend {
@@ -92,7 +93,9 @@ impl LanguageServer for Backend {
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 document_symbol_provider: Some(OneOf::Left(true)),
                 workspace_symbol_provider: Some(OneOf::Left(true)),
+                code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
                 ..Default::default()
+
             },
         });
     }
@@ -241,6 +244,26 @@ impl LanguageServer for Backend {
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
         return Ok(rename::rename(vault, &params, &path));
+    }
+
+
+    async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
+        let bad_vault = self.vault.read().await;
+        let Some(vault) = bad_vault.deref() else {
+            return Err(Error::new(ErrorCode::ServerError(0)));
+        };
+
+        let Ok(path) = params
+            .text_document
+            .uri
+            .to_file_path()
+        else {
+            return Err(Error::new(ErrorCode::ServerError(0)));
+        };
+
+
+        return Ok(codeactions::code_actions(vault, params, &path))
+
     }
 }
 

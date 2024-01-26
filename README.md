@@ -63,6 +63,7 @@ then adjust your nvim-cmp source settings for the following. Note that this will
     - [X] Heading Completions (requires extra nvim cmp config)
     - [X] Indexed block completions. Somehow using Ripgrep to find the paragraphs/blocks in the vault, then appending an index in the file, then inserting a link (workaround supported; using "_" instead of any non_word characters)
     - [X] Footnotes
+    - [ ] Make file completions faster in NvimCmp
     - [ ] Callout completions
     - [ ] Metadata completions
     - [ ] Dataview?
