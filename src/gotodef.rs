@@ -14,7 +14,7 @@ pub fn goto_definition(
     let (path, reference) = links.iter().find(|&l| {
         l.1.data().range.start.line <= cursor_position.line
             && l.1.data().range.end.line >= cursor_position.line
-            && l.1.data().range.start.character <= cursor_position.character
+            && l.1.data().range.start.character <= cursor_position.character // this is a bug
             && l.1.data().range.end.character >= cursor_position.character
     })?;
 
