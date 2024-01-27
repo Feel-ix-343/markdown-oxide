@@ -73,7 +73,7 @@ then adjust your nvim-cmp source settings for the following. Note that this will
     - [X] Indexed Blocks
     - [X] Footnotes
 - [ ] Code Actions
-    - [ ] Missing file for link -> Create the file
+    - [x] Missing file for link -> Create the file
     - [ ] Link suggestions (by text match or other)
     - [ ] Refactoring: Move headers or selections to a new file
 - [X] Diagnostics
