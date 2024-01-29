@@ -1,6 +1,5 @@
 # obsidian-markdown-ls
-Markdown language server for the obsidian note-taking format
-
+Obsidian Language Server: Obsidian-flavored-markdown language server 
 Implementing obsidian PKM features (and possibly more) in the form of a language server allows us to use these features in our favorite text editors (neovim or vscode!) and reuse other lsp related plugins (like Telescope, outline, and builtin lsp support)
 
 ## Installation for Neovim (there is no VS code plugin yet)
@@ -75,7 +74,7 @@ then adjust your nvim-cmp source settings for the following. Note that this will
     - [X] Indexed Blocks
     - [X] Footnotes
 - [ ] Code Actions
-    - [ ] Missing file for link -> Create the file
+    - [x] Missing file for link -> Create the file
     - [ ] Link suggestions (by text match or other)
     - [ ] Refactoring: Move headers or selections to a new file
 - [X] Diagnostics
