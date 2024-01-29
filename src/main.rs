@@ -73,6 +73,20 @@ impl LanguageServer for Backend {
         let mut value = self.vault.write().await;
         *value = Some(vault);
 
+        let file_op_reg = FileOperationRegistrationOptions{
+            filters: std::iter::once(
+                FileOperationFilter {
+                    pattern: FileOperationPattern {
+                        options: None,
+                        glob: "**/*.md".into(),
+                        matches: None
+                    },
+                    ..Default::default()
+                }
+            ).collect()
+        } ;
+
+
         return Ok(InitializeResult {
             server_info: None,
             capabilities: ServerCapabilities {
@@ -94,8 +108,16 @@ impl LanguageServer for Backend {
                 document_symbol_provider: Some(OneOf::Left(true)),
                 workspace_symbol_provider: Some(OneOf::Left(true)),
                 code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
+                workspace: Some(WorkspaceServerCapabilities{
+                    file_operations: Some(WorkspaceFileOperationsServerCapabilities{
+                        did_create: Some(file_op_reg.clone()),
+                        did_rename: Some(file_op_reg.clone()),
+                        did_delete: Some(file_op_reg.clone()),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }),
                 ..Default::default()
-
             },
         });
     }
@@ -170,7 +192,7 @@ impl LanguageServer for Backend {
             .client
             .progress(ProgressToken::Number(1), "Calculating Completions")
             .begin()
-            .await;
+        .await;
         let timer = std::time::Instant::now();
 
         let bad_vault = self.vault.read().await;
@@ -183,7 +205,12 @@ impl LanguageServer for Backend {
 
         progress
             .finish_with_message(format!("Finished in {}ms", elapsed.as_millis()))
-            .await;
+        .await;
+
+        if elapsed.as_millis() > 10  {
+            self.client.log_message(MessageType::WARNING, format!("Completion Calculation took a long time: Finished in {}ms", elapsed.as_millis())).await;
+        }
+
 
         Ok(completions)
     }
