@@ -87,4 +87,9 @@ then adjust your nvim-cmp source settings for the following. Note that this will
     - [ ] File
     - [ ] Headings
     - [ ] Tags.
-- [ ] Dataview support?- [ ] 
+- [ ] Dataview support
+
+### Dev Todo's
+
+- [X] Extract the RwLock read pattern
+- [ ] Fix: updating diagnostics after code action
