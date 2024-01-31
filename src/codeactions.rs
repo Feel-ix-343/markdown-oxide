@@ -6,7 +6,7 @@ use tower_lsp::lsp_types::{CodeActionParams, CodeActionOrCommand, CodeActionResp
 
 use crate::vault::{Vault, self};
 
-pub fn code_actions(vault: &Vault, params: CodeActionParams, path: &Path) -> Option<Vec<CodeActionOrCommand>> {
+pub fn code_actions(vault: &Vault, params: &CodeActionParams, path: &Path) -> Option<Vec<CodeActionOrCommand>> {
 
 
 

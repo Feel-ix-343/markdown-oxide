@@ -4,7 +4,7 @@ use tower_lsp::lsp_types::{Hover, HoverContents, HoverParams};
 
 use crate::{ui::preview_reference, vault::Vault};
 
-pub fn hover(vault: &Vault, params: HoverParams, path: &Path) -> Option<Hover> {
+pub fn hover(vault: &Vault, params: &HoverParams, path: &Path) -> Option<Hover> {
     let cursor_position = params.text_document_position_params.position;
 
     let links = vault.select_references(Some(path))?;

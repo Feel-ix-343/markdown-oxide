@@ -58,6 +58,23 @@ impl Backend {
 
         diagnostics(vault, (&path, &params.uri, text), &self.client).await;
     }
+
+
+    async fn fold_vault<T>(&self, callback: impl Fn(&Vault) -> Result<T>) -> Result<T>
+    {
+
+        let vault_option = self.vault.read().await;
+        let Some(vault) = vault_option.deref() else {
+            return Err(Error::new(ErrorCode::ServerError(0)));
+        };
+
+
+        return Ok(
+            callback(&vault)?
+        )
+
+
+    }
 }
 
 #[tower_lsp::async_trait]
@@ -148,43 +165,47 @@ impl LanguageServer for Backend {
         &self,
         params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
-        let position = params.text_document_position_params.position;
 
-        let vault_option = self.vault.read().await;
-        let Some(vault) = vault_option.deref() else {
-            return Err(Error::new(ErrorCode::ServerError(0)));
-        };
-        let Ok(path) = params
-            .text_document_position_params
-            .text_document
-            .uri
-            .to_file_path()
-        else {
-            return Err(Error::new(ErrorCode::ServerError(0)));
-        };
-        let result = goto_definition(vault, position, &path);
+        self.fold_vault(|vault| {
 
-        return Ok(result.map(GotoDefinitionResponse::Array));
+
+            let Ok(path) = params
+                .text_document_position_params
+                .text_document
+                .uri
+                .to_file_path()
+            else {
+                return Err(Error::new(ErrorCode::ServerError(0)));
+            };
+
+
+            let position = params.text_document_position_params.position;
+
+            let result = goto_definition(vault, position, &path);
+
+            return Ok(result.map(GotoDefinitionResponse::Array));
+
+
+
+        }).await
     }
 
     async fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>> {
-        let position = params.text_document_position.position;
+        self.fold_vault(|vault| {
+            let position = params.text_document_position.position;
 
-        let vault_option = self.vault.read().await;
-        let Some(vault) = vault_option.deref() else {
-            return Err(Error::new(ErrorCode::ServerError(0)));
-        };
-        let Ok(path) = params
-            .text_document_position
-            .text_document
-            .uri
-            .to_file_path()
-        else {
-            return Err(Error::new(ErrorCode::ServerError(0)));
-        };
+            let Ok(path) = params
+                .text_document_position
+                .text_document
+                .uri
+                .to_file_path()
+            else {
+                return Err(Error::new(ErrorCode::ServerError(0)));
+            };
 
-        let locations = references(vault, position, &path);
-        Ok(locations)
+            let locations = references(vault, position, &path);
+            Ok(locations)
+        }).await
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
@@ -195,11 +216,9 @@ impl LanguageServer for Backend {
         .await;
         let timer = std::time::Instant::now();
 
-        let bad_vault = self.vault.read().await;
-        let Some(vault) = bad_vault.deref() else {
-            return Err(Error::new(ErrorCode::ServerError(2)));
-        };
-        let completions = get_completions(vault, &params);
+        let res = self.fold_vault(|vault| {
+            Ok(get_completions(vault, &params))
+        }).await;
 
         let elapsed = timer.elapsed();
 
@@ -212,74 +231,61 @@ impl LanguageServer for Backend {
         }
 
 
-        Ok(completions)
+        res
     }
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
-        let bad_vault = self.vault.read().await;
-        let Some(vault) = bad_vault.deref() else {
-            return Err(Error::new(ErrorCode::ServerError(0)));
-        };
-        let Ok(path) = params
-            .text_document_position_params
-            .text_document
-            .uri
-            .to_file_path()
-        else {
-            return Err(Error::new(ErrorCode::ServerError(0)));
-        };
-        return Ok(hover::hover(vault, params, &path));
+        self.fold_vault(|vault| {
+            let Ok(path) = params
+                .text_document_position_params
+                .text_document
+                .uri
+                .to_file_path()
+            else {
+                return Err(Error::new(ErrorCode::ServerError(0)));
+            };
+            return Ok(hover::hover(vault, &params, &path));
+        }).await
     }
 
     async fn document_symbol(
         &self,
         params: DocumentSymbolParams,
     ) -> Result<Option<DocumentSymbolResponse>> {
-        let bad_vault = self.vault.read().await;
-        let Some(vault) = bad_vault.deref() else {
-            return Err(Error::new(ErrorCode::ServerError(0)));
-        };
-        let Ok(path) = params.text_document.uri.to_file_path() else {
-            return Err(Error::new(ErrorCode::ServerError(0)));
-        };
-        return Ok(document_symbol(vault, params, &path));
+        self.fold_vault(|vault| {
+            let Ok(path) = params.text_document.uri.to_file_path() else {
+                return Err(Error::new(ErrorCode::ServerError(0)));
+            };
+            return Ok(document_symbol(vault, &params, &path));
+        }).await
     }
 
     async fn symbol(
         &self,
         params: WorkspaceSymbolParams,
     ) -> Result<Option<Vec<SymbolInformation>>> {
-        let bad_vault = self.vault.read().await;
-        let Some(vault) = bad_vault.deref() else {
-            return Err(Error::new(ErrorCode::ServerError(0)));
-        };
-        return Ok(workspace_symbol(vault, params));
+        self.fold_vault(|vault| {
+            return Ok(workspace_symbol(vault, &params));
+        }).await
     }
 
     async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
-        let bad_vault = self.vault.read().await;
-        let Some(vault) = bad_vault.deref() else {
-            return Err(Error::new(ErrorCode::ServerError(0)));
-        };
-
-        let Ok(path) = params
-            .text_document_position
-            .text_document
-            .uri
-            .to_file_path()
-        else {
-            return Err(Error::new(ErrorCode::ServerError(0)));
-        };
-        return Ok(rename::rename(vault, &params, &path));
+        self.fold_vault(|vault| {
+            let Ok(path) = params
+                .text_document_position
+                .text_document
+                .uri
+                .to_file_path()
+            else {
+                return Err(Error::new(ErrorCode::ServerError(0)));
+            };
+            return Ok(rename::rename(vault, &params, &path));
+        }).await
     }
 
 
     async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
-        let bad_vault = self.vault.read().await;
-        let Some(vault) = bad_vault.deref() else {
-            return Err(Error::new(ErrorCode::ServerError(0)));
-        };
-
+        self.fold_vault(|vault| {
         let Ok(path) = params
             .text_document
             .uri
@@ -289,8 +295,9 @@ impl LanguageServer for Backend {
         };
 
 
-        return Ok(codeactions::code_actions(vault, params, &path))
+        return Ok(codeactions::code_actions(vault, &params, &path))
 
+        }).await
     }
 }
 

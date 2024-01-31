@@ -10,7 +10,7 @@ use crate::vault::{MDHeading, Referenceable, Vault};
 
 pub fn workspace_symbol(
     vault: &Vault,
-    _params: WorkspaceSymbolParams,
+    _params: &WorkspaceSymbolParams,
 ) -> Option<Vec<SymbolInformation>> {
     let referenceables = vault.select_referenceable_nodes(None);
     let symbol_informations = referenceables
@@ -39,7 +39,7 @@ pub fn workspace_symbol(
 
 pub fn document_symbol(
     vault: &Vault,
-    _params: DocumentSymbolParams,
+    _params: &DocumentSymbolParams,
     path: &Path,
 ) -> Option<DocumentSymbolResponse> {
     let headings = vault.select_headings(path)?;
