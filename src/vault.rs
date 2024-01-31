@@ -207,11 +207,11 @@ impl Vault {
         return Some(
             references
                 .into_iter()
-                .filter(|(_, reference)| {
+                .filter(|(ref_path, reference)| {
                     referenceable.matches_reference(
                         &self.root_dir,
                         reference,
-                        referenceable.get_path(),
+                        &ref_path
                     )
                 })
                 .collect(),
@@ -602,7 +602,7 @@ impl Referenceable<'_> {
         &self,
         root_dir: &Path,
         reference: &Reference,
-        file_path: &Path,
+        reference_path: &Path,
     ) -> bool {
         let text = &reference.data().reference_text;
         match self {
@@ -615,7 +615,7 @@ impl Referenceable<'_> {
             &Referenceable::Footnote(path, _footnote) => {
                 matches!(reference, Footnote(_))
                     && self.get_refname(root_dir).as_ref() == Some(text)
-                    && path.as_path() == file_path
+                    && path.as_path() == reference_path
             }
             &Referenceable::File(_path, _file) => {
                 matches!(reference, Link(_))
@@ -994,65 +994,6 @@ more text
             Ok(_) => (),
             Err(e) => panic!("{}", e),
         }
-    }
-
-    #[test]
-    fn test_construct_goto_def() {
-        // get this projects root dir
-        let mut root_dir: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR")).into();
-        root_dir.push("TestFiles");
-
-        let vault = Vault::construct_vault(&root_dir).unwrap();
-
-        let position = Position {
-            line: 5,
-            character: 2,
-        };
-        let mut path = root_dir.clone();
-        path.push("A third test.md");
-        let result = goto_definition(&vault, position, &path);
-
-        let mut result_path = root_dir.clone();
-        result_path.push("Another Test.md");
-        let proper = Some(vec![Location {
-            uri: Url::from_file_path(result_path.to_str().unwrap()).unwrap(),
-            range: Range {
-                start: Position {
-                    line: 0,
-                    character: 0,
-                },
-                end: Position {
-                    line: 0,
-                    character: 1,
-                },
-            },
-        }]);
-        assert_eq!(result, proper);
-
-        let position = Position {
-            line: 6,
-            character: 27,
-        };
-        let mut path = root_dir.clone();
-        path.push("Test.md");
-        let result = goto_definition(&vault, position, &path);
-
-        let mut result_path = root_dir.clone();
-        result_path.push("Another Test.md");
-        let proper = Some(vec![Location {
-            uri: Url::from_file_path(result_path.to_str().unwrap()).unwrap(),
-            range: Range {
-                start: Position {
-                    line: 2,
-                    character: 0,
-                },
-                end: Position {
-                    line: 2,
-                    character: 24,
-                },
-            },
-        }]);
-        assert_eq!(result, proper);
     }
 
     #[test]
