@@ -60,6 +60,15 @@ impl Backend {
     }
 
 
+    /// This is an FP reference. Lets say that there is monad around the vault of type Result<Vault>, representing accesing the RwLock arond it in async
+    /// This function will extract the vautl result, apply the given function which will return another monad (which I am asuming to be another result)
+    /// The function then returns this monad
+    ///
+    /// I think this is a nice pattern; convienient and pretty simple api; cool stuff, if I say so myself!
+    ///
+    /// TODO: Hopefully rust async closures will be more convienient to use eventually and this can accept an async closure; this would enable better logging
+    /// in the call back functions. (though to get aroudn this, the callback could return a Result of a writer style monad, which could be logged async outside of
+    /// the callback)
     async fn bind_vault<T>(&self, callback: impl Fn(&Vault) -> Result<T>) -> Result<T>
     {
 
@@ -68,12 +77,7 @@ impl Backend {
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
 
-
-        return Ok(
-            callback(&vault)?
-        )
-
-
+        return callback(&vault)
     }
 }
 
@@ -81,6 +85,7 @@ impl Backend {
 impl LanguageServer for Backend {
     async fn initialize(&self, i: InitializeParams) -> Result<InitializeResult> {
         let Some(root_uri) = i.root_uri else {
+
             return Err(Error::new(ErrorCode::InvalidParams));
         };
         let root_dir = Path::new(root_uri.path());
