@@ -60,7 +60,7 @@ impl Backend {
     }
 
 
-    async fn fold_vault<T>(&self, callback: impl Fn(&Vault) -> Result<T>) -> Result<T>
+    async fn bind_vault<T>(&self, callback: impl Fn(&Vault) -> Result<T>) -> Result<T>
     {
 
         let vault_option = self.vault.read().await;
@@ -166,7 +166,7 @@ impl LanguageServer for Backend {
         params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
 
-        self.fold_vault(|vault| {
+        self.bind_vault(|vault| {
 
 
             let Ok(path) = params
@@ -191,7 +191,7 @@ impl LanguageServer for Backend {
     }
 
     async fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>> {
-        self.fold_vault(|vault| {
+        self.bind_vault(|vault| {
             let position = params.text_document_position.position;
 
             let Ok(path) = params
@@ -216,7 +216,7 @@ impl LanguageServer for Backend {
         .await;
         let timer = std::time::Instant::now();
 
-        let res = self.fold_vault(|vault| {
+        let res = self.bind_vault(|vault| {
             Ok(get_completions(vault, &params))
         }).await;
 
@@ -235,7 +235,7 @@ impl LanguageServer for Backend {
     }
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
-        self.fold_vault(|vault| {
+        self.bind_vault(|vault| {
             let Ok(path) = params
                 .text_document_position_params
                 .text_document
@@ -252,7 +252,7 @@ impl LanguageServer for Backend {
         &self,
         params: DocumentSymbolParams,
     ) -> Result<Option<DocumentSymbolResponse>> {
-        self.fold_vault(|vault| {
+        self.bind_vault(|vault| {
             let Ok(path) = params.text_document.uri.to_file_path() else {
                 return Err(Error::new(ErrorCode::ServerError(0)));
             };
@@ -264,13 +264,13 @@ impl LanguageServer for Backend {
         &self,
         params: WorkspaceSymbolParams,
     ) -> Result<Option<Vec<SymbolInformation>>> {
-        self.fold_vault(|vault| {
+        self.bind_vault(|vault| {
             return Ok(workspace_symbol(vault, &params));
         }).await
     }
 
     async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
-        self.fold_vault(|vault| {
+        self.bind_vault(|vault| {
             let Ok(path) = params
                 .text_document_position
                 .text_document
@@ -285,7 +285,7 @@ impl LanguageServer for Backend {
 
 
     async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
-        self.fold_vault(|vault| {
+        self.bind_vault(|vault| {
         let Ok(path) = params
             .text_document
             .uri
