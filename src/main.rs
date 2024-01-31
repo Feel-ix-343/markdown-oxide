@@ -171,45 +171,16 @@ impl LanguageServer for Backend {
         &self,
         params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
-
         self.bind_vault(|vault| {
-
-            let Ok(path) = params
-                .text_document_position_params
-                .text_document
-                .uri
-                .to_file_path()
-            else {
-                return Err(Error::new(ErrorCode::ServerError(0)));
-            };
-
-
-            let position = params.text_document_position_params.position;
-
-            let result = goto_definition(vault, position, &path);
-
-            return Ok(result.map(GotoDefinitionResponse::Array));
-
-
-
+            let path = params_path!(params.text_document_position_params)?;
+            Ok(goto_definition(vault, params.text_document_position_params.position, &path).map(GotoDefinitionResponse::Array))
         }).await
     }
 
     async fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>> {
         self.bind_vault(|vault| {
-            let position = params.text_document_position.position;
-
-            let Ok(path) = params
-                .text_document_position
-                .text_document
-                .uri
-                .to_file_path()
-            else {
-                return Err(Error::new(ErrorCode::ServerError(0)));
-            };
-
-            let locations = references(vault, position, &path);
-            Ok(locations)
+            let path = params_position_path!(params)?;
+            Ok(references(vault, params.text_document_position.position, &path))
         }).await
     }
 
@@ -241,14 +212,7 @@ impl LanguageServer for Backend {
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         self.bind_vault(|vault| {
-            let Ok(path) = params
-                .text_document_position_params
-                .text_document
-                .uri
-                .to_file_path()
-            else {
-                return Err(Error::new(ErrorCode::ServerError(0)));
-            };
+            let path = params_path!(params.text_document_position_params)?;
             return Ok(hover::hover(vault, &params, &path));
         }).await
     }
@@ -271,14 +235,7 @@ impl LanguageServer for Backend {
 
     async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
         self.bind_vault(|vault| {
-            let Ok(path) = params
-                .text_document_position
-                .text_document
-                .uri
-                .to_file_path()
-            else {
-                return Err(Error::new(ErrorCode::ServerError(0)));
-            };
+            let path = params_position_path!(params)?;
             return Ok(rename::rename(vault, &params, &path));
         }).await
     }

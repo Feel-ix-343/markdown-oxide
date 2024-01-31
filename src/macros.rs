@@ -6,8 +6,32 @@ macro_rules! params_path {
         
         {
 
-use tower_lsp::jsonrpc::Result;
+        use tower_lsp::jsonrpc::Result;
             let path_result = $x.text_document.uri.to_file_path();
+
+
+            let Ok(path) = path_result else {
+
+                return Result::Err(Error::new(ErrorCode::ServerError(0)))
+
+            };
+
+            Result::Ok(path)
+        }
+
+    };
+}
+
+
+#[macro_export]
+macro_rules! params_position_path {
+    ( $x:expr ) => {
+        
+        {
+
+        use tower_lsp::jsonrpc::Result;
+
+            let path_result = $x.text_document_position.text_document.uri.to_file_path();
 
 
             let Ok(path) = path_result else {
