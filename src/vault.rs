@@ -208,11 +208,7 @@ impl Vault {
             references
                 .into_iter()
                 .filter(|(ref_path, reference)| {
-                    referenceable.matches_reference(
-                        &self.root_dir,
-                        reference,
-                        &ref_path
-                    )
+                    referenceable.matches_reference(&self.root_dir, reference, &ref_path)
                 })
                 .collect(),
         );

@@ -16,17 +16,17 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 use vault::Vault;
 
+mod codeactions;
 mod completion;
 mod diagnostics;
 mod gotodef;
 mod hover;
+mod macros;
 mod references;
 mod rename;
 mod symbol;
 mod ui;
 mod vault;
-mod codeactions;
-mod macros;
 
 #[derive(Debug)]
 struct Backend {
@@ -60,7 +60,6 @@ impl Backend {
         diagnostics(vault, (&path, &params.uri, text), &self.client).await;
     }
 
-
     /// This is an FP reference. Lets say that there is monad around the vault of type Result<Vault>, representing accesing the RwLock arond it in async
     /// This function will extract the vautl result, apply the given function which will return another monad (which I am asuming to be another result)
     /// The function then returns this monad
@@ -70,15 +69,13 @@ impl Backend {
     /// TODO: Hopefully rust async closures will be more convienient to use eventually and this can accept an async closure; this would enable better logging
     /// in the call back functions. (though to get aroudn this, the callback could return a Result of a writer style monad, which could be logged async outside of
     /// the callback)
-    async fn bind_vault<T>(&self, callback: impl Fn(&Vault) -> Result<T>) -> Result<T>
-    {
-
+    async fn bind_vault<T>(&self, callback: impl Fn(&Vault) -> Result<T>) -> Result<T> {
         let vault_option = self.vault.read().await;
         let Some(vault) = vault_option.deref() else {
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
 
-        return callback(&vault)
+        return callback(&vault);
     }
 }
 
@@ -86,7 +83,6 @@ impl Backend {
 impl LanguageServer for Backend {
     async fn initialize(&self, i: InitializeParams) -> Result<InitializeResult> {
         let Some(root_uri) = i.root_uri else {
-
             return Err(Error::new(ErrorCode::InvalidParams));
         };
         let root_dir = Path::new(root_uri.path());
@@ -96,19 +92,17 @@ impl LanguageServer for Backend {
         let mut value = self.vault.write().await;
         *value = Some(vault);
 
-        let file_op_reg = FileOperationRegistrationOptions{
-            filters: std::iter::once(
-                FileOperationFilter {
-                    pattern: FileOperationPattern {
-                        options: None,
-                        glob: "**/*.md".into(),
-                        matches: None
-                    },
-                    ..Default::default()
-                }
-            ).collect()
-        } ;
-
+        let file_op_reg = FileOperationRegistrationOptions {
+            filters: std::iter::once(FileOperationFilter {
+                pattern: FileOperationPattern {
+                    options: None,
+                    glob: "**/*.md".into(),
+                    matches: None,
+                },
+                ..Default::default()
+            })
+            .collect(),
+        };
 
         return Ok(InitializeResult {
             server_info: None,
@@ -131,8 +125,8 @@ impl LanguageServer for Backend {
                 document_symbol_provider: Some(OneOf::Left(true)),
                 workspace_symbol_provider: Some(OneOf::Left(true)),
                 code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
-                workspace: Some(WorkspaceServerCapabilities{
-                    file_operations: Some(WorkspaceFileOperationsServerCapabilities{
+                workspace: Some(WorkspaceServerCapabilities {
+                    file_operations: Some(WorkspaceFileOperationsServerCapabilities {
                         did_create: Some(file_op_reg.clone()),
                         did_rename: Some(file_op_reg.clone()),
                         did_delete: Some(file_op_reg.clone()),
@@ -173,15 +167,24 @@ impl LanguageServer for Backend {
     ) -> Result<Option<GotoDefinitionResponse>> {
         self.bind_vault(|vault| {
             let path = params_path!(params.text_document_position_params)?;
-            Ok(goto_definition(vault, params.text_document_position_params.position, &path).map(GotoDefinitionResponse::Array))
-        }).await
+            Ok(
+                goto_definition(vault, params.text_document_position_params.position, &path)
+                    .map(GotoDefinitionResponse::Array),
+            )
+        })
+        .await
     }
 
     async fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>> {
         self.bind_vault(|vault| {
             let path = params_position_path!(params)?;
-            Ok(references(vault, params.text_document_position.position, &path))
-        }).await
+            Ok(references(
+                vault,
+                params.text_document_position.position,
+                &path,
+            ))
+        })
+        .await
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
@@ -189,23 +192,30 @@ impl LanguageServer for Backend {
             .client
             .progress(ProgressToken::Number(1), "Calculating Completions")
             .begin()
-        .await;
+            .await;
         let timer = std::time::Instant::now();
 
-        let res = self.bind_vault(|vault| {
-            Ok(get_completions(vault, &params))
-        }).await;
+        let res = self
+            .bind_vault(|vault| Ok(get_completions(vault, &params)))
+            .await;
 
         let elapsed = timer.elapsed();
 
         progress
             .finish_with_message(format!("Finished in {}ms", elapsed.as_millis()))
-        .await;
+            .await;
 
-        if elapsed.as_millis() > 10  {
-            self.client.log_message(MessageType::WARNING, format!("Completion Calculation took a long time: Finished in {}ms", elapsed.as_millis())).await;
+        if elapsed.as_millis() > 10 {
+            self.client
+                .log_message(
+                    MessageType::WARNING,
+                    format!(
+                        "Completion Calculation took a long time: Finished in {}ms",
+                        elapsed.as_millis()
+                    ),
+                )
+                .await;
         }
-
 
         res
     }
@@ -214,14 +224,19 @@ impl LanguageServer for Backend {
         self.bind_vault(|vault| {
             let path = params_path!(params.text_document_position_params)?;
             return Ok(hover::hover(vault, &params, &path));
-        }).await
+        })
+        .await
     }
 
-    async fn document_symbol( &self, params: DocumentSymbolParams,) -> Result<Option<DocumentSymbolResponse>> {
+    async fn document_symbol(
+        &self,
+        params: DocumentSymbolParams,
+    ) -> Result<Option<DocumentSymbolResponse>> {
         self.bind_vault(|vault| {
             let path = params_path!(params)?;
             return Ok(document_symbol(vault, &params, &path));
-        }).await
+        })
+        .await
     }
 
     async fn symbol(
@@ -230,22 +245,24 @@ impl LanguageServer for Backend {
     ) -> Result<Option<Vec<SymbolInformation>>> {
         self.bind_vault(|vault| {
             return Ok(workspace_symbol(vault, &params));
-        }).await
+        })
+        .await
     }
 
     async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
         self.bind_vault(|vault| {
             let path = params_position_path!(params)?;
             return Ok(rename::rename(vault, &params, &path));
-        }).await
+        })
+        .await
     }
-
 
     async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
         self.bind_vault(|vault| {
             let path = params_path!(params)?;
-            return Ok(codeactions::code_actions(vault, &params, &path))
-        }).await
+            return Ok(codeactions::code_actions(vault, &params, &path));
+        })
+        .await
     }
 }
 
