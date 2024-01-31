@@ -204,14 +204,14 @@ impl Vault {
     ) -> Option<Vec<(&Path, &Reference)>> {
         let references = self.select_references(None)?;
 
-        return Some(
+        Some(
             references
                 .into_iter()
                 .filter(|(ref_path, reference)| {
-                    referenceable.matches_reference(&self.root_dir, reference, &ref_path)
+                    referenceable.matches_reference(&self.root_dir, reference, ref_path)
                 })
                 .collect(),
-        );
+        )
     }
 }
 
@@ -663,9 +663,9 @@ impl Referenceable<'_> {
 mod vault_tests {
     use std::path::{Path, PathBuf};
 
-    use tower_lsp::lsp_types::{Location, Position, Range, Url};
+    use tower_lsp::lsp_types::{Position, Range};
 
-    use crate::gotodef::goto_definition;
+    
     use crate::vault::{HeadingLevel, ReferenceData};
 
     use super::Reference::*;

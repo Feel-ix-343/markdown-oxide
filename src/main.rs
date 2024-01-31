@@ -1,7 +1,7 @@
 #![feature(slice_split_once)]
 
 use std::ops::Deref;
-use std::path::{Path, PathBuf};
+use std::path::{Path};
 
 use completion::get_completions;
 use diagnostics::diagnostics;
@@ -75,7 +75,7 @@ impl Backend {
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
 
-        return callback(&vault);
+        callback(vault)
     }
 }
 
@@ -223,7 +223,7 @@ impl LanguageServer for Backend {
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         self.bind_vault(|vault| {
             let path = params_path!(params.text_document_position_params)?;
-            return Ok(hover::hover(vault, &params, &path));
+            Ok(hover::hover(vault, &params, &path))
         })
         .await
     }
@@ -234,7 +234,7 @@ impl LanguageServer for Backend {
     ) -> Result<Option<DocumentSymbolResponse>> {
         self.bind_vault(|vault| {
             let path = params_path!(params)?;
-            return Ok(document_symbol(vault, &params, &path));
+            Ok(document_symbol(vault, &params, &path))
         })
         .await
     }
@@ -244,7 +244,7 @@ impl LanguageServer for Backend {
         params: WorkspaceSymbolParams,
     ) -> Result<Option<Vec<SymbolInformation>>> {
         self.bind_vault(|vault| {
-            return Ok(workspace_symbol(vault, &params));
+            Ok(workspace_symbol(vault, &params))
         })
         .await
     }
@@ -252,7 +252,7 @@ impl LanguageServer for Backend {
     async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
         self.bind_vault(|vault| {
             let path = params_position_path!(params)?;
-            return Ok(rename::rename(vault, &params, &path));
+            Ok(rename::rename(vault, &params, &path))
         })
         .await
     }
@@ -260,7 +260,7 @@ impl LanguageServer for Backend {
     async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
         self.bind_vault(|vault| {
             let path = params_path!(params)?;
-            return Ok(codeactions::code_actions(vault, &params, &path));
+            Ok(codeactions::code_actions(vault, &params, &path))
         })
         .await
     }

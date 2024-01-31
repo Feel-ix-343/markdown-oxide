@@ -1,17 +1,16 @@
 use std::{
-    iter,
     path::{Path, PathBuf},
 };
 
 use pathdiff::diff_paths;
 use rayon::iter::*;
 use tower_lsp::lsp_types::{
-    CodeAction, CodeActionKind, CodeActionOrCommand, CodeActionParams, CodeActionResponse,
-    CreateFile, Diagnostic, DiagnosticSeverity, DocumentChangeOperation, DocumentChanges,
+    CodeAction, CodeActionOrCommand, CodeActionParams,
+    CreateFile, DocumentChangeOperation, DocumentChanges,
     ResourceOp, Url, WorkspaceEdit,
 };
 
-use crate::vault::{self, Vault};
+use crate::vault::{Vault};
 
 pub fn code_actions(
     vault: &Vault,
@@ -23,7 +22,7 @@ pub fn code_actions(
     let Some(pathreferences) = vault.select_references(Some(path)) else {
         return None;
     };
-    let Some(allreferences) = vault.select_references(None) else {
+    let Some(_allreferences) = vault.select_references(None) else {
         return None;
     };
 
@@ -32,7 +31,7 @@ pub fn code_actions(
         !referenceables
             .iter()
             .any(|referenceable| referenceable.matches_reference(vault.root_dir(), reference, path))
-            && !reference.data().reference_text.contains("#")
+            && !reference.data().reference_text.contains('#')
             && reference.data().range.start.line == params.range.start.line
             && reference.data().range.start.character <= params.range.start.character
             && reference.data().range.end.character >= params.range.end.character
@@ -41,7 +40,7 @@ pub fn code_actions(
 
     Some(
         unresolved_file_links
-            .filter_map(|(path, reference)| {
+            .filter_map(|(_path, reference)| {
                 let mut new_path_buf = PathBuf::new();
                 new_path_buf.push(vault.root_dir());
                 new_path_buf.push(&reference.data().reference_text);
