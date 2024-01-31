@@ -1,7 +1,7 @@
 #![feature(slice_split_once)]
 
 use std::ops::Deref;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use completion::get_completions;
 use diagnostics::diagnostics;
@@ -26,6 +26,7 @@ mod symbol;
 mod ui;
 mod vault;
 mod codeactions;
+mod macros;
 
 #[derive(Debug)]
 struct Backend {
@@ -173,7 +174,6 @@ impl LanguageServer for Backend {
 
         self.bind_vault(|vault| {
 
-
             let Ok(path) = params
                 .text_document_position_params
                 .text_document
@@ -253,14 +253,9 @@ impl LanguageServer for Backend {
         }).await
     }
 
-    async fn document_symbol(
-        &self,
-        params: DocumentSymbolParams,
-    ) -> Result<Option<DocumentSymbolResponse>> {
+    async fn document_symbol( &self, params: DocumentSymbolParams,) -> Result<Option<DocumentSymbolResponse>> {
         self.bind_vault(|vault| {
-            let Ok(path) = params.text_document.uri.to_file_path() else {
-                return Err(Error::new(ErrorCode::ServerError(0)));
-            };
+            let path = params_path!(params)?;
             return Ok(document_symbol(vault, &params, &path));
         }).await
     }
@@ -291,17 +286,8 @@ impl LanguageServer for Backend {
 
     async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
         self.bind_vault(|vault| {
-        let Ok(path) = params
-            .text_document
-            .uri
-            .to_file_path()
-        else {
-            return Err(Error::new(ErrorCode::ServerError(0)));
-        };
-
-
-        return Ok(codeactions::code_actions(vault, &params, &path))
-
+            let path = params_path!(params)?;
+            return Ok(codeactions::code_actions(vault, &params, &path))
         }).await
     }
 }
