@@ -78,9 +78,12 @@ then adjust your nvim-cmp source settings for the following. Note that this will
     - [x] Missing file for link -> Create the file
     - [ ] Link suggestions (by text match or other)
     - [ ] Refactoring: Move headers or selections to a new file
+    - [ ] Link an unlinked reference
+    - [ ] Link all unlinked references to a referenceable
 - [X] Diagnostics
     - [X] Missing reference
     - [ ] Reference count
+    - [ ] Unlinked reference
 - [X] Symbols
     - [X] File symbols: Headings and subheadings
     - [X] Workspace headings: everythign linkable: files, headings, tags, ... Like a good search feature
