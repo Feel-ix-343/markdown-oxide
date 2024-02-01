@@ -110,7 +110,7 @@ then adjust your nvim-cmp source settings for the following. Note that this will
 
 Here are the alternatives (open source authors are welcom to make PRs adding their projects here!)
 
-- https://github.com/gw31415/obsidian-lsp ; I have been in discussions with the author; he is a med student and doesn't have time to maintain . I of course love his idea, but the current LS doesn't really provide any obsidian specific features yet. 
+- https://github.com/gw31415/obsidian-lsp ; I have been in discussions with the author; he/she is a med student and doesn't have time to maintain . I of course love his idea, but the current LS doesn't provide many obsidian specific features yet. 
 - https://github.com/WhiskeyJack96/logseqlsp ; This is a cool project and a great inspiration for logseq support (which is upcoming). status: it doesn't seem that it is maintained; no commites for 3 months
 - The og https://github.com/artempyanykh/marksman ; I used this for a while, but it is not obsidian specific and didn't act well w my vault
 
