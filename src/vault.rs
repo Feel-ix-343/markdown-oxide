@@ -468,15 +468,15 @@ impl Reference {
                     && referenceable.get_refname(root_dir).as_ref() == Some(text)
                     && path.as_path() == file_path
             }
-            &Referenceable::File(path, _file) => {
+            &Referenceable::File(_path, _file) => {
                 matches!(self, FileLink(_))
                     && referenceable.get_refname(root_dir).as_ref() == Some(text)
             }
-            &Referenceable::Heading(path, _file) => {
+            &Referenceable::Heading(_path, _file) => {
                 matches!(self, HeadingLink(..))
                     && referenceable.get_refname(root_dir).as_ref() == Some(text)
             }
-            &Referenceable::IndexedBlock(path, _file) => {
+            &Referenceable::IndexedBlock(_path, _file) => {
                 matches!(self, IndexedBlockLink(..))
                     && referenceable.get_refname(root_dir).as_ref() == Some(text)
             }

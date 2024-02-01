@@ -94,8 +94,8 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                         })],
                     })
                 }
-                Reference::HeadingLink(data, file, infile)
-                | Reference::IndexedBlockLink(data, file, infile)
+                Reference::HeadingLink(data, _file, infile)
+                | Reference::IndexedBlockLink(data, _file, infile)
                     if matches!(referenceable, Referenceable::File(..)) =>
                 {
                     let new_text = format!(
@@ -120,7 +120,7 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                         })],
                     })
                 }
-                Reference::HeadingLink(data, file, heading)
+                Reference::HeadingLink(data, _file, _heading)
                     if matches!(referenceable, Referenceable::Heading(..)) =>
                 {
                     let new_text = format!(
