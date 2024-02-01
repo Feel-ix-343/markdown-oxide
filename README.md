@@ -95,6 +95,7 @@ then adjust your nvim-cmp source settings for the following. Note that this will
     - [ ] Support Logseq embeds
     - [ ] Support Completions for logseq tasks
     - [ ] Support https://docs.logseq.com/#/page/markdown
+    - [ ] Influence from logseq shortcut completions; such as to dates like /tomorrow
 
 
 
