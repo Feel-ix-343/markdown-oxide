@@ -103,7 +103,8 @@ then adjust your nvim-cmp source settings for the following. Note that this will
 ### Dev Todo's
 
 - [X] Extract the RwLock read pattern
-- [ ] Fix: updating diagnostics after code action
+- [ ] Fix: update vault (diagnostics and references) after code action
+- [ ] Caching: As of right now, the completions really don't need to be recalcualted; there are many other functions like this
 
 # Alternatives
 
