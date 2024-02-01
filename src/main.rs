@@ -1,7 +1,7 @@
 #![feature(slice_split_once)]
 
 use std::ops::Deref;
-use std::path::{Path};
+use std::path::Path;
 
 use completion::get_completions;
 use diagnostics::diagnostics;
@@ -243,10 +243,8 @@ impl LanguageServer for Backend {
         &self,
         params: WorkspaceSymbolParams,
     ) -> Result<Option<Vec<SymbolInformation>>> {
-        self.bind_vault(|vault| {
-            Ok(workspace_symbol(vault, &params))
-        })
-        .await
+        self.bind_vault(|vault| Ok(workspace_symbol(vault, &params)))
+            .await
     }
 
     async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {

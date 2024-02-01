@@ -1,16 +1,13 @@
-use std::{
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use pathdiff::diff_paths;
 use rayon::iter::*;
 use tower_lsp::lsp_types::{
-    CodeAction, CodeActionOrCommand, CodeActionParams,
-    CreateFile, DocumentChangeOperation, DocumentChanges,
-    ResourceOp, Url, WorkspaceEdit,
+    CodeAction, CodeActionOrCommand, CodeActionParams, CreateFile, DocumentChangeOperation,
+    DocumentChanges, ResourceOp, Url, WorkspaceEdit,
 };
 
-use crate::vault::{Vault, Reference};
+use crate::vault::{Reference, Vault};
 
 pub fn code_actions(
     vault: &Vault,
@@ -27,19 +24,16 @@ pub fn code_actions(
     };
 
     let referenceables = vault.select_referenceable_nodes(None);
-    let unresolved_file_links = pathreferences
-        .par_iter()
-        .filter(|(path, reference)| {
-            !referenceables
-                .iter()
-                .any(|referenceable|
-                    referenceable.matches_reference(vault.root_dir(), reference, path))
+    let unresolved_file_links = pathreferences.par_iter().filter(|(path, reference)| {
+        !referenceables
+            .iter()
+            .any(|referenceable| referenceable.matches_reference(vault.root_dir(), reference, path))
             && matches!(reference, Reference::FileLink(..))
             && reference.data().range.start.line == params.range.start.line
             && reference.data().range.start.character <= params.range.start.character
             && reference.data().range.end.character >= params.range.end.character
         // TODO: Extract this to a match condition
-        });
+    });
 
     Some(
         unresolved_file_links

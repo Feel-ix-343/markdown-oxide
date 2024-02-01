@@ -377,22 +377,39 @@ impl Reference {
                             range: range_to_position(&Rope::from_str(text), full.range()),
                             display_text: display.map(|d| d.as_str().into()),
                         })
-                    },
-                    (full, filepath, Some(infile), display) if infile.as_str().get(0..1) == Some("^") => {
-                        return IndexedBlockLink(ReferenceData{
-                            reference_text: format!("{}#{}", filepath.as_str(), infile.as_str()),
-                            range: range_to_position(&Rope::from_str(text), full.range()),
-                            display_text: display.map(|d| d.as_str().into()),
-                        }, filepath.as_str().into(), infile.as_str().into())
-                    },
-                    (full, filepath, Some(infile), display) => {
-                        return IndexedBlockLink(ReferenceData{
-                            reference_text: format!("{}#{}", filepath.as_str(), infile.as_str()),
-                            range: range_to_position(&Rope::from_str(text), full.range()),
-                            display_text: display.map(|d| d.as_str().into()),
-                        }, filepath.as_str().into(), infile.as_str().into())
                     }
-
+                    (full, filepath, Some(infile), display)
+                        if infile.as_str().get(0..1) == Some("^") =>
+                    {
+                        return IndexedBlockLink(
+                            ReferenceData {
+                                reference_text: format!(
+                                    "{}#{}",
+                                    filepath.as_str(),
+                                    infile.as_str()
+                                ),
+                                range: range_to_position(&Rope::from_str(text), full.range()),
+                                display_text: display.map(|d| d.as_str().into()),
+                            },
+                            filepath.as_str().into(),
+                            infile.as_str().into(),
+                        )
+                    }
+                    (full, filepath, Some(infile), display) => {
+                        return IndexedBlockLink(
+                            ReferenceData {
+                                reference_text: format!(
+                                    "{}#{}",
+                                    filepath.as_str(),
+                                    infile.as_str()
+                                ),
+                                range: range_to_position(&Rope::from_str(text), full.range()),
+                                display_text: display.map(|d| d.as_str().into()),
+                            },
+                            filepath.as_str().into(),
+                            infile.as_str().into(),
+                        )
+                    }
                 }
             })
             .collect_vec();
@@ -409,7 +426,7 @@ impl Reference {
             .collect();
 
         static FOOTNOTE_LINK_RE: Lazy<Regex> =
-        Lazy::new(|| Regex::new(r"[^\[](?<full>\[(?<index>\^[^\[\] ]+)\])[^\:]").unwrap());
+            Lazy::new(|| Regex::new(r"[^\[](?<full>\[(?<index>\^[^\[\] ]+)\])[^\:]").unwrap());
         let footnote_references: Vec<Reference> = FOOTNOTE_LINK_RE
             .captures_iter(text)
             .flat_map(
@@ -444,25 +461,25 @@ impl Reference {
         match referenceable {
             &Referenceable::Tag(_, _) => {
                 matches!(self, Tag(_))
-                && referenceable.get_refname(root_dir) == Some(text.to_string())
+                    && referenceable.get_refname(root_dir) == Some(text.to_string())
             }
             &Referenceable::Footnote(path, _footnote) => {
                 matches!(self, Footnote(_))
-                && referenceable.get_refname(root_dir).as_ref() == Some(text)
-                && path.as_path() == file_path
-            },
+                    && referenceable.get_refname(root_dir).as_ref() == Some(text)
+                    && path.as_path() == file_path
+            }
             &Referenceable::File(path, _file) => {
                 matches!(self, FileLink(_))
-                && referenceable.get_refname(root_dir).as_ref() == Some(text)
-            },
+                    && referenceable.get_refname(root_dir).as_ref() == Some(text)
+            }
             &Referenceable::Heading(path, _file) => {
                 matches!(self, HeadingLink(..))
-                && referenceable.get_refname(root_dir).as_ref() == Some(text)
-            },
+                    && referenceable.get_refname(root_dir).as_ref() == Some(text)
+            }
             &Referenceable::IndexedBlock(path, _file) => {
                 matches!(self, IndexedBlockLink(..))
-                && referenceable.get_refname(root_dir).as_ref() == Some(text)
-            },
+                    && referenceable.get_refname(root_dir).as_ref() == Some(text)
+            }
         }
     }
 }
@@ -486,7 +503,7 @@ pub struct MDHeading {
 impl MDHeading {
     fn new(text: &str) -> Vec<MDHeading> {
         static HEADING_RE: Lazy<Regex> =
-        Lazy::new(|| Regex::new(r"(?<starter>#+) (?<heading_text>.+)").unwrap());
+            Lazy::new(|| Regex::new(r"(?<starter>#+) (?<heading_text>.+)").unwrap());
 
         let headings: Vec<MDHeading> = HEADING_RE
             .captures_iter(text)
@@ -518,7 +535,7 @@ pub struct MDIndexedBlock {
 impl MDIndexedBlock {
     fn new(text: &str) -> Vec<MDIndexedBlock> {
         static INDEXED_BLOCK_RE: Lazy<Regex> =
-        Lazy::new(|| Regex::new(r".+ (\^(?<index>\w+))").unwrap());
+            Lazy::new(|| Regex::new(r".+ (\^(?<index>\w+))").unwrap());
 
         let indexed_blocks: Vec<MDIndexedBlock> = INDEXED_BLOCK_RE
             .captures_iter(text)
@@ -547,7 +564,7 @@ impl MDFootnote {
     fn new(text: &str) -> Vec<MDFootnote> {
         // static FOOTNOTE_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r".+ (\^(?<index>\w+))").unwrap());
         static FOOTNOTE_RE: Lazy<Regex> =
-        Lazy::new(|| Regex::new(r"\[(?<index>\^[^ \[\]]+)\]\:(?<text>.+)").unwrap());
+            Lazy::new(|| Regex::new(r"\[(?<index>\^[^ \[\]]+)\]\:(?<text>.+)").unwrap());
 
         let footnotes: Vec<MDFootnote> = FOOTNOTE_RE
             .captures_iter(text)
@@ -577,7 +594,7 @@ pub struct MDTag {
 impl MDTag {
     fn new(text: &str) -> Vec<MDTag> {
         static TAG_RE: Lazy<Regex> =
-        Lazy::new(|| Regex::new(r"(\n|\A| )(?<full>#(?<tag>[.[^ \n\#]]+))(\n|\z| )").unwrap());
+            Lazy::new(|| Regex::new(r"(\n|\A| )(?<full>#(?<tag>[.[^ \n\#]]+))(\n|\z| )").unwrap());
 
         let tagged_blocks = TAG_RE
             .captures_iter(text)
@@ -642,23 +659,23 @@ impl Referenceable<'_> {
         match &self {
             Referenceable::Tag(_, _) => {
                 matches!(reference, Tag(_))
-                && self
-                    .get_refname(root_dir)
-                    .is_some_and(|refname| text.starts_with(&refname))
+                    && self
+                        .get_refname(root_dir)
+                        .is_some_and(|refname| text.starts_with(&refname))
             }
             Referenceable::Footnote(path, _footnote) => {
                 matches!(reference, Footnote(_))
-                && self.get_refname(root_dir).as_ref() == Some(text)
-                && path.as_path() == reference_path
+                    && self.get_refname(root_dir).as_ref() == Some(text)
+                    && path.as_path() == reference_path
             }
             Referenceable::File(_path, _file) => {
                 matches!(reference, FileLink(data) if Some(&data.reference_text) == self.get_refname(root_dir).as_ref())
-                || matches!(reference, HeadingLink(.., file, _) if Some(file) == self.get_refname(root_dir).as_ref())
-                || matches!(reference, IndexedBlockLink(.., file, _) if Some(file) == self.get_refname(root_dir).as_ref())
-            },
+                    || matches!(reference, HeadingLink(.., file, _) if Some(file) == self.get_refname(root_dir).as_ref())
+                    || matches!(reference, IndexedBlockLink(.., file, _) if Some(file) == self.get_refname(root_dir).as_ref())
+            }
             Referenceable::Heading(_path, _file) => {
                 matches!(reference, HeadingLink(data, ..) if Some(&data.reference_text) == self.get_refname(root_dir).as_ref())
-            },
+            }
             Referenceable::IndexedBlock(..) => {
                 matches!(reference, IndexedBlockLink(.., file, _) if Some(file) == self.get_refname(root_dir).as_ref())
             }
@@ -701,7 +718,6 @@ mod vault_tests {
     use std::path::{Path, PathBuf};
 
     use tower_lsp::lsp_types::{Position, Range};
-
 
     use crate::vault::{HeadingLevel, ReferenceData};
 

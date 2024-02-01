@@ -70,7 +70,8 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
         .filter_map(|(path, reference)| {
             // update references
 
-            match reference { // todo: move the obsidian link formatting to the vault module; it should be centralized there; no honestly this code sucks; this whole file
+            match reference {
+                // todo: move the obsidian link formatting to the vault module; it should be centralized there; no honestly this code sucks; this whole file
                 Reference::FileLink(data) if matches!(referenceable, Referenceable::File(..)) => {
                     let new_text = format!(
                         "[[{}{}]]",
@@ -92,8 +93,11 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                             new_text,
                         })],
                     })
-                },
-                Reference::HeadingLink(data, file, infile) | Reference::IndexedBlockLink(data, file, infile) if matches!(referenceable, Referenceable::File(..)) => {
+                }
+                Reference::HeadingLink(data, file, infile)
+                | Reference::IndexedBlockLink(data, file, infile)
+                    if matches!(referenceable, Referenceable::File(..)) =>
+                {
                     let new_text = format!(
                         "[[{}#{}{}]]",
                         new_ref_name,
@@ -115,8 +119,10 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                             new_text,
                         })],
                     })
-                },
-                Reference::HeadingLink(data, file, heading) if matches!(referenceable, Referenceable::Heading(..)) => {
+                }
+                Reference::HeadingLink(data, file, heading)
+                    if matches!(referenceable, Referenceable::Heading(..)) =>
+                {
                     let new_text = format!(
                         "[[{}{}]]",
                         new_ref_name,
@@ -137,7 +143,7 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                             new_text,
                         })],
                     })
-                },
+                }
                 Reference::Tag(data) => {
                     let new_text = format!(
                         "#{}",
@@ -158,8 +164,11 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                             new_text,
                         })],
                     })
-                },
-                Reference::Footnote(..) | Reference::IndexedBlockLink(..) | Reference::FileLink(..) | Reference::HeadingLink(..) => None,
+                }
+                Reference::Footnote(..)
+                | Reference::IndexedBlockLink(..)
+                | Reference::FileLink(..)
+                | Reference::HeadingLink(..) => None,
             }
         })
         .map(DocumentChangeOperation::Edit);

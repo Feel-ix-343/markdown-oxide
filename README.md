@@ -88,6 +88,7 @@ then adjust your nvim-cmp source settings for the following. Note that this will
     - [ ] File
     - [ ] Headings
     - [ ] Tags.
+    - [ ] Indexed Blocks
 - [ ] Dataview support
 - [ ] Take some influence from LogSeq!!!!! https://docs.logseq.com/#/page/start%20here
     - [ ] Support Logseq syntax and completions/parsing for block references
