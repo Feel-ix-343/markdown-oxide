@@ -80,6 +80,7 @@ then adjust your nvim-cmp source settings for the following. Note that this will
     - [ ] Refactoring: Move headers or selections to a new file
 - [X] Diagnostics
     - [X] Missing reference
+    - [ ] Reference count
 - [X] Symbols
     - [X] File symbols: Headings and subheadings
     - [X] Workspace headings: everythign linkable: files, headings, tags, ... Like a good search feature
