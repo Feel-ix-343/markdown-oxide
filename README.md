@@ -80,6 +80,7 @@ then adjust your nvim-cmp source settings for the following. Note that this will
     - [ ] Refactoring: Move headers or selections to a new file
 - [X] Diagnostics
     - [X] Missing reference
+    - [ ] Reference count
 - [X] Symbols
     - [X] File symbols: Headings and subheadings
     - [X] Workspace headings: everythign linkable: files, headings, tags, ... Like a good search feature
@@ -92,6 +93,10 @@ then adjust your nvim-cmp source settings for the following. Note that this will
 - [ ] Dataview support
 - [ ] Take some influence from LogSeq!!!!! https://docs.logseq.com/#/page/start%20here
     - [ ] Support Logseq syntax and completions/parsing for block references
+    - [ ] Support Logseq embeds
+    - [ ] Support Completions for logseq tasks
+    - [ ] Support https://docs.logseq.com/#/page/markdown
+    - [ ] Influence from logseq shortcut completions; such as to dates like /tomorrow
 
 
 
@@ -100,13 +105,30 @@ then adjust your nvim-cmp source settings for the following. Note that this will
 - [X] Extract the RwLock read pattern
 - [ ] Fix: updating diagnostics after code action
 
+# Alternatives
+
+**I love open source and all open source authors!! I also believe healthy competition is good! Moxide is competing with some alternatives, and I want to make it the best at its job!!**
+
+Here are the alternatives (open source authors are welcom to make PRs adding their projects here!)
+
+- https://github.com/gw31415/obsidian-lsp ; I have been in discussions with the author; he/she is a med student and doesn't have time to maintain . I of course love his idea, but the current LS doesn't provide many obsidian specific features yet. 
+- https://github.com/WhiskeyJack96/logseqlsp ; This is a cool project and a great inspiration for logseq support (which is upcoming). status: it doesn't seem that it is maintained; no commites for 3 months
+- The og https://github.com/artempyanykh/marksman ; I used this for a while, but it is not obsidian specific and didn't act well w my vault
 
 # Workflows
 
 - Linking to daily notes in the future to set todos; checking references to those notes using the language server
 
+# Obsidian Graph Flexing (and maybe a little exigence for the project)
+
+This is my vault. As you can see, there is a lot of stuff in it. Along with notes, I also like speed. Obsidian, logseq, and other language servers are a little slow with my vault. I need speed; Neovim and this LSP CMPs my needs! (I am using this daily, right now even). 
+
+![image](https://github.com/Feel-ix-343/moxide/assets/88951499/3de26de6-1113-469f-8807-40dd6c2e1e03)
+
+![image](https://github.com/Feel-ix-343/moxide/assets/88951499/9204ebf9-f927-4f1e-8563-12e79099debd)
 
 
-# The bottom line
 
-Listen; I really like vim motions. I also really like low latency terminal editing. I very much so also like my neovim plugins. And wow I also like using obsidian (and other md apps). Can't I just have it all??? Can't I brute edit in neovim and preview and fine edit in the JS madness? Well, I thought I could; that is why I am making this. (And hopefully why you will help me!)
+# ---The--bottom--line--------------------------------------------------------
+
+Listen. I really like vim motions. I also really like low latency terminal editing. I very much so also like my neovim plugins and config. And wow I also like using obsidian (and other md apps). Can't I just have it all??? Can't I brute text edit in neovim and preview and fine edit in the JS madness? Well, I thought I could; that is why I am making this. (And hopefully why you will help me!)
