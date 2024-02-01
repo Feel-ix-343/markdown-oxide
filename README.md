@@ -118,7 +118,9 @@ Here are the alternatives (open source authors are welcom to make PRs adding the
 
 - Linking to daily notes in the future to set todos; checking references to those notes using the language server
 
-# Obsidian Graph Flexing (please add on, people)!!!!
+# Obsidian Graph Flexing (and maybe a little exigence for the project)
+
+This is my vault. As you can see, there is a lot of stuff in it. I also like speed. Obsidian and other language servers are a little slow with my vault. I need speed so I made this project to cmp my needs.
 
 ![image](https://github.com/Feel-ix-343/moxide/assets/88951499/3de26de6-1113-469f-8807-40dd6c2e1e03)
 
@@ -126,6 +128,6 @@ Here are the alternatives (open source authors are welcom to make PRs adding the
 
 
 
-# ---The bottom line (a line: --------------------------------------------------------)
+# ---The--bottom--line--------------------------------------------------------
 
 Listen. I really like vim motions. I also really like low latency terminal editing. I very much so also like my neovim plugins and config. And wow I also like using obsidian (and other md apps). Can't I just have it all??? Can't I brute text edit in neovim and preview and fine edit in the JS madness? Well, I thought I could; that is why I am making this. (And hopefully why you will help me!)
