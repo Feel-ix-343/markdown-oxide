@@ -10,7 +10,7 @@ use tower_lsp::lsp_types::{
     ResourceOp, Url, WorkspaceEdit,
 };
 
-use crate::vault::{Vault};
+use crate::vault::{Vault, Reference};
 
 pub fn code_actions(
     vault: &Vault,
@@ -27,16 +27,19 @@ pub fn code_actions(
     };
 
     let referenceables = vault.select_referenceable_nodes(None);
-    let unresolved_file_links = pathreferences.par_iter().filter(|(path, reference)| {
-        !referenceables
-            .iter()
-            .any(|referenceable| referenceable.matches_reference(vault.root_dir(), reference, path))
-            && !reference.data().reference_text.contains('#')
+    let unresolved_file_links = pathreferences
+        .par_iter()
+        .filter(|(path, reference)| {
+            !referenceables
+                .iter()
+                .any(|referenceable|
+                    referenceable.matches_reference(vault.root_dir(), reference, path))
+            && matches!(reference, Reference::FileLink(..))
             && reference.data().range.start.line == params.range.start.line
             && reference.data().range.start.character <= params.range.start.character
             && reference.data().range.end.character >= params.range.end.character
         // TODO: Extract this to a match condition
-    });
+        });
 
     Some(
         unresolved_file_links

@@ -70,17 +70,8 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
         .filter_map(|(path, reference)| {
             // update references
 
-            match reference {
-                Reference::Link(data) => {
-                    let new_ref_name = match data.reference_text.split_once('#') {
-                        Some((_file, rest))
-                            if matches!(referenceable, Referenceable::File(_, _)) =>
-                        {
-                            format!("{}#{}", new_ref_name, rest)
-                        }
-                        _ => new_ref_name.clone(),
-                    };
-
+            match reference { // todo: move the obsidian link formatting to the vault module; it should be centralized there; no honestly this code sucks; this whole file
+                Reference::FileLink(data) if matches!(referenceable, Referenceable::File(..)) => {
                     let new_text = format!(
                         "[[{}{}]]",
                         new_ref_name,
@@ -101,7 +92,52 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                             new_text,
                         })],
                     })
-                }
+                },
+                Reference::HeadingLink(data, file, infile) | Reference::IndexedBlockLink(data, file, infile) if matches!(referenceable, Referenceable::File(..)) => {
+                    let new_text = format!(
+                        "[[{}#{}{}]]",
+                        new_ref_name,
+                        infile,
+                        data.display_text
+                            .as_ref()
+                            .map(|text| format!("|{text}"))
+                            .unwrap_or_else(|| String::from(""))
+                    );
+
+                    Some(TextDocumentEdit {
+                        text_document:
+                            tower_lsp::lsp_types::OptionalVersionedTextDocumentIdentifier {
+                                uri: Url::from_file_path(path).ok()?,
+                                version: None,
+                            },
+                        edits: vec![OneOf::Left(TextEdit {
+                            range: data.range,
+                            new_text,
+                        })],
+                    })
+                },
+                Reference::HeadingLink(data, file, heading) if matches!(referenceable, Referenceable::Heading(..)) => {
+                    let new_text = format!(
+                        "[[{}{}]]",
+                        new_ref_name,
+                        data.display_text
+                            .as_ref()
+                            .map(|text| format!("|{text}"))
+                            .unwrap_or_else(|| String::from(""))
+                    );
+
+                    Some(TextDocumentEdit {
+                        text_document:
+                            tower_lsp::lsp_types::OptionalVersionedTextDocumentIdentifier {
+                                uri: Url::from_file_path(path).ok()?,
+                                version: None,
+                            },
+                        edits: vec![OneOf::Left(TextEdit {
+                            range: data.range,
+                            new_text,
+                        })],
+                    })
+                },
                 Reference::Tag(data) => {
                     let new_text = format!(
                         "#{}",
@@ -122,8 +158,8 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                             new_text,
                         })],
                     })
-                }
-                _ => None,
+                },
+                Reference::Footnote(..) | Reference::IndexedBlockLink(..) | Reference::FileLink(..) | Reference::HeadingLink(..) => None,
             }
         })
         .map(DocumentChangeOperation::Edit);

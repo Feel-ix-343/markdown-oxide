@@ -28,13 +28,15 @@ pub fn preview_referenceable(
     })
 }
 
+use Reference::*;
+
 pub fn preview_reference(
     vault: &Vault,
     reference_path: &Path,
     reference: &Reference,
 ) -> Option<MarkupContent> {
     match reference {
-        Reference::Link(_) | Reference::Footnote(_) => {
+        FileLink(..) | HeadingLink(..) | IndexedBlockLink(..) | Footnote(_) => {
             let positions = vault.select_referenceable_nodes(None);
             let referenceable = positions
                 .iter()
