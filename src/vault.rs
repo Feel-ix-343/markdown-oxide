@@ -396,7 +396,7 @@ impl Reference {
                         )
                     }
                     (full, filepath, Some(infile), display) => {
-                        return IndexedBlockLink(
+                        return HeadingLink(
                             ReferenceData {
                                 reference_text: format!(
                                     "{}#{}",
