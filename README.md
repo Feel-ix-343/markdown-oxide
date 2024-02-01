@@ -104,8 +104,14 @@ then adjust your nvim-cmp source settings for the following. Note that this will
 
 - Linking to daily notes in the future to set todos; checking references to those notes using the language server
 
+# Obsidian Graph Flexing (please add on, people)!!!!
+
+![image](https://github.com/Feel-ix-343/moxide/assets/88951499/3de26de6-1113-469f-8807-40dd6c2e1e03)
+
+![image](https://github.com/Feel-ix-343/moxide/assets/88951499/9204ebf9-f927-4f1e-8563-12e79099debd)
 
 
-# The bottom line
 
-Listen; I really like vim motions. I also really like low latency terminal editing. I very much so also like my neovim plugins. And wow I also like using obsidian (and other md apps). Can't I just have it all??? Can't I brute edit in neovim and preview and fine edit in the JS madness? Well, I thought I could; that is why I am making this. (And hopefully why you will help me!)
+# ---The bottom line (a line: --------------------------------------------------------)
+
+Listen. I really like vim motions. I also really like low latency terminal editing. I very much so also like my neovim plugins and config. And wow I also like using obsidian (and other md apps). Can't I just have it all??? Can't I brute text edit in neovim and preview and fine edit in the JS madness? Well, I thought I could; that is why I am making this. (And hopefully why you will help me!)
