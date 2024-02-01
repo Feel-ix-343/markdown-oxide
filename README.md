@@ -62,6 +62,7 @@ then adjust your nvim-cmp source settings for the following. Note that this will
     - [X] Heading Completions (requires extra nvim cmp config)
     - [X] Indexed block completions. Somehow using Ripgrep to find the paragraphs/blocks in the vault, then appending an index in the file, then inserting a link (workaround supported; using "_" instead of any non_word characters)
     - [X] Footnotes
+    - [ ] Create file completions
     - [ ] Make file completions faster in NvimCmp (this is mostly a neovim issue as moxide generates very many completions for large vaults)
     - [ ] Callout completions
     - [ ] Metadata completions
@@ -88,8 +89,23 @@ then adjust your nvim-cmp source settings for the following. Note that this will
     - [ ] Headings
     - [ ] Tags.
 - [ ] Dataview support
+- [ ] Take some influence from LogSeq!!!!! https://docs.logseq.com/#/page/start%20here
+    - [ ] Support Logseq syntax and completions/parsing for block references
+
+
 
 ### Dev Todo's
 
 - [X] Extract the RwLock read pattern
 - [ ] Fix: updating diagnostics after code action
+
+
+# Workflows
+
+- Linking to daily notes in the future to set todos; checking references to those notes using the language server
+
+
+
+# The bottom line
+
+Listen; I really like vim motions. I also really like low latency terminal editing. I very much so also like my neovim plugins. And wow I also like using obsidian (and other md apps). Can't I just have it all??? Can't I brute edit in neovim and preview and fine edit in the JS madness? Well, I thought I could; that is why I am making this. (And hopefully why you will help me!)
