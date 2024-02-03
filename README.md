@@ -89,9 +89,9 @@ then adjust your nvim-cmp source settings for the following. Note that this will
     - [X] Workspace headings: everythign linkable: files, headings, tags, ... Like a good search feature
     - [ ] Lists and indented lists
 - [ ] Rename
-    - [ ] File
-    - [ ] Headings
-    - [ ] Tags.
+    - [X] File
+    - [X] Headings
+    - [X] Tags.
     - [ ] Indexed Blocks
 - [ ] Dataview support
 - [ ] Take some influence from LogSeq!!!!! https://docs.logseq.com/#/page/start%20here
