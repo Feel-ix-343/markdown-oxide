@@ -1,11 +1,12 @@
 #![feature(slice_split_once)]
 #![feature(async_closure)]
 
-use std::ops::Deref;
-use std::path::Path;
+use std::ops::{Deref, DerefMut};
+use std::path::{Path, PathBuf};
 
 use completion::get_completions;
 use diagnostics::diagnostics;
+use itertools::Itertools;
 use references::references;
 use symbol::{document_symbol, workspace_symbol};
 use tokio::sync::RwLock;
@@ -33,6 +34,7 @@ mod vault;
 struct Backend {
     client: Client,
     vault: RwLock<Option<Vault>>,
+    opened_files: RwLock<Vec<PathBuf>>
 }
 
 struct TextDocumentItem {
@@ -42,23 +44,34 @@ struct TextDocumentItem {
 
 impl Backend {
     async fn update_vault(&self, params: TextDocumentItem) {
-        let Some(ref mut vault) = *self.vault.write().await else {
-            self.client
-                .log_message(MessageType::ERROR, "Vault is not initialized")
-                .await;
-            return;
-        };
 
-        let Ok(path) = params.uri.to_file_path() else {
-            self.client
-                .log_message(MessageType::ERROR, "Failed to parse URI path")
-                .await;
-            return;
-        };
-        let text = &params.text;
-        Vault::update_vault(vault, (&path, text));
+        {
+            let Some(ref mut vault) = *self.vault.write().await else {
 
-        diagnostics(vault, (&path, &params.uri, text), &self.client).await;
+                self.client
+                    .log_message(MessageType::ERROR, "Vault is not initialized")
+                .await;
+
+                return;
+
+            };
+
+            let Ok(path) = params.uri.to_file_path() else {
+
+                self.client
+                    .log_message(MessageType::ERROR, "Failed to parse URI path")
+                .await;
+                return;
+
+            };
+            let text = &params.text;
+            Vault::update_vault(vault, (&path, text));
+        } // must close the write lock before publishing diagnostics; I don't really like how imperative this is; TODO: Fix this shit
+
+        match self.publish_diagnostics().await {
+            Ok(_) => (),
+            Err(e) => self.client.log_message(MessageType::ERROR, format!("Failed calculating diagnostics on vault update {:?}", e)).await
+        }
     }
 
     async fn reconstruct_vault(&self) {
@@ -70,15 +83,17 @@ impl Backend {
 
         let timer = std::time::Instant::now();
 
-        let _ = self.bind_vault_mut(|vault| {
-            let Ok(new_vault) = Vault::construct_vault(&vault.root_dir()) else {
-                return Err(Error::new(ErrorCode::ServerError(0)));
-            };
+        {
+            let _ = self.bind_vault_mut(|vault| {
+                let Ok(new_vault) = Vault::construct_vault(&vault.root_dir()) else {
+                    return Err(Error::new(ErrorCode::ServerError(0)));
+                };
 
-            *vault = new_vault;
+                *vault = new_vault;
 
-            Ok(())
-        }).await;
+                Ok(())
+            }).await;
+        } // same issue as in the above function; TODO: Fix this
 
         let elapsed = timer.elapsed();
 
@@ -99,6 +114,38 @@ impl Backend {
             .await;
         }
 
+
+        match self.publish_diagnostics().await {
+            Ok(_) => (),
+            Err(e) => self.client.log_message(MessageType::ERROR, format!("Failed calculating diagnostics on vault construction {:?}", e)).await
+        }
+
+    }
+
+    async fn publish_diagnostics(&self) -> Result<()> {
+
+        let urls = self.bind_opened_files(|files| Ok(files.clone())).await?;
+        let uris = urls.into_iter().filter_map(|url| Url::from_file_path(url).ok()).collect_vec();
+
+        let diagnostics = self.bind_vault(|vault| {
+
+            Ok(uris.iter().filter_map(|uri| {
+
+                let path = uri.to_file_path().ok()?;
+
+                diagnostics(vault, (&path, &uri)).map(|diags| (uri.clone(), diags))
+
+            }).collect_vec())
+
+        }).await?;
+
+        self.client.log_message(MessageType::LOG, format!("Calcualted Diagnostics for files: {:?}", diagnostics.iter().map(|(uri, _)| uri).collect_vec())).await;
+
+        for (uri, diags) in diagnostics {
+            self.client.publish_diagnostics(uri, diags, None).await;
+        }
+
+        Ok(())
     }
 
     /// This is an FP reference. Lets say that there is monad around the vault of type Result<Vault>, representing accesing the RwLock arond it in async
@@ -126,6 +173,16 @@ impl Backend {
 
         callback(vault)
     }
+
+    async fn bind_opened_files<T>(&self, callback: impl Fn(&Vec<PathBuf>) -> Result<T>) -> Result<T> {
+        let opened_files = self.opened_files.read().await;
+        callback(opened_files.deref())
+    }
+
+    async fn bind_opened_files_mut<T>(&self, callback: impl Fn(&mut Vec<PathBuf>) -> Result<T>) -> Result<T> {
+        let mut opened_files = self.opened_files.write().await;
+        callback(opened_files.deref_mut())
+    }
 }
 
 #[tower_lsp::async_trait]
@@ -150,7 +207,7 @@ impl LanguageServer for Backend {
                 },
                 ..Default::default()
             })
-            .collect(),
+                .collect(),
         };
 
         return Ok(InitializeResult {
@@ -222,6 +279,25 @@ impl LanguageServer for Backend {
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
+        let _ = self.bind_opened_files_mut(|files| { // diagnostics will only be published for the files that are opened; We must track which files are opened
+            let path = params_path!(params)?;
+            files.push(path);
+
+            Ok(())
+        }).await;
+
+
+        self.update_vault(TextDocumentItem {
+            uri: params.text_document.uri,
+            text: params.text_document.text,
+        })
+        .await; // usually, this is not necesary; however some may start the LS without saving a changed file, so it is necessary
+
+
+        match self.publish_diagnostics().await {
+            Ok(_) => (),
+            Err(e) => self.client.log_message(MessageType::ERROR, format!("Failed calculating diagnostics on file open {:?}", e)).await
+        }
     }
 
     async fn did_change(&self, mut params: DidChangeTextDocumentParams) {
@@ -263,6 +339,7 @@ impl LanguageServer for Backend {
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+        self.client.log_message(MessageType::LOG, "Getting Completions").await;
         let progress = self
             .client
             .progress(ProgressToken::Number(1), "Calculating Completions")
@@ -347,6 +424,7 @@ async fn main() {
     let (service, socket) = LspService::new(|client| Backend {
         client,
         vault: None.into(),
+        opened_files: vec![].into()
     });
     Server::new(stdin, stdout, socket).serve(service).await;
 }

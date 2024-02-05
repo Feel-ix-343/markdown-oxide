@@ -8,16 +8,12 @@ use tower_lsp::{
 
 use crate::vault::{self, Vault};
 
-pub async fn diagnostics(vault: &Vault, (path, uri, _): (&PathBuf, &Url, &str), client: &Client) {
+pub fn diagnostics(vault: &Vault, (path, uri): (&PathBuf, &Url)) -> Option<Vec<Diagnostic>> {
     // Diagnostics
     // get all links for changed file
     let referenceables = vault.select_referenceable_nodes(None);
-    let Some(pathreferences) = vault.select_references(Some(path)) else {
-        return;
-    };
-    let Some(allreferences) = vault.select_references(None) else {
-        return;
-    };
+    let pathreferences = vault.select_references(Some(path))?;
+    let allreferences = vault.select_references(None)?;
     let unresolved = pathreferences.par_iter().filter(|(path, reference)| {
         !referenceables
             .iter()
@@ -46,5 +42,5 @@ pub async fn diagnostics(vault: &Vault, (path, uri, _): (&PathBuf, &Url, &str), 
         })
         .collect();
 
-    client.publish_diagnostics(uri.clone(), diags, None).await;
+    return Some(diags);
 }
