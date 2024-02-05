@@ -6,7 +6,7 @@ use tower_lsp::lsp_types::{
 
 use crate::{
     ui::preview_referenceable,
-    vault::{Referenceable, Vault},
+    vault::{Referenceable, Vault, Preview},
 };
 
 pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<CompletionResponse> {
@@ -59,6 +59,10 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
                             filter_text: match referenceable {
                                 Referenceable::IndexedBlock(_, _) => vault
                                     .select_referenceable_preview(&referenceable)
+                                    .and_then(|preview| match preview {
+                                        Preview::Text(string) => Some(string),
+                                        Preview::Empty => None
+                                    })
                                     .map(|text| root + &text),
                                 _ => None,
                             },
@@ -126,6 +130,10 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
                                 .map(Documentation::MarkupContent),
                             filter_text: vault
                                 .select_referenceable_preview(&footnote)
+                                    .and_then(|preview| match preview {
+                                        Preview::Text(string) => Some(string),
+                                        Preview::Empty => None
+                                    })
                                 .map(|preview_string| root + &preview_string),
                             ..Default::default()
                         })

@@ -2,18 +2,21 @@ use std::path::Path;
 
 use tower_lsp::lsp_types::{MarkupContent, MarkupKind};
 
-use crate::vault::{Reference, Referenceable, Vault};
+use crate::vault::{Reference, Referenceable, Vault, Preview};
 
 fn referenceable_string(vault: &Vault, referenceable: &Referenceable) -> Option<String> {
     let preview = vault.select_referenceable_preview(referenceable)?;
 
-    Some(match referenceable {
-        Referenceable::File(_, _) => format!("File Preview:\n---\n\n{}", preview),
-        Referenceable::Heading(_, _) => format!("Heading Preview:\n---\n\n{}", preview),
-        Referenceable::IndexedBlock(_, _) => format!("Block Preview:\n---\n\n{}", preview),
-        Referenceable::Footnote(_, _) => format!("Footnote Preview:\n---\n\n{}", preview),
-        _ => format!("Preview:\n---\n\n{}", preview),
-    })
+    match preview {
+        Preview::Empty => return Some("No Preview".into()),
+        Preview::Text(text) => match referenceable {
+            Referenceable::File(_, _) => format!("File Preview:\n---\n\n{}", text).into(),
+            Referenceable::Heading(_, _) => format!("Heading Preview:\n---\n\n{}", text).into(),
+            Referenceable::IndexedBlock(_, _) => format!("Block Preview:\n---\n\n{}", text).into(),
+            Referenceable::Footnote(_, _) => format!("Footnote Preview:\n---\n\n{}", text).into(),
+            _ => format!("Preview:\n---\n\n{}", text).into(),
+        }
+    } 
 }
 
 pub fn preview_referenceable(

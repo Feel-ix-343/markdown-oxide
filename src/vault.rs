@@ -224,36 +224,6 @@ impl Vault {
         &self.root_dir
     }
 
-    pub fn select_referenceable_preview(&self, referenceable: &Referenceable) -> Option<String> {
-        match referenceable {
-            Referenceable::Footnote(_, _) => {
-                let range = referenceable.get_range()?;
-                Some(String::from_iter(self.select_line(
-                    referenceable.get_path(),
-                    range.start.line as usize,
-                )?))
-            }
-            Referenceable::Heading(_, _) => {
-                let range = referenceable.get_range()?;
-                Some(
-                    (range.start.line..=range.end.line + 10)
-                        .filter_map(|ln| self.select_line(referenceable.get_path(), ln as usize)) // flatten those options!
-                        .map(String::from_iter)
-                        .join(""),
-                )
-            }
-            Referenceable::IndexedBlock(_, _) => {
-                let range = referenceable.get_range()?;
-                self.select_line(referenceable.get_path(), range.start.line as usize)
-                    .map(String::from_iter)
-            }
-            Referenceable::File(_, _) => {
-                let file_text = self.ropes.get(referenceable.get_path()).unwrap();
-                Some(String::from(file_text))
-            }
-            _ => None,
-        }
-    }
 
     pub fn select_references_for_referenceable<'a>(
         &'a self,
@@ -269,6 +239,61 @@ impl Vault {
                 })
                 .collect(),
         )
+    }
+}
+
+
+pub enum Preview {
+    Text(String),
+    Empty
+}
+
+impl From<String> for Preview {
+    fn from(value: String) -> Self {
+        Preview::Text(value)
+    }
+}
+
+use Preview::*;
+
+impl Vault {
+    pub fn select_referenceable_preview(&self, referenceable: &Referenceable) -> Option<Preview> {
+
+
+        if self.ropes.get(referenceable.get_path()).is_some_and(|rope| rope.len_lines() == 1) {
+            return Some(Empty)
+        }
+
+        match referenceable {
+            Referenceable::Footnote(_, _) => {
+                let range = referenceable.get_range()?;
+                Some(String::from_iter(self.select_line(
+                    referenceable.get_path(),
+                    range.start.line as usize,
+                )?).into())
+            }
+            Referenceable::Heading(_, _) => {
+                let range = referenceable.get_range()?;
+                Some(
+                    (range.start.line..=range.end.line + 10)
+                        .filter_map(|ln| self.select_line(referenceable.get_path(), ln as usize)) // flatten those options!
+                        .map(String::from_iter)
+                        .join("")
+                        .into(),
+                )
+            }
+            Referenceable::IndexedBlock(_, _) => {
+                let range = referenceable.get_range()?;
+                self.select_line(referenceable.get_path(), range.start.line as usize)
+                    .map(String::from_iter)
+                    .map(Into::into)
+            }
+            Referenceable::File(_, _) => {
+                let file_text = self.ropes.get(referenceable.get_path()).unwrap();
+                Some(String::from(file_text).into())
+            }
+            _ => None,
+        }
     }
 }
 
