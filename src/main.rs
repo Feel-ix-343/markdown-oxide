@@ -107,7 +107,7 @@ impl Backend {
                 .log_message(
                     MessageType::WARNING,
                     format!(
-                        "Vault Construction took a long time: Finished in {}ms",
+                        "Vault Construction took {}ms",
                         elapsed.as_millis()
                     ),
                 )
