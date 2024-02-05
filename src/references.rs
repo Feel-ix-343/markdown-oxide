@@ -17,7 +17,7 @@ pub fn references(vault: &Vault, cursor_position: Position, path: &Path) -> Opti
                 Url::from_file_path(link.0)
                     .map(|good| Location {
                         uri: good,
-                        range: link.1.data().range,
+                        range: *link.1.data().range // TODO: Why can't I use .into() here?
                     })
                     .ok()
             })

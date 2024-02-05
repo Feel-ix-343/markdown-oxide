@@ -31,7 +31,7 @@ pub fn goto_definition(
             .filter_map(|linkable| {
                 Some(Location {
                     uri: Url::from_file_path(linkable.get_path().to_str()?).unwrap(),
-                    range: linkable.get_range(),
+                    range: *linkable.get_range()?,
                 })
             })
             .collect(),

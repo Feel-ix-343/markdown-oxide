@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use rayon::prelude::*;
 use tower_lsp::lsp_types::{
-    CompletionItem, CompletionItemKind, CompletionParams, CompletionResponse, Documentation,
+    CompletionItem, CompletionItemKind, CompletionParams, CompletionResponse, Documentation, CompletionItemLabelDetails,
 };
 
 use crate::{
@@ -33,7 +33,7 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
 
         let all_links = vault
             .select_referenceable_nodes(None)
-            .into_par_iter()
+            .into_iter()
             .filter(|referenceable| {
                 !matches!(referenceable, Referenceable::Tag(_, _))
                     && !matches!(referenceable, Referenceable::Footnote(_, _))
@@ -47,6 +47,13 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
                         .map(|root| CompletionItem {
                             kind: Some(CompletionItemKind::FILE),
                             label: root.clone(),
+                            label_details: match referenceable.is_unresolved() {
+                                true => Some(CompletionItemLabelDetails {
+                                    detail: Some("Unresolved".into()),
+                                    description: None
+                                }),
+                                false => None
+                            },
                             documentation: preview_referenceable(vault, &referenceable)
                                 .map(Documentation::MarkupContent),
                             filter_text: match referenceable {
@@ -59,6 +66,7 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
                         })
                 })
                 .flatten()
+                .unique_by(|completion| completion.label.clone())
                 .collect::<Vec<_>>(),
         ));
     } else if character

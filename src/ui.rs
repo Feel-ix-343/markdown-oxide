@@ -40,7 +40,7 @@ pub fn preview_reference(
             let positions = vault.select_referenceable_nodes(None);
             let referenceable = positions
                 .iter()
-                .find(|i| i.matches_reference(vault.root_dir(), reference, reference_path))?;
+                .find(|i| reference.references(&vault.root_dir(), i.get_path(), i))?;
 
             let display = referenceable_string(vault, referenceable)?;
 

@@ -23,7 +23,7 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                         version: None,
                     },
                     edits: vec![OneOf::Left(TextEdit {
-                        range: heading.range,
+                        range: *heading.range,
                         new_text,
                     })],
                 });
@@ -89,7 +89,7 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                                 version: None,
                             },
                         edits: vec![OneOf::Left(TextEdit {
-                            range: data.range,
+                            range: *data.range,
                             new_text,
                         })],
                     })
@@ -115,7 +115,7 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                                 version: None,
                             },
                         edits: vec![OneOf::Left(TextEdit {
-                            range: data.range,
+                            range: *data.range,
                             new_text,
                         })],
                     })
@@ -139,7 +139,7 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                                 version: None,
                             },
                         edits: vec![OneOf::Left(TextEdit {
-                            range: data.range,
+                            range: *data.range,
                             new_text,
                         })],
                     })
@@ -160,7 +160,7 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                             version: None,
                         },
                         edits: vec![OneOf::Left(TextEdit {
-                            range: data.range,
+                            range: *data.range,
                             new_text,
                         })],
                     })

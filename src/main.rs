@@ -340,11 +340,13 @@ impl LanguageServer for Backend {
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         self.client.log_message(MessageType::LOG, "Getting Completions").await;
+
         let progress = self
             .client
             .progress(ProgressToken::Number(1), "Calculating Completions")
             .begin()
         .await;
+
         let timer = std::time::Instant::now();
 
         let res = self

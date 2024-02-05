@@ -25,7 +25,7 @@ pub fn workspace_symbol(
                 },
                 location: Location {
                     uri: Url::from_file_path(referenceable.get_path()).ok()?,
-                    range: referenceable.get_range(),
+                    range: *referenceable.get_range()?,
                 },
                 container_name: None,
                 tags: None,
@@ -104,9 +104,9 @@ fn map_to_lsp_tree(tree: Vec<Node>) -> Vec<DocumentSymbol> {
             kind: SymbolKind::STRUCT,
             deprecated: None,
             tags: None,
-            range: node.heading.range,
+            range: *node.heading.range,
             detail: None,
-            selection_range: node.heading.range,
+            selection_range: *node.heading.range,
             children: node.children.map(map_to_lsp_tree),
         })
         .collect()
