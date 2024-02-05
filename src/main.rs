@@ -364,7 +364,7 @@ impl LanguageServer for Backend {
                 .log_message(
                     MessageType::WARNING,
                     format!(
-                        "Completion Calculation took a long time: Finished in {}ms",
+                        "Completion Calculation took {}ms",
                         elapsed.as_millis()
                     ),
                 )
