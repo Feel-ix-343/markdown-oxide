@@ -1,4 +1,5 @@
 #![feature(slice_split_once)]
+#![feature(async_closure)]
 
 use std::ops::Deref;
 use std::path::Path;
@@ -40,7 +41,7 @@ struct TextDocumentItem {
 }
 
 impl Backend {
-    async fn on_change(&self, params: TextDocumentItem) {
+    async fn update_vault(&self, params: TextDocumentItem) {
         let Some(ref mut vault) = *self.vault.write().await else {
             self.client
                 .log_message(MessageType::ERROR, "Vault is not initialized")
@@ -55,9 +56,48 @@ impl Backend {
             return;
         };
         let text = &params.text;
-        Vault::reconstruct_vault(vault, (&path, text));
+        Vault::update_vault(vault, (&path, text));
 
         diagnostics(vault, (&path, &params.uri, text), &self.client).await;
+    }
+
+    async fn reconstruct_vault(&self) {
+        let progress = self
+            .client
+            .progress(ProgressToken::Number(2), "Reconstructing Vault")
+            .begin()
+        .await;
+        let timer = std::time::Instant::now();
+
+        let _ = self.bind_vault_mut(|vault| {
+            let Ok(new_vault) = Vault::construct_vault(&vault.root_dir()) else {
+                return Err(Error::new(ErrorCode::ServerError(0)));
+            };
+
+            *vault = new_vault;
+
+            Ok(())
+        }).await;
+
+        let elapsed = timer.elapsed();
+
+        progress
+            .finish_with_message(format!("Finished in {}ms", elapsed.as_millis()))
+        .await;
+
+
+        if elapsed.as_millis() > 10 {
+            self.client
+                .log_message(
+                    MessageType::WARNING,
+                    format!(
+                        "Vault Reconstruction took a long time: Finished in {}ms",
+                        elapsed.as_millis()
+                    ),
+                )
+            .await;
+        }
+
     }
 
     /// This is an FP reference. Lets say that there is monad around the vault of type Result<Vault>, representing accesing the RwLock arond it in async
@@ -72,6 +112,14 @@ impl Backend {
     async fn bind_vault<T>(&self, callback: impl Fn(&Vault) -> Result<T>) -> Result<T> {
         let vault_option = self.vault.read().await;
         let Some(vault) = vault_option.deref() else {
+            return Err(Error::new(ErrorCode::ServerError(0)));
+        };
+
+        callback(vault)
+    }
+
+    async fn bind_vault_mut<T>(&self, callback: impl Fn(&mut Vault) -> Result<T>) -> Result<T> {
+        let Some(ref mut vault) = *self.vault.write().await else {
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
 
@@ -143,10 +191,39 @@ impl LanguageServer for Backend {
         Ok(())
     }
 
-    async fn initialized(&self, _: InitializedParams) {}
+    async fn initialized(&self, _: InitializedParams) {
+
+        let Ok(root_path) = self.bind_vault(|vault| {
+            Ok(vault.root_dir().clone())
+        }).await else {
+            return
+        };
+
+        let Ok(root_uri) = Url::from_directory_path(root_path) else {
+            return
+        };
+
+
+        let value = serde_json::to_value(DidChangeWatchedFilesRegistrationOptions {
+            watchers: vec![FileSystemWatcher {
+                glob_pattern: GlobPattern::String("**/*.md".into()),
+                kind: None
+            }]
+        }).unwrap();
+
+        let registration = Registration {
+            id: "myserver-fileWatcher".to_string(),
+            method: "workspace/didChangeWatchedFiles".to_string(),
+            register_options: Some(value),
+        };
+
+        self.client.register_capability(vec![registration]).await.unwrap();
+    }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        self.on_change(TextDocumentItem {
+        self.reconstruct_vault().await;
+
+        self.update_vault(TextDocumentItem {
             uri: params.text_document.uri,
             text: params.text_document.text,
         })
@@ -154,11 +231,31 @@ impl LanguageServer for Backend {
     }
 
     async fn did_change(&self, mut params: DidChangeTextDocumentParams) {
-        self.on_change(TextDocumentItem {
+        self.update_vault(TextDocumentItem {
             uri: params.text_document.uri,
             text: params.content_changes.remove(0).text,
         })
         .await;
+    }
+
+    async fn did_create_files(&self, params: CreateFilesParams) {
+        self.reconstruct_vault().await
+    }
+
+    async fn did_delete_files(&self, params: DeleteFilesParams) {
+        self.reconstruct_vault().await
+    }
+
+    async fn did_rename_files(&self, params: RenameFilesParams) {
+        self.reconstruct_vault().await
+    }
+
+    async fn did_save(&self, params: DidSaveTextDocumentParams) {
+        self.reconstruct_vault().await
+    }
+
+    async fn did_change_watched_files(&self, params: DidChangeWatchedFilesParams) {
+        self.reconstruct_vault().await
     }
 
     async fn goto_definition(
@@ -192,18 +289,18 @@ impl LanguageServer for Backend {
             .client
             .progress(ProgressToken::Number(1), "Calculating Completions")
             .begin()
-            .await;
+        .await;
         let timer = std::time::Instant::now();
 
         let res = self
             .bind_vault(|vault| Ok(get_completions(vault, &params)))
-            .await;
+        .await;
 
         let elapsed = timer.elapsed();
 
         progress
             .finish_with_message(format!("Finished in {}ms", elapsed.as_millis()))
-            .await;
+        .await;
 
         if elapsed.as_millis() > 10 {
             self.client
@@ -214,7 +311,7 @@ impl LanguageServer for Backend {
                         elapsed.as_millis()
                     ),
                 )
-                .await;
+            .await;
         }
 
         res
@@ -244,7 +341,7 @@ impl LanguageServer for Backend {
         params: WorkspaceSymbolParams,
     ) -> Result<Option<Vec<SymbolInformation>>> {
         self.bind_vault(|vault| Ok(workspace_symbol(vault, &params)))
-            .await
+        .await
     }
 
     async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {

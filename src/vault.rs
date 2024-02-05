@@ -55,7 +55,7 @@ impl Vault {
         })
     }
 
-    pub fn reconstruct_vault(old: &mut Vault, new_file: (&PathBuf, &str)) {
+    pub fn update_vault(old: &mut Vault, new_file: (&PathBuf, &str)) {
         let new_md_file = MDFile::new(new_file.1, new_file.0.clone());
         let new = old.md_files.get_mut(new_file.0);
 
