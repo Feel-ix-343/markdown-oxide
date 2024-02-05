@@ -20,9 +20,10 @@ default_config = {
   -- {path} will be {where ever you cloned from}/obsidian-ls/target/release/obsidian-ls
 },
 on_attach = on_attach, -- do this only if you have an on_attach function already
-capabilities = capabilities, -- add the nvim cmp capabilities if using it
 }
-require("lspconfig").obsidian_ls.setup({})
+require("lspconfig").obsidian_ls.setup({
+    capabilities = capabilities -- ensure that capabilities.workspace.didChangeWatchedFiles.dynamicRegistration = true
+})
 ```
 
 then adjust your nvim-cmp source settings for the following. Note that this will likely change in the future.

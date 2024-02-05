@@ -64,9 +64,10 @@ impl Backend {
     async fn reconstruct_vault(&self) {
         let progress = self
             .client
-            .progress(ProgressToken::Number(2), "Reconstructing Vault")
+            .progress(ProgressToken::Number(1), "Constructing Vault")
             .begin()
         .await;
+
         let timer = std::time::Instant::now();
 
         let _ = self.bind_vault_mut(|vault| {
@@ -91,7 +92,7 @@ impl Backend {
                 .log_message(
                     MessageType::WARNING,
                     format!(
-                        "Vault Reconstruction took a long time: Finished in {}ms",
+                        "Vault Construction took a long time: Finished in {}ms",
                         elapsed.as_millis()
                     ),
                 )
