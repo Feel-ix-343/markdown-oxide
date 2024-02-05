@@ -222,13 +222,6 @@ impl LanguageServer for Backend {
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        self.reconstruct_vault().await;
-
-        self.update_vault(TextDocumentItem {
-            uri: params.text_document.uri,
-            text: params.text_document.text,
-        })
-        .await;
     }
 
     async fn did_change(&self, mut params: DidChangeTextDocumentParams) {
@@ -237,22 +230,6 @@ impl LanguageServer for Backend {
             text: params.content_changes.remove(0).text,
         })
         .await;
-    }
-
-    async fn did_create_files(&self, params: CreateFilesParams) {
-        self.reconstruct_vault().await
-    }
-
-    async fn did_delete_files(&self, params: DeleteFilesParams) {
-        self.reconstruct_vault().await
-    }
-
-    async fn did_rename_files(&self, params: RenameFilesParams) {
-        self.reconstruct_vault().await
-    }
-
-    async fn did_save(&self, params: DidSaveTextDocumentParams) {
-        self.reconstruct_vault().await
     }
 
     async fn did_change_watched_files(&self, params: DidChangeWatchedFilesParams) {
