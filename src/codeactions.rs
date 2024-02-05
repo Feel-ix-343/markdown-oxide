@@ -7,7 +7,7 @@ use tower_lsp::lsp_types::{
     DocumentChanges, ResourceOp, Url, WorkspaceEdit,
 };
 
-use crate::vault::{Reference, Vault};
+use crate::{vault::{Reference, Vault}, diagnostics::path_unresolved_references};
 
 pub fn code_actions(
     vault: &Vault,
@@ -16,27 +16,23 @@ pub fn code_actions(
 ) -> Option<Vec<CodeActionOrCommand>> {
     // Diagnostics
     // get all links for changed file
-    let Some(pathreferences) = vault.select_references(Some(path)) else {
-        return None;
-    };
-    let Some(_allreferences) = vault.select_references(None) else {
-        return None;
-    };
 
-    let referenceables = vault.select_referenceable_nodes(None);
-    let unresolved_file_links = pathreferences.par_iter().filter(|(path, reference)| {
-        !referenceables
-            .iter()
-            .any(|referenceable| referenceable.matches_reference(vault.root_dir(), reference, path))
-            && matches!(reference, Reference::FileLink(..))
-            && reference.data().range.start.line == params.range.start.line
-            && reference.data().range.start.character <= params.range.start.character
-            && reference.data().range.end.character >= params.range.end.character
-        // TODO: Extract this to a match condition
+    let unresolved = path_unresolved_references(vault, path)?;
+
+    let unresolved_file_links = unresolved.into_iter().filter(|(_, reference)| {
+        matches!(reference, Reference::FileLink(..))
+    });
+
+
+    let code_action_unresolved = unresolved_file_links.filter(|(_, reference)| {
+        reference.data().range.start.line <= params.range.start.line
+        && reference.data().range.end.line >= params.range.end.line
+        && reference.data().range.start.character <= params.range.start.character
+        && reference.data().range.end.character >= params.range.end.character
     });
 
     Some(
-        unresolved_file_links
+        code_action_unresolved
             .filter_map(|(_path, reference)| {
                 let mut new_path_buf = PathBuf::new();
                 new_path_buf.push(vault.root_dir());
