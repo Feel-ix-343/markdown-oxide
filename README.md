@@ -126,7 +126,7 @@ Here are the alternatives (open source authors are welcom to make PRs adding the
 
 # Obsidian Graph Flexing (and maybe a little exigence for the project)
 
-This is my vault. As you can see, there is a lot of stuff in it. Along with notes, I also like speed. Obsidian, logseq, and other language servers are a little slow with my vault. I need speed; Neovim and this LSP CMPs my needs! (I am using this daily, right now even). 
+This is my vault. As you can see, there is a lot of stuff in it. Along with notes, I also like speed. Obsidian, logseq, and other language servers are a little slow with my vault (and a little high latency in general). I need speed; Neovim and this LSP CMPs my needs! (I am using this daily, right now even). 
 
 ![image](https://github.com/Feel-ix-343/moxide/assets/88951499/3de26de6-1113-469f-8807-40dd6c2e1e03)
 
