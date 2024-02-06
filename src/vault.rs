@@ -21,7 +21,7 @@ impl Vault {
             .filter_entry(|e| {
                 !e.file_name()
                     .to_str()
-                    .map(|s| s.starts_with('.'))
+                    .map(|s| s.starts_with('.') || s == "logseq") // TODO: This is a temporary fix; a hidden config is better
                     .unwrap_or(false)
             })
             .flatten()
