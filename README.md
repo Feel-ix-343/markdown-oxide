@@ -136,4 +136,4 @@ This is my vault. As you can see, there is a lot of stuff in it. Along with note
 
 # ---The--bottom--line--------------------------------------------------------
 
-Listen. I really like vim motions. I also really like low latency terminal editing. I very much so also like my neovim plugins and config. And wow I also like using obsidian (and other md apps). Can't I just have it all??? Can't I brute text edit in neovim and preview and fine edit in the JS madness? Well, I thought I could; that is why I am making this. (And hopefully why you will help me!)
+Listen. I really like vim motions. I also really like low latency terminal editing. I very much so also like my neovim plugins and config. And wow I also like using obsidian (and other md apps). Can't I just have it all??? Can't I brute text edit in neovim and preview and fine edit in the JS madness? Well, I thought I could; that is why I am making this. (And hopefully why you might help me!)
