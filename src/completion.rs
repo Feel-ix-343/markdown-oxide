@@ -2,7 +2,6 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 
 use cached::proc_macro::cached;
 use itertools::Itertools;
-use memoize::memoize;
 use rayon::prelude::*;
 use tower_lsp::lsp_types::{
     CompletionItem, CompletionItemKind, CompletionParams, CompletionResponse, Documentation, CompletionItemLabelDetails,
