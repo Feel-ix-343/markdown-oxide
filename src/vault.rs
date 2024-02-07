@@ -1,10 +1,11 @@
 use std::{
     collections::{HashMap, HashSet},
     iter,
-    ops::{Range, Deref},
+    ops::{Range, Deref, DerefMut},
     path::{Path, PathBuf}, hash::Hash,
 };
 
+use cached::proc_macro::cached;
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use pathdiff::diff_paths;
@@ -38,7 +39,7 @@ impl Vault {
             })
             .collect();
 
-        let ropes = md_file_paths
+        let ropes: HashMap<PathBuf, Rope> = md_file_paths
             .par_iter()
             .flat_map(|p| {
                 let text = std::fs::read_to_string(p.path())?;
@@ -49,8 +50,8 @@ impl Vault {
             .collect();
 
         Ok(Vault {
-            ropes,
-            md_files,
+            ropes: ropes.into(),
+            md_files: md_files.into(),
             root_dir: root_dir.into(),
         })
     }
@@ -82,12 +83,50 @@ impl Vault {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct MyHashMap<B: Hash>(HashMap<PathBuf, B>);
+
+impl<B: Hash> Hash for MyHashMap<B> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+
+        // https://stackoverflow.com/questions/73195185/how-can-i-derive-hash-for-a-struct-containing-a-hashmap
+
+
+        let mut pairs: Vec<_> = self.0.iter().collect();
+        pairs.sort_by_key(|i| i.0);
+        
+        Hash::hash(&pairs, state);
+    }
+}
+
+impl<B: Hash> Deref for MyHashMap<B> {
+    type Target = HashMap<PathBuf, B>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+// implement DerefMut
+impl<B: Hash> DerefMut for MyHashMap<B> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<B: Hash> From<HashMap<PathBuf, B>> for MyHashMap<B> {
+    fn from(value: HashMap<PathBuf, B>) -> Self {
+        MyHashMap(value)
+    }
+}
+
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 /// The in memory representation of the obsidian vault files. This data is exposed through an interface of methods to select the vaults data.
 /// These methods do not do any interpretation or analysis of the data. That is up to the consumer of this struct. The methods are analogous to selecting on a database.
 pub struct Vault {
-    md_files: HashMap<PathBuf, MDFile>,
-    ropes: HashMap<PathBuf, Rope>,
+    md_files: MyHashMap<MDFile>,
+    ropes: MyHashMap<Rope>,
     root_dir: PathBuf,
 }
 
@@ -168,7 +207,7 @@ impl Vault {
                         !resolved_referenceables_refnames
                             .contains(&reference.data().reference_text)
                     })
-                    .filter_map(|(_, reference)| {
+                        .filter_map(|(_, reference)| {
 
                             match reference {
                                 Reference::FileLink(data) => {
@@ -320,7 +359,7 @@ fn range_to_position(rope: &Rope, range: Range<usize>) -> MyRange {
     }.into()
 }
 
-#[derive(Debug, PartialEq, Eq, Default, Hash)]
+#[derive(Debug, PartialEq, Eq, Default, Hash, Clone)]
 pub struct MDFile {
     references: Vec<Reference>,
     headings: Vec<MDHeading>,
@@ -646,7 +685,7 @@ impl MDHeading {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct MDIndexedBlock {
     index: String,
     range: MyRange,
@@ -673,7 +712,7 @@ impl MDIndexedBlock {
     } // Make this better identify the full blocks
 }
 
-#[derive(Debug, Eq, PartialEq, Hash)]
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct MDFootnote {
     index: String,
     footnote_text: String,
@@ -705,7 +744,7 @@ impl MDFootnote {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct MDTag {
     tag_ref: String,
     range: MyRange,
