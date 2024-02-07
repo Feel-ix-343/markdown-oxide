@@ -359,17 +359,15 @@ impl LanguageServer for Backend {
             .finish_with_message(format!("Finished in {}ms", elapsed.as_millis()))
         .await;
 
-        if elapsed.as_millis() > 10 {
-            self.client
-                .log_message(
-                    MessageType::WARNING,
-                    format!(
-                        "Completion Calculation took {}ms",
-                        elapsed.as_millis()
-                    ),
-                )
-            .await;
-        }
+        self.client
+            .log_message(
+                MessageType::WARNING,
+                format!(
+                    "Completion Calculation took {}ms",
+                    elapsed.as_millis()
+                ),
+            )
+        .await;
 
         res
     }
