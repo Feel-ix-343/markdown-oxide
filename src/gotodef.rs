@@ -14,13 +14,11 @@ pub fn goto_definition(
     // Now we have the reference text. We need to find where this is actually referencing, or if it is referencing anything.
     // Lets get all of the referenceable nodes
 
-    let positions = vault.select_referenceable_nodes(None);
-    let referenced_referenceables = positions
-        .iter()
-        .filter(|i| reference.references(vault.root_dir(), path, i));
+    let referenceables = vault.select_referenceables_for_reference(reference, path);
 
     Some(
-        referenced_referenceables
+        referenceables
+            .into_iter()
             .filter_map(|linkable| {
                 Some(Location {
                     uri: Url::from_file_path(linkable.get_path().to_str()?).unwrap(),

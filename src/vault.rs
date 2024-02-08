@@ -303,11 +303,28 @@ impl Vault {
                 .collect(),
         )
     }
+
+    pub fn select_referenceables_for_reference(
+        &self,
+        reference: &Reference,
+        reference_path: &Path
+    ) -> Vec<Referenceable> {
+
+        let referenceables = self.select_referenceable_nodes(None);
+
+        referenceables
+            .into_iter()
+            .filter(|i| reference.references(self.root_dir(), reference_path, i))
+            .collect()
+
+    }
+
 }
 
 
 pub enum Preview {
     Text(String),
+
     Empty
 }
 
