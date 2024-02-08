@@ -17,15 +17,15 @@ pub fn references(vault: &Vault, cursor_position: Position, path: &Path) -> Opti
             vault.select_reference_at_position(path, cursor_position)
                 .and_then(|reference| {
 
-                    vault.select_references(None)
+                    let referenceables = vault.select_referenceables_for_reference(reference, path);
+                    let references = referenceables
+                        .into_iter()
+                        .map(|referenceable| vault.select_references_for_referenceable(&referenceable))
+                        .flatten() // drop the Nones on the options
+                        .flatten()
+                        .collect_vec();
 
-                        .map(|references| {
-                            references
-                                .into_iter()
-                                .filter(|(p, r)| reference.matches_reference(vault, path, (r, p)))
-                                .collect_vec()
-                        })
-
+                    Some(references)
 
                 })
         )?;

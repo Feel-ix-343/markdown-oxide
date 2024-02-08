@@ -664,21 +664,6 @@ impl Reference {
             }
         }
     }
-
-    pub fn matches_reference(
-        &self,
-        vault: &Vault,
-        self_path: &Path,
-        (other, other_path): (&Reference, &Path)
-    ) -> bool {
-
-
-        let referenceables = vault.select_referenceables_for_reference(&self, self_path);
-        let other_referenceables = vault.select_referenceables_for_reference(other, other_path);
-
-        return referenceables == other_referenceables
-
-    }
 }
 
 #[derive(Eq, PartialEq, Debug, PartialOrd, Ord, Clone, Hash)]
