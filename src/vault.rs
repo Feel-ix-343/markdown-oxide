@@ -180,7 +180,7 @@ impl Vault {
     }
 
 
-    pub fn select_reference_at_position(&self, path: &Path, position: Position) -> Option<&Reference> {
+    pub fn select_reference_at_position<'a>(&'a self, path: &'a Path, position: Position) -> Option<&Reference> {
 
 
         let links = self.select_references(Some(path))?;
@@ -290,7 +290,7 @@ impl Vault {
 
     pub fn select_references_for_referenceable<'a>(
         &'a self,
-        referenceable: &'a Referenceable,
+        referenceable: &Referenceable,
     ) -> Option<Vec<(&Path, &Reference)>> {
         let references = self.select_references(None)?;
 
@@ -314,7 +314,7 @@ impl Vault {
 
         referenceables
             .into_iter()
-            .filter(|i| reference.references(self.root_dir(), reference_path, i))
+            .filter(|i| reference.references(&self.root_dir(), reference_path, i))
             .collect()
 
     }
@@ -663,6 +663,21 @@ impl Reference {
                 && referenceable.get_refname(root_dir).as_ref() == Some(text)
             }
         }
+    }
+
+    pub fn matches_reference(
+        &self,
+        vault: &Vault,
+        self_path: &Path,
+        (other, other_path): (&Reference, &Path)
+    ) -> bool {
+
+
+        let referenceables = vault.select_referenceables_for_reference(&self, self_path);
+        let other_referenceables = vault.select_referenceables_for_reference(other, other_path);
+
+        return referenceables == other_referenceables
+
     }
 }
 
