@@ -121,7 +121,15 @@ impl<B: Hash> From<HashMap<PathBuf, B>> for MyHashMap<B> {
 }
 
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+
+impl Hash for Vault {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.md_files.hash(state)
+    }
+}
+
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 /// The in memory representation of the obsidian vault files. This data is exposed through an interface of methods to select the vaults data.
 /// These methods do not do any interpretation or analysis of the data. That is up to the consumer of this struct. The methods are analogous to selecting on a database.
 pub struct Vault {
@@ -169,6 +177,22 @@ impl Vault {
         })?;
 
         Some(linkable)
+    }
+
+
+    pub fn select_reference_at_position(&self, path: &Path, position: Position) -> Option<&Reference> {
+
+
+        let links = self.select_references(Some(path))?;
+
+        let (path, reference) = links.into_iter().find(|&l| {
+            l.1.data().range.start.line <= position.line
+            && l.1.data().range.end.line >= position.line
+            && l.1.data().range.start.character <= position.character // this is a bug
+            && l.1.data().range.end.character >= position.character
+        })?;
+
+        return Some(reference)
     }
 
     /// Select all linkable positions in the vault
@@ -430,7 +454,15 @@ pub struct ReferenceData {
 type File = String;
 type Specialref = String;
 
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+
+// TODO: I should probably make this my own hash trait so it is more clear what it does
+impl Hash for Reference {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.data().reference_text.hash(state)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Reference {
     Tag(ReferenceData),
     FileLink(ReferenceData),
@@ -626,11 +658,18 @@ impl Default for HeadingLevel {
     }
 }
 
-#[derive(Debug, Default, PartialEq, Eq, Clone, Hash)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct MDHeading {
     pub heading_text: String,
     pub range: MyRange,
     pub level: HeadingLevel,
+}
+
+impl Hash for MDHeading {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.level.hash(state);
+        self.heading_text.hash(state)
+    }
 }
 
 #[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
@@ -685,10 +724,16 @@ impl MDHeading {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MDIndexedBlock {
     index: String,
     range: MyRange,
+}
+
+impl Hash for MDIndexedBlock {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.index.hash(state);
+    }
 }
 
 impl MDIndexedBlock {
@@ -712,11 +757,18 @@ impl MDIndexedBlock {
     } // Make this better identify the full blocks
 }
 
-#[derive(Debug, Eq, PartialEq, Hash, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct MDFootnote {
     index: String,
     footnote_text: String,
     range: MyRange,
+}
+
+impl Hash for MDFootnote {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.index.hash(state);
+        self.footnote_text.hash(state);
+    }
 }
 
 impl MDFootnote {
@@ -744,10 +796,16 @@ impl MDFootnote {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MDTag {
     tag_ref: String,
     range: MyRange,
+}
+
+impl Hash for MDTag {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.tag_ref.hash(state);
+    }
 }
 
 impl MDTag {
@@ -898,6 +956,10 @@ impl Referenceable<'_> {
         return matches!(self, Referenceable::UnresolvedHeading(..) | Referenceable::UnresovledFile(..) | Referenceable::UnresovledIndexedBlock(..))
     }
 }
+
+
+
+
 
 // tests
 #[cfg(test)]
