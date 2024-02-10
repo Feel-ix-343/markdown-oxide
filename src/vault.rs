@@ -180,7 +180,7 @@ impl Vault {
     ) -> Option<&Reference> {
         let links = self.select_references(Some(path))?;
 
-        let (path, reference) = links.into_iter().find(|&l| {
+        let (_path, reference) = links.into_iter().find(|&l| {
             l.1.data().range.start.line <= position.line
             && l.1.data().range.end.line >= position.line
             && l.1.data().range.start.character <= position.character // this is a bug
@@ -233,13 +233,13 @@ impl Vault {
 
                                 Some(Referenceable::UnresovledFile(path, &data.reference_text))
                             }
-                            Reference::HeadingLink(data, end_path, heading) => {
+                            Reference::HeadingLink(_data, end_path, heading) => {
                                 let mut path = self.root_dir().clone();
                                 path.push(end_path);
 
                                 Some(Referenceable::UnresolvedHeading(path, &end_path, &heading))
                             }
-                            Reference::IndexedBlockLink(data, end_path, index) => {
+                            Reference::IndexedBlockLink(_data, end_path, index) => {
                                 let mut path = self.root_dir().clone();
                                 path.push(end_path);
 
@@ -421,7 +421,7 @@ impl MDFile {
 impl MDFile {
     fn get_referenceables(&self) -> Vec<Referenceable> {
         let MDFile {
-            references,
+            references: _,
             headings,
             indexed_blocks,
             tags,
@@ -836,7 +836,7 @@ impl MDTag {
     }
 }
 
-use Reference::*;
+
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 /**

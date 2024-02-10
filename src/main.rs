@@ -290,7 +290,7 @@ impl LanguageServer for Backend {
             return;
         };
 
-        let Ok(root_uri) = Url::from_directory_path(root_path) else {
+        let Ok(_root_uri) = Url::from_directory_path(root_path) else {
             return;
         };
 
@@ -352,7 +352,7 @@ impl LanguageServer for Backend {
         .await;
     }
 
-    async fn did_change_watched_files(&self, params: DidChangeWatchedFilesParams) {
+    async fn did_change_watched_files(&self, _params: DidChangeWatchedFilesParams) {
         self.reconstruct_vault().await
     }
 

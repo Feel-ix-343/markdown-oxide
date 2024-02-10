@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use rayon::prelude::*;
 use tower_lsp::lsp_types::{
-    Diagnostic, DiagnosticSeverity, RelatedUnchangedDocumentDiagnosticReport, Url,
+    Diagnostic, DiagnosticSeverity, Url,
 };
 
 use crate::vault::{self, Reference, Referenceable, Vault};

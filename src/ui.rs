@@ -35,7 +35,7 @@ use Reference::*;
 
 pub fn preview_reference(
     vault: &Vault,
-    reference_path: &Path,
+    _reference_path: &Path,
     reference: &Reference,
 ) -> Option<MarkupContent> {
     match reference {

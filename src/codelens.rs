@@ -2,7 +2,6 @@ use std::path::Path;
 
 use itertools::Itertools;
 use tower_lsp::{
-    jsonrpc::Result,
     lsp_types::{CodeLens, CodeLensParams, Command, Location, Position, Url},
 };
 
@@ -17,7 +16,7 @@ struct FindReferencesData {
     locations: Vec<Location>,
 }
 
-pub fn code_lens(vault: &Vault, path: &Path, params: &CodeLensParams) -> Option<Vec<CodeLens>> {
+pub fn code_lens(vault: &Vault, path: &Path, _params: &CodeLensParams) -> Option<Vec<CodeLens>> {
     let referenceables = vault.select_referenceable_nodes(Some(&path));
     let data = referenceables
         .into_iter()
