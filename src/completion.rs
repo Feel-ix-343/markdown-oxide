@@ -10,10 +10,10 @@ use tower_lsp::lsp_types::{
 
 use crate::{
     ui::preview_referenceable,
-    vault::{Preview, Referenceable, Vault},
+    vault::{Preview, Referenceable, Vault}, params_position_path,
 };
 
-pub fn get_completions(vault: &Vault, opened_files: HashSet<PathBuf>, params: &CompletionParams) -> Option<CompletionResponse> {
+pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], params: &CompletionParams, path: &Path) -> Option<CompletionResponse> {
     let Ok(path) = params
         .text_document_position
         .text_document
@@ -28,22 +28,34 @@ pub fn get_completions(vault: &Vault, opened_files: HashSet<PathBuf>, params: &C
 
     let selected_line = vault.select_line(&path.to_path_buf(), line)?;
 
-
     if character
         .checked_sub(2)
         .and_then(|start| selected_line.get(start..character))
     == Some(&['[', '[']) {
 
         Some(CompletionResponse::List(CompletionList{
-            items: opened_files
+            items: initial_completion_files
                 .iter()
-                .filter_map(|path| {
+                .filter_map(|path_i| {
                     Some(vault
-                        .select_referenceable_nodes(Some(path))
+                        .select_referenceable_nodes(Some(path_i))
                         .into_iter()
                         .filter(|referenceable| {
-                            !matches!(referenceable, Referenceable::Tag(_, _))
-                            && !matches!(referenceable, Referenceable::Footnote(_, _))
+                            if initial_completion_files.len() > 1 {
+
+                                if *path_i != path {
+                                    !matches!(referenceable, Referenceable::Tag(_, _))
+                                    && !matches!(referenceable, Referenceable::Footnote(_, _))
+                                } else {
+                                    false
+                                }
+
+                            } else {
+
+                                !matches!(referenceable, Referenceable::Tag(_, _))
+                                && !matches!(referenceable, Referenceable::Footnote(_, _))
+
+                            }
                         })
                         .collect_vec()
                     )})

@@ -397,10 +397,11 @@ impl LanguageServer for Backend {
 
         let timer = std::time::Instant::now();
 
-        let files = self.bind_opened_files(|files| Ok(files.clone())).await?;
+        let path = params_position_path!(params)?;
+        let files = self.bind_opened_files(|files| Ok(files.clone().into_iter().collect::<Box<[_]>>())).await?;
 
         let res = self
-            .bind_vault(|vault| Ok(get_completions(vault, files, &params)))
+            .bind_vault(|vault| Ok(get_completions(vault, &files, &params, &path)))
             .await;
 
         let elapsed = timer.elapsed();
