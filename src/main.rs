@@ -19,6 +19,7 @@ use tower_lsp::{Client, LanguageServer, LspService, Server};
 use vault::Vault;
 
 mod codeactions;
+mod codelens;
 mod completion;
 mod diagnostics;
 mod gotodef;
@@ -29,13 +30,12 @@ mod rename;
 mod symbol;
 mod ui;
 mod vault;
-mod codelens;
 
 #[derive(Debug)]
 struct Backend {
     client: Client,
     vault: RwLock<Option<Vault>>,
-    opened_files: RwLock<Vec<PathBuf>>
+    opened_files: RwLock<Vec<PathBuf>>,
 }
 
 struct TextDocumentItem {
@@ -45,25 +45,20 @@ struct TextDocumentItem {
 
 impl Backend {
     async fn update_vault(&self, params: TextDocumentItem) {
-
         {
             let Some(ref mut vault) = *self.vault.write().await else {
-
                 self.client
                     .log_message(MessageType::ERROR, "Vault is not initialized")
-                .await;
+                    .await;
 
                 return;
-
             };
 
             let Ok(path) = params.uri.to_file_path() else {
-
                 self.client
                     .log_message(MessageType::ERROR, "Failed to parse URI path")
-                .await;
+                    .await;
                 return;
-
             };
             let text = &params.text;
             Vault::update_vault(vault, (&path, text));
@@ -71,7 +66,14 @@ impl Backend {
 
         match self.publish_diagnostics().await {
             Ok(_) => (),
-            Err(e) => self.client.log_message(MessageType::ERROR, format!("Failed calculating diagnostics on vault update {:?}", e)).await
+            Err(e) => {
+                self.client
+                    .log_message(
+                        MessageType::ERROR,
+                        format!("Failed calculating diagnostics on vault update {:?}", e),
+                    )
+                    .await
+            }
         }
     }
 
@@ -80,67 +82,84 @@ impl Backend {
             .client
             .progress(ProgressToken::Number(1), "Constructing Vault")
             .begin()
-        .await;
+            .await;
 
         let timer = std::time::Instant::now();
 
         {
-            let _ = self.bind_vault_mut(|vault| {
-                let Ok(new_vault) = Vault::construct_vault(&vault.root_dir()) else {
-                    return Err(Error::new(ErrorCode::ServerError(0)));
-                };
+            let _ = self
+                .bind_vault_mut(|vault| {
+                    let Ok(new_vault) = Vault::construct_vault(&vault.root_dir()) else {
+                        return Err(Error::new(ErrorCode::ServerError(0)));
+                    };
 
-                *vault = new_vault;
+                    *vault = new_vault;
 
-                Ok(())
-            }).await;
+                    Ok(())
+                })
+                .await;
         } // same issue as in the above function; TODO: Fix this
 
         let elapsed = timer.elapsed();
 
         progress
             .finish_with_message(format!("Finished in {}ms", elapsed.as_millis()))
-        .await;
-
+            .await;
 
         if elapsed.as_millis() > 10 {
             self.client
                 .log_message(
                     MessageType::WARNING,
-                    format!(
-                        "Vault Construction took {}ms",
-                        elapsed.as_millis()
-                    ),
+                    format!("Vault Construction took {}ms", elapsed.as_millis()),
                 )
-            .await;
+                .await;
         }
-
 
         match self.publish_diagnostics().await {
             Ok(_) => (),
-            Err(e) => self.client.log_message(MessageType::ERROR, format!("Failed calculating diagnostics on vault construction {:?}", e)).await
+            Err(e) => {
+                self.client
+                    .log_message(
+                        MessageType::ERROR,
+                        format!(
+                            "Failed calculating diagnostics on vault construction {:?}",
+                            e
+                        ),
+                    )
+                    .await
+            }
         }
-
     }
 
     async fn publish_diagnostics(&self) -> Result<()> {
-
         let urls = self.bind_opened_files(|files| Ok(files.clone())).await?;
-        let uris = urls.into_iter().filter_map(|url| Url::from_file_path(url).ok()).collect_vec();
+        let uris = urls
+            .into_iter()
+            .filter_map(|url| Url::from_file_path(url).ok())
+            .collect_vec();
 
-        let diagnostics = self.bind_vault(|vault| {
+        let diagnostics = self
+            .bind_vault(|vault| {
+                Ok(uris
+                    .iter()
+                    .filter_map(|uri| {
+                        let path = uri.to_file_path().ok()?;
 
-            Ok(uris.iter().filter_map(|uri| {
+                        diagnostics(vault, (&path, &uri)).map(|diags| (uri.clone(), diags))
+                    })
+                    .collect_vec())
+            })
+            .await?;
 
-                let path = uri.to_file_path().ok()?;
-
-                diagnostics(vault, (&path, &uri)).map(|diags| (uri.clone(), diags))
-
-            }).collect_vec())
-
-        }).await?;
-
-        self.client.log_message(MessageType::LOG, format!("Calcualted Diagnostics for files: {:?}", diagnostics.iter().map(|(uri, _)| uri).collect_vec())).await;
+        self.client
+            .log_message(
+                MessageType::LOG,
+                format!(
+                    "Calcualted Diagnostics for files: {:?}",
+                    diagnostics.iter().map(|(uri, _)| uri).collect_vec()
+                ),
+            )
+            .await;
 
         for (uri, diags) in diagnostics {
             self.client.publish_diagnostics(uri, diags, None).await;
@@ -175,12 +194,18 @@ impl Backend {
         callback(vault)
     }
 
-    async fn bind_opened_files<T>(&self, callback: impl Fn(&Vec<PathBuf>) -> Result<T>) -> Result<T> {
+    async fn bind_opened_files<T>(
+        &self,
+        callback: impl Fn(&Vec<PathBuf>) -> Result<T>,
+    ) -> Result<T> {
         let opened_files = self.opened_files.read().await;
         callback(opened_files.deref())
     }
 
-    async fn bind_opened_files_mut<T>(&self, callback: impl Fn(&mut Vec<PathBuf>) -> Result<T>) -> Result<T> {
+    async fn bind_opened_files_mut<T>(
+        &self,
+        callback: impl Fn(&mut Vec<PathBuf>) -> Result<T>,
+    ) -> Result<T> {
         let mut opened_files = self.opened_files.write().await;
         callback(opened_files.deref_mut())
     }
@@ -208,7 +233,7 @@ impl LanguageServer for Backend {
                 },
                 ..Default::default()
             })
-                .collect(),
+            .collect(),
         };
 
         return Ok(InitializeResult {
@@ -242,7 +267,7 @@ impl LanguageServer for Backend {
                     ..Default::default()
                 }),
                 code_lens_provider: Some(CodeLensOptions {
-                    resolve_provider: None
+                    resolve_provider: None,
                 }),
                 ..Default::default()
             },
@@ -256,30 +281,26 @@ impl LanguageServer for Backend {
     async fn code_lens(&self, params: CodeLensParams) -> Result<Option<Vec<CodeLens>>> {
         let path = params_path!(params)?;
 
-        self.bind_vault(|vault| {
-            Ok(codelens::code_lens(vault, &path, &params))
-        }).await
+        self.bind_vault(|vault| Ok(codelens::code_lens(vault, &path, &params)))
+            .await
     }
 
     async fn initialized(&self, _: InitializedParams) {
-
-        let Ok(root_path) = self.bind_vault(|vault| {
-            Ok(vault.root_dir().clone())
-        }).await else {
-            return
+        let Ok(root_path) = self.bind_vault(|vault| Ok(vault.root_dir().clone())).await else {
+            return;
         };
 
         let Ok(root_uri) = Url::from_directory_path(root_path) else {
-            return
+            return;
         };
-
 
         let value = serde_json::to_value(DidChangeWatchedFilesRegistrationOptions {
             watchers: vec![FileSystemWatcher {
                 glob_pattern: GlobPattern::String("**/*.md".into()),
-                kind: None
-            }]
-        }).unwrap();
+                kind: None,
+            }],
+        })
+        .unwrap();
 
         let registration = Registration {
             id: "myserver-fileWatcher".to_string(),
@@ -287,17 +308,22 @@ impl LanguageServer for Backend {
             register_options: Some(value),
         };
 
-        self.client.register_capability(vec![registration]).await.unwrap();
+        self.client
+            .register_capability(vec![registration])
+            .await
+            .unwrap();
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        let _ = self.bind_opened_files_mut(|files| { // diagnostics will only be published for the files that are opened; We must track which files are opened
-            let path = params_path!(params)?;
-            files.push(path);
+        let _ = self
+            .bind_opened_files_mut(|files| {
+                // diagnostics will only be published for the files that are opened; We must track which files are opened
+                let path = params_path!(params)?;
+                files.push(path);
 
-            Ok(())
-        }).await;
-
+                Ok(())
+            })
+            .await;
 
         self.update_vault(TextDocumentItem {
             uri: params.text_document.uri,
@@ -305,10 +331,16 @@ impl LanguageServer for Backend {
         })
         .await; // usually, this is not necesary; however some may start the LS without saving a changed file, so it is necessary
 
-
         match self.publish_diagnostics().await {
             Ok(_) => (),
-            Err(e) => self.client.log_message(MessageType::ERROR, format!("Failed calculating diagnostics on file open {:?}", e)).await
+            Err(e) => {
+                self.client
+                    .log_message(
+                        MessageType::ERROR,
+                        format!("Failed calculating diagnostics on file open {:?}", e),
+                    )
+                    .await
+            }
         }
     }
 
@@ -351,35 +383,34 @@ impl LanguageServer for Backend {
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
-        self.client.log_message(MessageType::LOG, "Getting Completions").await;
+        self.client
+            .log_message(MessageType::LOG, "Getting Completions")
+            .await;
 
         let progress = self
             .client
             .progress(ProgressToken::Number(1), "Calculating Completions")
             .begin()
-        .await;
+            .await;
 
         let timer = std::time::Instant::now();
 
         let res = self
             .bind_vault(|vault| Ok(get_completions(vault, &params)))
-        .await;
+            .await;
 
         let elapsed = timer.elapsed();
 
         progress
             .finish_with_message(format!("Finished in {}ms", elapsed.as_millis()))
-        .await;
+            .await;
 
         self.client
             .log_message(
                 MessageType::WARNING,
-                format!(
-                    "Completion Calculation took {}ms",
-                    elapsed.as_millis()
-                ),
+                format!("Completion Calculation took {}ms", elapsed.as_millis()),
             )
-        .await;
+            .await;
 
         res
     }
@@ -408,7 +439,7 @@ impl LanguageServer for Backend {
         params: WorkspaceSymbolParams,
     ) -> Result<Option<Vec<SymbolInformation>>> {
         self.bind_vault(|vault| Ok(workspace_symbol(vault, &params)))
-        .await
+            .await
     }
 
     async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
@@ -436,7 +467,7 @@ async fn main() {
     let (service, socket) = LspService::new(|client| Backend {
         client,
         vault: None.into(),
-        opened_files: vec![].into()
+        opened_files: vec![].into(),
     });
     Server::new(stdin, stdout, socket).serve(service).await;
 }

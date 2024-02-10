@@ -1,30 +1,41 @@
-use std::path::{PathBuf, Path};
+use std::path::{Path, PathBuf};
 
 use rayon::prelude::*;
-use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Url, RelatedUnchangedDocumentDiagnosticReport};
+use tower_lsp::lsp_types::{
+    Diagnostic, DiagnosticSeverity, RelatedUnchangedDocumentDiagnosticReport, Url,
+};
 
-use crate::vault::{self, Vault, Referenceable, Reference};
+use crate::vault::{self, Reference, Referenceable, Vault};
 
-pub fn path_unresolved_references<'a>(vault: &'a Vault, path: &'a Path) -> Option<Vec<(&'a Path, &'a Reference)>> {
-
+pub fn path_unresolved_references<'a>(
+    vault: &'a Vault,
+    path: &'a Path,
+) -> Option<Vec<(&'a Path, &'a Reference)>> {
     let referenceables = vault.select_referenceable_nodes(None);
     let pathreferences = vault.select_references(Some(path))?;
 
-    let unresolved = pathreferences.into_par_iter().filter(|(path, reference)| {
-        let matched_option = referenceables
-            .iter()
-            .find(|referenceable| reference.references(vault.root_dir(), path, referenceable));
+    let unresolved = pathreferences
+        .into_par_iter()
+        .filter(|(path, reference)| {
+            let matched_option = referenceables
+                .iter()
+                .find(|referenceable| reference.references(vault.root_dir(), path, referenceable));
 
-        matched_option.is_some_and(|matched| {
-            return matches!(matched, Referenceable::UnresovledIndexedBlock(..) | Referenceable::UnresovledFile(..) | Referenceable::UnresolvedHeading(..))
+            matched_option.is_some_and(|matched| {
+                return matches!(
+                    matched,
+                    Referenceable::UnresovledIndexedBlock(..)
+                        | Referenceable::UnresovledFile(..)
+                        | Referenceable::UnresolvedHeading(..)
+                );
+            })
         })
-    }).collect::<Vec<_>>();
+        .collect::<Vec<_>>();
 
     Some(unresolved)
-} 
+}
 
 pub fn diagnostics(vault: &Vault, (path, _uri): (&PathBuf, &Url)) -> Option<Vec<Diagnostic>> {
-
     let unresolved = path_unresolved_references(vault, path)?;
 
     let allreferences = vault.select_references(None)?;

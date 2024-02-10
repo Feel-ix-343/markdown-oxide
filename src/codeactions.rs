@@ -7,7 +7,10 @@ use tower_lsp::lsp_types::{
     DocumentChanges, ResourceOp, Url, WorkspaceEdit,
 };
 
-use crate::{vault::{Reference, Vault}, diagnostics::path_unresolved_references};
+use crate::{
+    diagnostics::path_unresolved_references,
+    vault::{Reference, Vault},
+};
 
 pub fn code_actions(
     vault: &Vault,
@@ -19,16 +22,15 @@ pub fn code_actions(
 
     let unresolved = path_unresolved_references(vault, path)?;
 
-    let unresolved_file_links = unresolved.into_iter().filter(|(_, reference)| {
-        matches!(reference, Reference::FileLink(..))
-    });
-
+    let unresolved_file_links = unresolved
+        .into_iter()
+        .filter(|(_, reference)| matches!(reference, Reference::FileLink(..)));
 
     let code_action_unresolved = unresolved_file_links.filter(|(_, reference)| {
         reference.data().range.start.line <= params.range.start.line
-        && reference.data().range.end.line >= params.range.end.line
-        && reference.data().range.start.character <= params.range.start.character
-        && reference.data().range.end.character >= params.range.end.character
+            && reference.data().range.end.line >= params.range.end.line
+            && reference.data().range.start.character <= params.range.start.character
+            && reference.data().range.end.character >= params.range.end.character
     });
 
     Some(

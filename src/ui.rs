@@ -2,7 +2,7 @@ use std::path::Path;
 
 use tower_lsp::lsp_types::{MarkupContent, MarkupKind};
 
-use crate::vault::{Reference, Referenceable, Vault, Preview};
+use crate::vault::{Preview, Reference, Referenceable, Vault};
 
 fn referenceable_string(vault: &Vault, referenceable: &Referenceable) -> Option<String> {
     let preview = vault.select_referenceable_preview(referenceable)?;
@@ -15,8 +15,8 @@ fn referenceable_string(vault: &Vault, referenceable: &Referenceable) -> Option<
             Referenceable::IndexedBlock(_, _) => format!("Block Preview:\n---\n\n{}", text).into(),
             Referenceable::Footnote(_, _) => format!("Footnote Preview:\n---\n\n{}", text).into(),
             _ => format!("Preview:\n---\n\n{}", text).into(),
-        }
-    } 
+        },
+    }
 }
 
 pub fn preview_referenceable(

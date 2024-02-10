@@ -4,12 +4,13 @@ use cached::proc_macro::cached;
 use itertools::Itertools;
 use rayon::prelude::*;
 use tower_lsp::lsp_types::{
-    CompletionItem, CompletionItemKind, CompletionParams, CompletionResponse, Documentation, CompletionItemLabelDetails,
+    CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionParams,
+    CompletionResponse, Documentation,
 };
 
 use crate::{
     ui::preview_referenceable,
-    vault::{Referenceable, Vault, Preview},
+    vault::{Preview, Referenceable, Vault},
 };
 
 pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<CompletionResponse> {
@@ -33,8 +34,7 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
         == Some(&['[', '['])
     {
         // we have a link
-        return get_link_completions(vault)
-
+        return get_link_completions(vault);
     } else if character
         .checked_sub(1)
         .and_then(|start| selected_line.get(start..character))
@@ -92,10 +92,10 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
                                 .map(Documentation::MarkupContent),
                             filter_text: vault
                                 .select_referenceable_preview(&footnote)
-                                    .and_then(|preview| match preview {
-                                        Preview::Text(string) => Some(string),
-                                        Preview::Empty => None
-                                    })
+                                .and_then(|preview| match preview {
+                                    Preview::Text(string) => Some(string),
+                                    Preview::Empty => None,
+                                })
                                 .map(|preview_string| root + &preview_string),
                             ..Default::default()
                         })
@@ -118,50 +118,49 @@ fn calculate_hash<T: Hash>(t: &T) -> u64 {
     key = "u64",
     convert = r#"{ {
         calculate_hash(vault)
-    } }"#,
+    } }"#
 )] // TODO: this is stupid because it should know how to calculate the hash in a better way
 fn get_link_completions(vault: &Vault) -> Option<tower_lsp::lsp_types::CompletionResponse> {
+    let all_links = vault
+        .select_referenceable_nodes(None)
+        .into_iter()
+        .filter(|referenceable| {
+            !matches!(referenceable, Referenceable::Tag(_, _))
+                && !matches!(referenceable, Referenceable::Footnote(_, _))
+        });
 
-        let all_links = vault
-            .select_referenceable_nodes(None)
-            .into_iter()
-            .filter(|referenceable| {
-                !matches!(referenceable, Referenceable::Tag(_, _))
-                    && !matches!(referenceable, Referenceable::Footnote(_, _))
-            });
-
-        return Some(CompletionResponse::Array(
-            all_links
-                .map(|referenceable| {
-                    referenceable
-                        .get_refname(vault.root_dir())
-                        .map(|root| CompletionItem {
-                            kind: Some(CompletionItemKind::FILE),
-                            label: root.clone(),
-                            label_details: match referenceable.is_unresolved() {
-                                true => Some(CompletionItemLabelDetails {
-                                    detail: Some("Unresolved".into()),
-                                    description: None
-                                }),
-                                false => None
-                            },
-                            documentation: preview_referenceable(vault, &referenceable)
-                                .map(Documentation::MarkupContent),
-                            filter_text: match referenceable {
-                                Referenceable::IndexedBlock(_, _) => vault
-                                    .select_referenceable_preview(&referenceable)
-                                    .and_then(|preview| match preview {
-                                        Preview::Text(string) => Some(string),
-                                        Preview::Empty => None
-                                    })
-                                    .map(|text| root + &text),
-                                _ => None,
-                            },
-                            ..Default::default()
-                        })
-                })
-                .flatten()
-                .unique_by(|completion| completion.label.clone())
-                .collect::<Vec<_>>(),
-        ));
+    return Some(CompletionResponse::Array(
+        all_links
+            .map(|referenceable| {
+                referenceable
+                    .get_refname(vault.root_dir())
+                    .map(|root| CompletionItem {
+                        kind: Some(CompletionItemKind::FILE),
+                        label: root.clone(),
+                        label_details: match referenceable.is_unresolved() {
+                            true => Some(CompletionItemLabelDetails {
+                                detail: Some("Unresolved".into()),
+                                description: None,
+                            }),
+                            false => None,
+                        },
+                        documentation: preview_referenceable(vault, &referenceable)
+                            .map(Documentation::MarkupContent),
+                        filter_text: match referenceable {
+                            Referenceable::IndexedBlock(_, _) => vault
+                                .select_referenceable_preview(&referenceable)
+                                .and_then(|preview| match preview {
+                                    Preview::Text(string) => Some(string),
+                                    Preview::Empty => None,
+                                })
+                                .map(|text| root + &text),
+                            _ => None,
+                        },
+                        ..Default::default()
+                    })
+            })
+            .flatten()
+            .unique_by(|completion| completion.label.clone())
+            .collect::<Vec<_>>(),
+    ));
 }
