@@ -48,6 +48,20 @@ then adjust your nvim-cmp source settings for the following. Note that this will
 ```
 
 
+I also recommend enabling codelens in neovim. Add this snippet to your on\_attach function for nvim-lspconfig
+
+
+```
+-- refresh codelens on TextChanged and InsertLeave as well
+vim.api.nvim_create_autocmd({ 'TextChanged', 'InsertLeave', 'CursorHold', 'LspAttach' }, {
+    buffer = bufnr,
+    callback = vim.lsp.codelens.refresh,
+})
+-- trigger codelens refresh
+vim.api.nvim_exec_autocmds('User', { pattern = 'LspAttached' })
+```
+
+
 1. Test it out! Go to definitions, get references, and more!
 
 NOTE: To get references on files, you must place your cursor/pointer on the first character of the first line of the file, and then get references. (In VSCode, you can also use the references code lens)
