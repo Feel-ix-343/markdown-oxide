@@ -2,7 +2,13 @@
 Obsidian Language Server: Obsidian-flavored-markdown language server 
 Implementing obsidian PKM features (and possibly more) in the form of a language server allows us to use these features in our favorite text editors (neovim or vscode!) and reuse other lsp related plugins (like Telescope, outline, and builtin lsp support)
 
-## Installation for Neovim (there is no VS code plugin yet)
+## Testing
+
+## VSCode
+
+Go to [the vscode extension readme](./vscode-extension/README.md) and run the commands listed
+
+## Neovim
 
 Make sure rust is installed properly and that you are using nvim cmp (I am not sure if it works in other completion engines)
 
