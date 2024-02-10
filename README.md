@@ -50,6 +50,8 @@ then adjust your nvim-cmp source settings for the following. Note that this will
 
 1. Test it out! Go to definitions, get references, and more!
 
+NOTE: To get references on files, you must place your cursor/pointer on the first character of the first line of the file, and then get references. (In VSCode, you can also use the references code lens)
+
 ## Features
 
 - [ ] Go to definition (or definitions) from ...
