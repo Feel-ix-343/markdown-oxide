@@ -894,7 +894,12 @@ impl Referenceable<'_> {
                 matches!(reference, Tag(_))
                     && self
                         .get_refname(root_dir)
-                        .is_some_and(|refname| text.starts_with(&refname))
+                    .is_some_and(|refname| {
+                        let refname_split = refname.split("/").collect_vec();
+                        let text_split = text.split("/").collect_vec();
+
+                        return text_split.get(0..refname_split.len()) == Some(&refname_split)
+                    })
             }
             Referenceable::Footnote(path, _footnote) => {
                 matches!(reference, Footnote(_data))
