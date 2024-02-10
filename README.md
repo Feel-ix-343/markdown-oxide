@@ -93,7 +93,6 @@ NOTE: To get references on files, you must place your cursor/pointer on the firs
     - [ ] Link all unlinked references to a referenceable
 - [X] Diagnostics
     - [X] Missing reference
-    - [ ] Reference count
     - [ ] Unlinked reference
 - [X] Symbols
     - [X] File symbols: Headings and subheadings
@@ -102,7 +101,7 @@ NOTE: To get references on files, you must place your cursor/pointer on the firs
 - [ ] Rename
     - [X] File
     - [X] Headings
-    - [X] Tags.
+    - [X] Tags
     - [ ] Indexed Blocks
 - [ ] Dataview support
 - [ ] Take some influence from LogSeq!!!!! https://docs.logseq.com/#/page/start%20here
