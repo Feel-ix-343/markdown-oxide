@@ -4,17 +4,19 @@ Implementing obsidian PKM features (and possibly more) in the form of a language
 
 ## Testing
 
-## VSCode
+First, compile the plugin. Clone the repo and then run `cargo build --release`
+
+Next, follow the directions for your editor
+
+### VSCode
 
 Go to [the vscode extension readme](./vscode-extension/README.md) and run the commands listed
 
-## Neovim
+### Neovim
 
 Make sure rust is installed properly and that you are using nvim cmp (I am not sure if it works in other completion engines)
 
-1. Clone the repo
-2. `Cargo build --release`
-3. Add and adjust the following to your Neovim config  
+Adjust your neovim config as follows
 
 ```
 local configs = require("lspconfig.configs")
