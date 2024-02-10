@@ -177,7 +177,7 @@ impl Backend {
     /// TODO: Hopefully rust async closures will be more convienient to use eventually and this can accept an async closure; this would enable better logging
     /// in the call back functions. (though to get aroudn this, the callback could return a Result of a writer style monad, which could be logged async outside of
     /// the callback)
-    async fn bind_vault<T>(&self, callback: impl Fn(&Vault) -> Result<T>) -> Result<T> {
+    async fn bind_vault<T>(&self, callback: impl FnOnce(&Vault) -> Result<T>) -> Result<T> {
         let vault_option = self.vault.read().await;
         let Some(vault) = vault_option.deref() else {
             return Err(Error::new(ErrorCode::ServerError(0)));
@@ -395,8 +395,10 @@ impl LanguageServer for Backend {
 
         let timer = std::time::Instant::now();
 
+        let files = self.bind_opened_files(|files| Ok(files.clone())).await?;
+
         let res = self
-            .bind_vault(|vault| Ok(get_completions(vault, &params)))
+            .bind_vault(|vault| Ok(get_completions(vault, files, &params)))
             .await;
 
         let elapsed = timer.elapsed();

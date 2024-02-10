@@ -892,8 +892,7 @@ impl Referenceable<'_> {
         match &self {
             Referenceable::Tag(_, _) => {
                 matches!(reference, Tag(_))
-                    && self
-                        .get_refname(root_dir)
+                && self.get_refname(root_dir)
                     .is_some_and(|refname| {
                         let refname_split = refname.split("/").collect_vec();
                         let text_split = text.split("/").collect_vec();
