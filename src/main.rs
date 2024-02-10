@@ -29,6 +29,7 @@ mod rename;
 mod symbol;
 mod ui;
 mod vault;
+mod codelens;
 
 #[derive(Debug)]
 struct Backend {
@@ -240,6 +241,9 @@ impl LanguageServer for Backend {
                     }),
                     ..Default::default()
                 }),
+                code_lens_provider: Some(CodeLensOptions {
+                    resolve_provider: None
+                }),
                 ..Default::default()
             },
         });
@@ -247,6 +251,14 @@ impl LanguageServer for Backend {
 
     async fn shutdown(&self) -> Result<()> {
         Ok(())
+    }
+
+    async fn code_lens(&self, params: CodeLensParams) -> Result<Option<Vec<CodeLens>>> {
+        let path = params_path!(params)?;
+
+        self.bind_vault(|vault| {
+            Ok(codelens::code_lens(vault, &path, &params))
+        }).await
     }
 
     async fn initialized(&self, _: InitializedParams) {

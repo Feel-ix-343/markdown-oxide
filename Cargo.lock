@@ -512,6 +512,7 @@ dependencies = [
  "rayon",
  "regex",
  "ropey",
+ "serde",
  "serde_json",
  "tokio",
  "tower-lsp",
