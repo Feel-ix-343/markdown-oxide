@@ -22,12 +22,12 @@ pub fn path_unresolved_references<'a>(
                 .find(|referenceable| reference.references(vault.root_dir(), path, referenceable));
 
             matched_option.is_some_and(|matched| {
-                return matches!(
+                matches!(
                     matched,
                     Referenceable::UnresovledIndexedBlock(..)
                         | Referenceable::UnresovledFile(..)
                         | Referenceable::UnresolvedHeading(..)
-                );
+                )
             })
         })
         .collect::<Vec<_>>();
@@ -63,5 +63,5 @@ pub fn diagnostics(vault: &Vault, (path, _uri): (&PathBuf, &Url)) -> Option<Vec<
         })
         .collect();
 
-    return Some(diags);
+    Some(diags)
 }

@@ -8,7 +8,7 @@ fn referenceable_string(vault: &Vault, referenceable: &Referenceable) -> Option<
     let preview = vault.select_referenceable_preview(referenceable)?;
 
     match preview {
-        Preview::Empty => return Some("No Preview".into()),
+        Preview::Empty => Some("No Preview".into()),
         Preview::Text(text) => match referenceable {
             Referenceable::File(_, _) => format!("File Preview:\n---\n\n{}", text).into(),
             Referenceable::Heading(_, _) => format!("Heading Preview:\n---\n\n{}", text).into(),
@@ -43,7 +43,7 @@ pub fn preview_reference(
             let positions = vault.select_referenceable_nodes(None);
             let referenceable = positions
                 .iter()
-                .find(|i| reference.references(&vault.root_dir(), i.get_path(), i))?;
+                .find(|i| reference.references(vault.root_dir(), i.get_path(), i))?;
 
             let display = referenceable_string(vault, referenceable)?;
 

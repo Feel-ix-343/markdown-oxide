@@ -17,7 +17,7 @@ struct FindReferencesData {
 }
 
 pub fn code_lens(vault: &Vault, path: &Path, _params: &CodeLensParams) -> Option<Vec<CodeLens>> {
-    let referenceables = vault.select_referenceable_nodes(Some(&path));
+    let referenceables = vault.select_referenceable_nodes(Some(path));
     let data = referenceables
         .into_iter()
         .filter_map(|referenceable| {
@@ -41,7 +41,7 @@ pub fn code_lens(vault: &Vault, path: &Path, _params: &CodeLensParams) -> Option
                 .filter_map(|(path, reference)| {
                     Some(Location {
                         uri: Url::from_file_path(path).ok()?,
-                        range: *reference.data().range.clone(),
+                        range: *reference.data().range,
                     })
                 })
                 .collect_vec();

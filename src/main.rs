@@ -89,7 +89,7 @@ impl Backend {
         {
             let _ = self
                 .bind_vault_mut(|vault| {
-                    let Ok(new_vault) = Vault::construct_vault(&vault.root_dir()) else {
+                    let Ok(new_vault) = Vault::construct_vault(vault.root_dir()) else {
                         return Err(Error::new(ErrorCode::ServerError(0)));
                     };
 

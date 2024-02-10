@@ -187,7 +187,7 @@ impl Vault {
             && l.1.data().range.end.character >= position.character
         })?;
 
-        return Some(reference);
+        Some(reference)
     }
 
     /// Select all linkable positions in the vault
@@ -203,7 +203,7 @@ impl Vault {
                         .flatten()
                         .collect_vec();
 
-                return resolved_referenceables;
+                resolved_referenceables
 
                 // TODO: Add unresolved referenceables
             }
@@ -216,7 +216,7 @@ impl Vault {
 
                 let resolved_referenceables_refnames: HashSet<String> = resolved_referenceables
                     .iter()
-                    .filter_map(|resolved| resolved.get_refname(&self.root_dir()))
+                    .filter_map(|resolved| resolved.get_refname(self.root_dir()))
                     .collect();
 
                 let unresolved = self.select_references(None).map(|references| {
@@ -237,14 +237,14 @@ impl Vault {
                                 let mut path = self.root_dir().clone();
                                 path.push(end_path);
 
-                                Some(Referenceable::UnresolvedHeading(path, &end_path, &heading))
+                                Some(Referenceable::UnresolvedHeading(path, end_path, heading))
                             }
                             Reference::IndexedBlockLink(_data, end_path, index) => {
                                 let mut path = self.root_dir().clone();
                                 path.push(end_path);
 
                                 Some(Referenceable::UnresovledIndexedBlock(
-                                    path, &end_path, &index,
+                                    path, end_path, index,
                                 ))
                             }
                             Reference::Tag(..) | Reference::Footnote(..) => None,
@@ -252,10 +252,10 @@ impl Vault {
                         .collect_vec()
                 });
 
-                return resolved_referenceables
+                resolved_referenceables
                     .into_iter()
                     .chain(unresolved.into_iter().flatten())
-                    .collect();
+                    .collect()
             }
         }
     }
@@ -276,8 +276,8 @@ impl Vault {
         &self.root_dir
     }
 
-    pub fn select_references_for_referenceable<'a>(
-        &'a self,
+    pub fn select_references_for_referenceable(
+        &self,
         referenceable: &Referenceable,
     ) -> Option<Vec<(&Path, &Reference)>> {
         let references = self.select_references(None)?;
@@ -301,7 +301,7 @@ impl Vault {
 
         referenceables
             .into_iter()
-            .filter(|i| reference.references(&self.root_dir(), reference_path, i))
+            .filter(|i| reference.references(self.root_dir(), reference_path, i))
             .collect()
     }
 }
@@ -532,7 +532,7 @@ impl Reference {
                     (full, filepath, None, display) => {
                         return FileLink(ReferenceData {
                             reference_text: filepath.as_str().into(),
-                            range: range_to_position(&Rope::from_str(text), full.range()).into(),
+                            range: range_to_position(&Rope::from_str(text), full.range()),
                             display_text: display.map(|d| d.as_str().into()),
                         })
                     }
@@ -546,8 +546,7 @@ impl Reference {
                                     filepath.as_str(),
                                     infile.as_str()
                                 ),
-                                range: range_to_position(&Rope::from_str(text), full.range())
-                                    .into(),
+                                range: range_to_position(&Rope::from_str(text), full.range()),
                                 display_text: display.map(|d| d.as_str().into()),
                             },
                             filepath.as_str().into(),
@@ -562,8 +561,7 @@ impl Reference {
                                     filepath.as_str(),
                                     infile.as_str()
                                 ),
-                                range: range_to_position(&Rope::from_str(text), full.range())
-                                    .into(),
+                                range: range_to_position(&Rope::from_str(text), full.range()),
                                 display_text: display.map(|d| d.as_str().into()),
                             },
                             filepath.as_str().into(),
@@ -720,7 +718,7 @@ impl MDHeading {
             .map(|(full_heading, heading_match, starter)| {
                 return MDHeading {
                     heading_text: heading_match.as_str().trim_end().into(),
-                    range: range_to_position(&Rope::from_str(text), full_heading.range()).into(),
+                    range: range_to_position(&Rope::from_str(text), full_heading.range()),
                     level: HeadingLevel(starter.as_str().len()),
                 };
             })
@@ -755,7 +753,7 @@ impl MDIndexedBlock {
             })
             .map(|(full, index)| MDIndexedBlock {
                 index: index.as_str().into(),
-                range: range_to_position(&Rope::from_str(text), full.range()).into(),
+                range: range_to_position(&Rope::from_str(text), full.range()),
             })
             .collect_vec();
 
@@ -794,7 +792,7 @@ impl MDFootnote {
             .map(|(full, index, footnote_text)| MDFootnote {
                 footnote_text: footnote_text.as_str().trim_start().into(),
                 index: index.as_str().into(),
-                range: range_to_position(&Rope::from_str(text), full.range()).into(),
+                range: range_to_position(&Rope::from_str(text), full.range()),
             })
             .collect_vec();
 
@@ -828,7 +826,7 @@ impl MDTag {
             .filter(|(_, index)| index.as_str().chars().any(|c| c.is_alphabetic()))
             .map(|(full, index)| MDTag {
                 tag_ref: index.as_str().into(),
-                range: range_to_position(&Rope::from_str(text), full.range()).into(),
+                range: range_to_position(&Rope::from_str(text), full.range()),
             })
             .collect_vec();
 
@@ -877,7 +875,7 @@ impl Referenceable<'_> {
             Referenceable::UnresolvedHeading(_, path, heading) => {
                 Some(format!("{}#{}", path, heading))
             }
-            Referenceable::UnresovledFile(_, path) => Some(format!("{}", path)),
+            Referenceable::UnresovledFile(_, path) => Some(path.to_string()),
             Referenceable::UnresovledIndexedBlock(_, path, index) => {
                 Some(format!("{}#{}", path, index))
             }
@@ -935,9 +933,9 @@ impl Referenceable<'_> {
             &Referenceable::IndexedBlock(path, _) => path,
             &Referenceable::Tag(path, _) => path,
             &Referenceable::Footnote(path, _) => path,
-            &Referenceable::UnresovledIndexedBlock(ref path, ..) => path,
-            &Referenceable::UnresovledFile(ref path, ..) => path,
-            &Referenceable::UnresolvedHeading(ref path, ..) => path,
+            Referenceable::UnresovledIndexedBlock(path, ..) => path,
+            Referenceable::UnresovledFile(path, ..) => path,
+            Referenceable::UnresolvedHeading(path, ..) => path,
         }
     }
 
@@ -967,12 +965,12 @@ impl Referenceable<'_> {
     }
 
     pub fn is_unresolved(&self) -> bool {
-        return matches!(
+        matches!(
             self,
             Referenceable::UnresolvedHeading(..)
                 | Referenceable::UnresovledFile(..)
                 | Referenceable::UnresovledIndexedBlock(..)
-        );
+        )
     }
 }
 

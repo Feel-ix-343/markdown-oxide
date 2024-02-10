@@ -34,7 +34,7 @@ pub fn get_completions(vault: &Vault, params: &CompletionParams) -> Option<Compl
         == Some(&['[', '['])
     {
         // we have a link
-        return get_link_completions(vault);
+        get_link_completions(vault)
     } else if character
         .checked_sub(1)
         .and_then(|start| selected_line.get(start..character))
@@ -131,7 +131,7 @@ fn get_link_completions(vault: &Vault) -> Option<tower_lsp::lsp_types::Completio
 
     return Some(CompletionResponse::Array(
         all_links
-            .map(|referenceable| {
+            .filter_map(|referenceable| {
                 referenceable
                     .get_refname(vault.root_dir())
                     .map(|root| CompletionItem {
@@ -159,7 +159,6 @@ fn get_link_completions(vault: &Vault) -> Option<tower_lsp::lsp_types::Completio
                         ..Default::default()
                     })
             })
-            .flatten()
             .unique_by(|completion| completion.label.clone())
             .collect::<Vec<_>>(),
     ));
