@@ -2,13 +2,21 @@
 Obsidian Language Server: Obsidian-flavored-markdown language server 
 Implementing obsidian PKM features (and possibly more) in the form of a language server allows us to use these features in our favorite text editors (neovim or vscode!) and reuse other lsp related plugins (like Telescope, outline, and builtin lsp support)
 
-## Installation for Neovim (there is no VS code plugin yet)
+## Testing
+
+First, compile the plugin. Clone the repo and then run `cargo build --release`
+
+Next, follow the directions for your editor
+
+### VSCode
+
+Go to [the vscode extension readme](./vscode-extension/README.md) and run the commands listed
+
+### Neovim
 
 Make sure rust is installed properly and that you are using nvim cmp (I am not sure if it works in other completion engines)
 
-1. Clone the repo
-2. `Cargo build --release`
-3. Add and adjust the following to your Neovim config  
+Adjust your neovim config as follows
 
 ```
 local configs = require("lspconfig.configs")
@@ -41,6 +49,8 @@ then adjust your nvim-cmp source settings for the following. Note that this will
 
 
 1. Test it out! Go to definitions, get references, and more!
+
+NOTE: To get references on files, you must place your cursor/pointer on the first character of the first line of the file, and then get references. (In VSCode, you can also use the references code lens)
 
 ## Features
 
@@ -83,7 +93,6 @@ then adjust your nvim-cmp source settings for the following. Note that this will
     - [ ] Link all unlinked references to a referenceable
 - [X] Diagnostics
     - [X] Missing reference
-    - [ ] Reference count
     - [ ] Unlinked reference
 - [X] Symbols
     - [X] File symbols: Headings and subheadings
@@ -92,7 +101,7 @@ then adjust your nvim-cmp source settings for the following. Note that this will
 - [ ] Rename
     - [X] File
     - [X] Headings
-    - [X] Tags.
+    - [X] Tags
     - [ ] Indexed Blocks
 - [ ] Dataview support
 - [ ] Take some influence from LogSeq!!!!! https://docs.logseq.com/#/page/start%20here
