@@ -1,11 +1,11 @@
-use std::{hash::{DefaultHasher, Hash, Hasher}, path::{PathBuf, Path}};
+use std::{hash::{DefaultHasher, Hash, Hasher}, path::{PathBuf, Path}, collections::HashSet};
 
 use cached::proc_macro::cached;
 use itertools::Itertools;
 use rayon::prelude::*;
 use tower_lsp::lsp_types::{
     CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionParams,
-    CompletionResponse, Documentation, CompletionTextEdit, TextEdit, Range, Position,
+    CompletionResponse, Documentation, CompletionTextEdit, TextEdit, Range, Position, CompletionList,
 };
 
 use crate::{
@@ -13,7 +13,7 @@ use crate::{
     vault::{Preview, Referenceable, Vault},
 };
 
-pub fn get_completions(vault: &Vault, opened_files: Vec<PathBuf>, params: &CompletionParams) -> Option<CompletionResponse> {
+pub fn get_completions(vault: &Vault, opened_files: HashSet<PathBuf>, params: &CompletionParams) -> Option<CompletionResponse> {
     let Ok(path) = params
         .text_document_position
         .text_document
@@ -34,49 +34,51 @@ pub fn get_completions(vault: &Vault, opened_files: Vec<PathBuf>, params: &Compl
         .and_then(|start| selected_line.get(start..character))
     == Some(&['[', '[']) {
 
-        Some(CompletionResponse::Array(opened_files
-            .iter()
-            .filter_map(|path| {
-                Some(vault
-                .select_referenceable_nodes(Some(path))
-                .into_iter()
-                    .filter(|referenceable| {
-                        !matches!(referenceable, Referenceable::Tag(_, _))
-                        && !matches!(referenceable, Referenceable::Footnote(_, _))
-                    })
-                    .collect_vec()
-                )})
-            .flatten()
-            .filter_map(|referenceable| {
-                referenceable
-                    .get_refname(vault.root_dir())
-                    .map(|root| CompletionItem {
-                        kind: Some(CompletionItemKind::FILE),
-                        label: root.clone(),
-                        label_details: match referenceable.is_unresolved() {
-                            true => Some(CompletionItemLabelDetails {
-                                detail: Some("Unresolved".into()),
-                                description: None,
-                            }),
-                            false => None,
-                        },
-                        documentation: preview_referenceable(vault, &referenceable)
-                            .map(Documentation::MarkupContent),
-                        filter_text: match referenceable {
-                            Referenceable::IndexedBlock(_, _) => vault
-                                .select_referenceable_preview(&referenceable)
-                                .and_then(|preview| match preview {
-                                    Preview::Text(string) => Some(string),
-                                    Preview::Empty => None,
-                                })
-                                .map(|text| format!("{}{}", root, &text)),
-                            _ => None,
-                        },
-                        ..Default::default()
-                    })
-            })
-            .collect::<Vec<_>>()
-        ))
+        Some(CompletionResponse::List(CompletionList{
+            items: opened_files
+                .iter()
+                .filter_map(|path| {
+                    Some(vault
+                        .select_referenceable_nodes(Some(path))
+                        .into_iter()
+                        .filter(|referenceable| {
+                            !matches!(referenceable, Referenceable::Tag(_, _))
+                            && !matches!(referenceable, Referenceable::Footnote(_, _))
+                        })
+                        .collect_vec()
+                    )})
+                .flatten()
+                .filter_map(|referenceable| {
+                    referenceable
+                        .get_refname(vault.root_dir())
+                        .map(|root| CompletionItem {
+                            kind: Some(CompletionItemKind::FILE),
+                            label: root.clone(),
+                            label_details: match referenceable.is_unresolved() {
+                                true => Some(CompletionItemLabelDetails {
+                                    detail: Some("Unresolved".into()),
+                                    description: None,
+                                }),
+                                false => None,
+                            },
+                            documentation: preview_referenceable(vault, &referenceable)
+                                .map(Documentation::MarkupContent),
+                            filter_text: match referenceable {
+                                Referenceable::IndexedBlock(_, _) => vault
+                                    .select_referenceable_preview(&referenceable)
+                                    .and_then(|preview| match preview {
+                                        Preview::Text(string) => Some(string),
+                                        Preview::Empty => None,
+                                    })
+                                    .map(|text| format!("{}{}", root, &text)),
+                                _ => None,
+                            },
+                            ..Default::default()
+                        })
+                })
+                .collect::<Vec<_>>(),
+            is_incomplete: true
+        }))
 
     } else if character
         .checked_sub(3)
