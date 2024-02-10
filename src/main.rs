@@ -1,6 +1,7 @@
 #![feature(slice_split_once)]
 #![feature(async_closure)]
 
+use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 
@@ -35,7 +36,7 @@ mod vault;
 struct Backend {
     client: Client,
     vault: RwLock<Option<Vault>>,
-    opened_files: RwLock<Vec<PathBuf>>,
+    opened_files: RwLock<HashSet<PathBuf>>,
 }
 
 struct TextDocumentItem {
@@ -196,7 +197,7 @@ impl Backend {
 
     async fn bind_opened_files<T>(
         &self,
-        callback: impl Fn(&Vec<PathBuf>) -> Result<T>,
+        callback: impl Fn(&HashSet<PathBuf>) -> Result<T>,
     ) -> Result<T> {
         let opened_files = self.opened_files.read().await;
         callback(opened_files.deref())
@@ -204,7 +205,7 @@ impl Backend {
 
     async fn bind_opened_files_mut<T>(
         &self,
-        callback: impl Fn(&mut Vec<PathBuf>) -> Result<T>,
+        callback: impl Fn(&mut HashSet<PathBuf>) -> Result<T>,
     ) -> Result<T> {
         let mut opened_files = self.opened_files.write().await;
         callback(opened_files.deref_mut())
@@ -319,7 +320,8 @@ impl LanguageServer for Backend {
             .bind_opened_files_mut(|files| {
                 // diagnostics will only be published for the files that are opened; We must track which files are opened
                 let path = params_path!(params)?;
-                files.push(path);
+
+                files.insert(path);
 
                 Ok(())
             })
@@ -469,7 +471,7 @@ async fn main() {
     let (service, socket) = LspService::new(|client| Backend {
         client,
         vault: None.into(),
-        opened_files: vec![].into(),
+        opened_files: HashSet::new().into(),
     });
     Server::new(stdin, stdout, socket).serve(service).await;
 }
