@@ -222,6 +222,7 @@ impl Vault {
                 let unresolved = self.select_references(None).map(|references| {
                     references
                         .iter()
+                        .unique_by(|(_, reference)| &reference.data().reference_text)
                         .filter(|(_, reference)| {
                             !resolved_referenceables_refnames
                                 .contains(&reference.data().reference_text)
