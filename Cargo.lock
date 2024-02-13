@@ -447,6 +447,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "markdown-oxide"
+version = "0.1.0"
+dependencies = [
+ "cached",
+ "futures",
+ "itertools",
+ "once_cell",
+ "pathdiff",
+ "rayon",
+ "regex",
+ "ropey",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower-lsp",
+ "tree-sitter",
+ "tree-sitter-md",
+ "walkdir",
+]
+
+[[package]]
 name = "memchr"
 version = "2.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -498,27 +519,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9cf5f9dd3933bd50a9e1f149ec995f39ae2c496d31fd772c1fd45ebc27e902b0"
 dependencies = [
  "memchr",
-]
-
-[[package]]
-name = "obsidian-ls"
-version = "0.1.0"
-dependencies = [
- "cached",
- "futures",
- "itertools",
- "once_cell",
- "pathdiff",
- "rayon",
- "regex",
- "ropey",
- "serde",
- "serde_json",
- "tokio",
- "tower-lsp",
- "tree-sitter",
- "tree-sitter-md",
- "walkdir",
 ]
 
 [[package]]

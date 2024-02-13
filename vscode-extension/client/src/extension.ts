@@ -32,7 +32,7 @@ export function activate(context: ExtensionContext) {
 	let findReferencesCmd = vscode.commands.registerCommand(`${extId}.findReferences`, findReferencesCmdImpl);
 
 
-  let path = context.asAbsolutePath("../target/release/obsidian-ls")
+  let path = context.asAbsolutePath("../target/release/markdown-oxide")
 
 	// If the extension is launched in debug mode then the debug server options are used
 	// Otherwise the run options are used
