@@ -1,4 +1,6 @@
-# obsidian-markdown-ls
+<meta name="google-site-verification" content="YWllrHxS71HepBAFJqguFgFjDXHZ7rAIeSUzJTPW91o" />
+
+# Markdown Oxide
 Obsidian Language Server: Obsidian-flavored-markdown language server 
 Implementing obsidian PKM features (and possibly more) in the form of a language server allows us to use these features in our favorite text editors (neovim or vscode!) and reuse other lsp related plugins (like Telescope, outline, and builtin lsp support)
 
