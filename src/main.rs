@@ -474,5 +474,4 @@ async fn main() {
         vault: None.into(),
         opened_files: HashSet::new().into(),
     });
-    Server::new(stdin, stdout, socket).serve(service).await;
-}
+    Server::new(stdin, stdout, socket).serve(service).await; }

@@ -60,34 +60,7 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
                         .collect_vec()
                     )})
                 .flatten()
-                .filter_map(|referenceable| {
-                    referenceable
-                        .get_refname(vault.root_dir())
-                        .map(|root| CompletionItem {
-                            kind: Some(CompletionItemKind::FILE),
-                            label: root.clone(),
-                            label_details: match referenceable.is_unresolved() {
-                                true => Some(CompletionItemLabelDetails {
-                                    detail: Some("Unresolved".into()),
-                                    description: None,
-                                }),
-                                false => None,
-                            },
-                            documentation: preview_referenceable(vault, &referenceable)
-                                .map(Documentation::MarkupContent),
-                            filter_text: match referenceable {
-                                Referenceable::IndexedBlock(_, _) => vault
-                                    .select_referenceable_preview(&referenceable)
-                                    .and_then(|preview| match preview {
-                                        Preview::Text(string) => Some(string),
-                                        Preview::Empty => None,
-                                    })
-                                    .map(|text| format!("{}{}", root, &text)),
-                                _ => None,
-                            },
-                            ..Default::default()
-                        })
-                })
+                .filter_map(|referenceable| completion_item(vault, &referenceable))
                 .collect::<Vec<_>>(),
             is_incomplete: true
         }))
@@ -108,8 +81,7 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
             .select_referenceable_nodes(None)
             .into_par_iter()
             .filter(|referenceable| {
-                !matches!(referenceable, Referenceable::Tag(_, _))
-                && !matches!(referenceable, Referenceable::Footnote(_, _))
+                matches!(referenceable, Referenceable::File(_, _))
             });
 
 
@@ -122,43 +94,80 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
         let filter_char = &selected_line[character - 1..character][0];
 
 
-        return Some(CompletionResponse::Array(
-
-            all_links
-                .filter(|referenceable| referenceable.get_refname(&vault.root_dir()).map(|name| name.to_lowercase().contains(filter_char.to_ascii_lowercase())) == Some(true))
+        return Some(CompletionResponse::List(CompletionList{
+            is_incomplete: true,
+            items: all_links
+                .filter(|referenceable| referenceable.get_refname(&vault.root_dir()).map(|name| name.to_lowercase().starts_with(filter_char.to_ascii_lowercase())) == Some(true))
                 .filter_map(|referenceable| {
-                    referenceable
-                        .get_refname(vault.root_dir())
-                        .map(|root| CompletionItem {
-                            kind: Some(CompletionItemKind::FILE),
-                            label: root.clone(),
-                            label_details: match referenceable.is_unresolved() {
-                                true => Some(CompletionItemLabelDetails {
-                                    detail: Some("Unresolved".into()),
-                                    description: None,
-                                }),
-                                false => None,
-                            },
-                            documentation: preview_referenceable(vault, &referenceable)
-                                .map(Documentation::MarkupContent),
-                            filter_text: match referenceable {
-                                Referenceable::IndexedBlock(_, _) => vault
-                                    .select_referenceable_preview(&referenceable)
-                                    .and_then(|preview| match preview {
-                                        Preview::Text(string) => Some(string),
-                                        Preview::Empty => None,
-                                    })
-                                    .map(|text| format!("{}{}", root, &text)),
-                                _ => None,
-                            },
+                    completion_item(vault, &referenceable)
+                        .and_then(|completion| Some(CompletionItem {
                             text_edit: Some(CompletionTextEdit::Edit(TextEdit {
                                 range,
-                                new_text: root.clone()
+                                new_text: referenceable.get_refname(&vault.root_dir())?
                             })),
-                            ..Default::default()
+                            ..completion
                         })
+                    )
                 })
                 .collect::<Vec<_>>(),
+
+        }
+
+
+        ));
+
+    } else if character
+        .checked_sub(4)
+        .and_then(|start| selected_line.get(start..character-2))
+    == Some(&['[', '['])
+    {
+        // we have a link
+
+
+
+        // let all_links = get_links(vault)?;
+
+
+        let all_links = vault
+            .select_referenceable_nodes(None)
+            .into_par_iter()
+            .filter(|referenceable| {
+                !matches!(referenceable, Referenceable::Tag(..))
+                && !matches!(referenceable, Referenceable::Footnote(..))
+
+            });
+
+
+
+        let range = Range {
+            start: Position {line: line as u32, character: (character - 2) as u32},
+            end: Position {line: line as u32, character: (character) as u32}
+        };
+
+        let filter_char = &selected_line[character - 2..character-1][0];
+        let filter_char_2 = &selected_line[character - 1..character][0];
+
+
+        return Some(CompletionResponse::List(CompletionList{
+            is_incomplete: false,
+            items: all_links
+                .filter(|referenceable| referenceable.get_refname(&vault.root_dir()).map(|name| name.to_lowercase().contains(filter_char.to_ascii_lowercase())) == Some(true)
+                    && referenceable.get_refname(&vault.root_dir()).map(|name| name.to_lowercase().contains(filter_char_2.to_ascii_lowercase())) == Some(true)
+                )
+                .filter_map(|referenceable| {
+                    completion_item(vault, &referenceable)
+                        .and_then(|completion| Some(CompletionItem {
+                            text_edit: Some(CompletionTextEdit::Edit(TextEdit {
+                                range,
+                                new_text: referenceable.get_refname(&vault.root_dir())?
+                            })),
+                            ..completion
+                        }))
+                })
+                .collect::<Vec<_>>(),
+
+        }
+
 
         ));
 
@@ -252,4 +261,36 @@ fn get_links(vault: &Vault) -> Option<Vec<Referenceable>> {
         .collect_vec();
 
     Some(re)
+}
+
+
+
+fn completion_item(vault: &Vault, referenceable: &Referenceable) -> Option<CompletionItem> {
+    let refname = referenceable.get_refname(&vault.root_dir())?;
+    let completion = CompletionItem {
+            kind: Some(CompletionItemKind::FILE),
+            label: refname.clone(),
+            label_details: match referenceable.is_unresolved() {
+                true => Some(CompletionItemLabelDetails {
+                    detail: Some("Unresolved".into()),
+                    description: None,
+                }),
+                false => None,
+            },
+            documentation: preview_referenceable(vault, &referenceable)
+                .map(Documentation::MarkupContent),
+            filter_text: match referenceable {
+                Referenceable::IndexedBlock(_, _) => vault
+                    .select_referenceable_preview(&referenceable)
+                    .and_then(|preview| match preview {
+                        Preview::Text(string) => Some(string),
+                        Preview::Empty => None,
+                    })
+                    .map(|text| format!("{}{}", refname, &text)),
+                _ => None,
+            },
+            ..Default::default()
+        };
+
+    Some(completion)
 }
