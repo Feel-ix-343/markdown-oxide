@@ -160,26 +160,6 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
                         .collect()
                 }))
             }
-            // [filter_char] => {
-            //
-            //     let all_links = vault
-            //         .select_referenceable_nodes(None)
-            //         .into_par_iter()
-            //         .filter(|referenceable| {
-            //             matches!(referenceable, Referenceable::File(_, _))
-            //         });
-            //
-            //
-            //     return Some(CompletionResponse::List(CompletionList{
-            //         is_incomplete: true,
-            //         items: all_links
-            //             .filter(|referenceable| referenceable.get_refname(&vault.root_dir()).map(|name| name.to_lowercase().starts_with(filter_char.to_ascii_lowercase())) == Some(true))
-            //             .filter_map(|referenceable| { completion_item(vault, &referenceable, Some(range)) })
-            //             .collect::<Vec<_>>(),
-            //
-            //     }));
-            //
-            // },
             ref filter_text @ [..] => {
 
 
