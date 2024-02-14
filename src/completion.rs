@@ -8,7 +8,7 @@ use rayon::prelude::*;
 use serde::{Serialize, Deserialize};
 use tower_lsp::{lsp_types::{
     CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionParams,
-    CompletionResponse, Documentation, CompletionTextEdit, TextEdit, Range, Position, CompletionList, Url,
+    CompletionResponse, Documentation, CompletionTextEdit, TextEdit, Range, Position, CompletionList, Url, Command,
 }, jsonrpc::Result, Client};
 
 use crate::{
@@ -107,6 +107,8 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
 
 
 
+
+
                 return Some(CompletionResponse::List(CompletionList {
                     is_incomplete: true,
                     items: matches
@@ -115,6 +117,7 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
                         .filter(|(block, _)| String::from_iter(selected_line.clone()).trim() != block.text)
                         .filter_map(|(block, rank)| {
                             let path_ref = get_obsidian_ref_path(&vault.root_dir(), &block.file)?;
+                            let url = Url::from_file_path(&block.file).ok()?;
                             Some(CompletionItem {
                                 label: block.text.clone(),
                                 sort_text: Some(rank.to_string()),
@@ -127,6 +130,34 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
                                     block: block.clone(),
                                     index: rand_id.clone()
                                 }).ok()?),
+                                command: Some(Command {
+                                    title: "Insert Block Reference Into File".into(),
+                                    command: "apply_edits".into(),
+                                    arguments: Some(vec![
+                                        serde_json::to_value(tower_lsp::lsp_types::WorkspaceEdit { 
+                                            changes: Some(
+                                                vec![( url, vec![
+                                                    TextEdit {
+                                                        range: Range {
+                                                            start: Position {
+                                                                line: block.range.end.line,
+                                                                character: block.range.end.character - 1
+                                                            },
+                                                            end: Position {
+                                                                line: block.range.end.line,
+                                                                character: block.range.end.character - 1
+                                                            }
+                                                        },
+                                                        new_text: format!("   ^{}", rand_id)
+                                                    }
+                                                ])]
+                                                    .into_iter()
+                                                    .collect()),
+                                            change_annotations: None,
+                                            document_changes: None
+                                        }).ok()?
+                                    ]),
+                                }),
                                 ..Default::default()
                             })
                         })
@@ -314,6 +345,8 @@ struct BlockCompletionRequest {
 
 pub async fn resolve_completion(completion: &CompletionItem, client: &Client)  -> Result<CompletionItem> {
 
+    return Ok(completion.clone());
+
     if let Some(block_completion_request)  = completion.data.clone().and_then(|data| serde_json::from_value::<BlockCompletionRequest>(data).ok() ) {
 
 
@@ -340,16 +373,16 @@ pub async fn resolve_completion(completion: &CompletionItem, client: &Client)  -
                 ])]
                     .into_iter()
                     .collect()),
-         change_annotations: None,
-         document_changes: None
+            change_annotations: None,
+            document_changes: None
         }).await;
 
 
         return Ok(completion.clone())
 
 
-} else {
-    return Ok(completion.clone())
+    } else {
+        return Ok(completion.clone())
     }
 
 }

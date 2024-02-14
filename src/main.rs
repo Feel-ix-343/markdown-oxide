@@ -9,6 +9,7 @@ use completion::get_completions;
 use diagnostics::diagnostics;
 use itertools::Itertools;
 use references::references;
+use serde_json::Value;
 use symbol::{document_symbol, workspace_symbol};
 use tokio::sync::RwLock;
 
@@ -429,6 +430,22 @@ impl LanguageServer for Backend {
     async fn completion_resolve(&self, params: CompletionItem) -> Result<CompletionItem> {
         completion::resolve_completion(&params, &self.client).await
     }
+
+    async fn execute_command(&self, params: ExecuteCommandParams) -> Result<Option<Value>> {
+        match params {
+            ExecuteCommandParams { command, .. }  if *command == *"apply_edits" => {
+                let edits = params.arguments.into_iter().map(|arg| serde_json::from_value::<WorkspaceEdit>(arg).ok()).flatten().collect_vec();
+
+                for edit in edits {
+                    let _ = self.client.apply_edit(edit).await;
+                }
+
+                Ok(None)
+            },
+            _ => Ok(None)
+        }
+    }
+
 
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
