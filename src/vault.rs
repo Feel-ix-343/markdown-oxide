@@ -262,10 +262,12 @@ impl Vault {
         }
     }
 
-    pub fn select_line(&self, path: &Path, line: usize) -> Option<Vec<char>> {
+    pub fn select_line(&self, path: &Path, line: isize) -> Option<Vec<char>> {
         let rope = self.ropes.get(path)?;
 
-        rope.get_line(line).map(|slice| slice.chars().collect_vec())
+        let usize: usize = line.try_into().ok()?;
+
+        rope.get_line(usize).map(|slice| slice.chars().collect_vec())
     }
 
     pub fn select_headings(&self, path: &Path) -> Option<&Vec<MDHeading>> {
@@ -337,7 +339,7 @@ impl Vault {
                 let range = referenceable.get_range()?;
                 Some(
                     String::from_iter(
-                        self.select_line(referenceable.get_path(), range.start.line as usize)?,
+                        self.select_line(referenceable.get_path(), range.start.line as isize)?,
                     )
                     .into(),
                 )
@@ -346,7 +348,7 @@ impl Vault {
                 let range = referenceable.get_range()?;
                 Some(
                     (range.start.line..=range.end.line + 10)
-                        .filter_map(|ln| self.select_line(referenceable.get_path(), ln as usize)) // flatten those options!
+                        .filter_map(|ln| self.select_line(referenceable.get_path(), ln as isize)) // flatten those options!
                         .map(String::from_iter)
                         .join("")
                         .into(),
@@ -354,7 +356,7 @@ impl Vault {
             }
             Referenceable::IndexedBlock(_, _) => {
                 let range = referenceable.get_range()?;
-                self.select_line(referenceable.get_path(), range.start.line as usize)
+                self.select_line(referenceable.get_path(), range.start.line as isize)
                     .map(String::from_iter)
                     .map(Into::into)
             }

@@ -8,7 +8,7 @@ use rayon::prelude::*;
 use serde::{Serialize, Deserialize};
 use tower_lsp::{lsp_types::{
     CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionParams,
-    CompletionResponse, Documentation, CompletionTextEdit, TextEdit, Range, Position, CompletionList, Url, Command,
+    CompletionResponse, Documentation, CompletionTextEdit, TextEdit, Range, Position, CompletionList, Url, Command, MarkupContent, MarkupKind,
 }, jsonrpc::Result, Client};
 
 use crate::{
@@ -41,7 +41,7 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
     let line = params.text_document_position.position.line as usize;
     let character = params.text_document_position.position.character as usize;
 
-    let selected_line = vault.select_line(&path.to_path_buf(), line)?;
+    let selected_line = vault.select_line(&path.to_path_buf(), line as isize)?;
 
 
 
@@ -95,7 +95,7 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
                     .collect::<Vec<_>>(),
                 is_incomplete: true
             })),
-            [' ', ref text @ ..] => {
+            [' ', ref text @ ..] if !text.contains(&']') => {
                 let blocks = vault.select_blocks();
 
                 let mut matcher = Matcher::new(nucleo_matcher::Config::DEFAULT);
@@ -121,6 +121,13 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
                             Some(CompletionItem {
                                 label: block.text.clone(),
                                 sort_text: Some(rank.to_string()),
+                                documentation: Some(Documentation::MarkupContent(MarkupContent{
+                                    kind: MarkupKind::Markdown,
+                                    value: (block.range.start.line as isize -1..=block.range.start.line as isize+1)
+                                        .flat_map(|i| vault.select_line(&block.file, i))
+                                        .map(String::from_iter)
+                                        .join("")
+                                })),
                                 filter_text: Some(format!(" {}", block.text)),
                                 text_edit: Some(CompletionTextEdit::Edit(TextEdit {
                                     range,
@@ -160,7 +167,7 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
                         .collect()
                 }))
             }
-            ref filter_text @ [..] => {
+            ref filter_text @ [..] if !filter_text.contains(&']') => {
 
 
                 let all_links = vault
@@ -193,7 +200,8 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
                         })
                         .collect::<Vec<_>>(),
                 }));
-            }
+            },
+            _ => None
         }
 
     } else if character
