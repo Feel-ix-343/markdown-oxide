@@ -126,10 +126,6 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
                                     range,
                                     new_text: format!("{}#^{}", path_ref, rand_id)
                                 })),
-                                data: Some(serde_json::to_value(BlockCompletionRequest {
-                                    block: block.clone(),
-                                    index: rand_id.clone()
-                                }).ok()?),
                                 command: Some(Command {
                                     title: "Insert Block Reference Into File".into(),
                                     command: "apply_edits".into(),
@@ -336,57 +332,6 @@ fn completion_item(vault: &Vault, referenceable: &Referenceable, range: Option<R
     Some(completion)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct BlockCompletionRequest {
-    block: Block,
-    index: String
-}
-
-
-pub async fn resolve_completion(completion: &CompletionItem, client: &Client)  -> Result<CompletionItem> {
-
-    return Ok(completion.clone());
-
-    if let Some(block_completion_request)  = completion.data.clone().and_then(|data| serde_json::from_value::<BlockCompletionRequest>(data).ok() ) {
-
-
-        let Ok(url) = Url::from_file_path(&block_completion_request.block.file) else {
-            return Ok(completion.clone())
-        };
-
-        let _ = client.apply_edit(tower_lsp::lsp_types::WorkspaceEdit { 
-            changes: Some(
-                vec![( url, vec![
-                    TextEdit {
-                        range: Range {
-                            start: Position {
-                                line: block_completion_request.block.range.end.line,
-                                character: block_completion_request.block.range.end.character - 1
-                            },
-                            end: Position {
-                                line: block_completion_request.block.range.end.line,
-                                character: block_completion_request.block.range.end.character - 1
-                            }
-                        },
-                        new_text: format!("   ^{}", block_completion_request.index)
-                    }
-                ])]
-                    .into_iter()
-                    .collect()),
-            change_annotations: None,
-            document_changes: None
-        }).await;
-
-
-        return Ok(completion.clone())
-
-
-    } else {
-        return Ok(completion.clone())
-    }
-
-}
-
 
 
 #[cfg(test)]
@@ -406,3 +351,4 @@ mod tests {
         assert_eq!(Some("lin"), s.get(expected + 1 .. 10));
     }
 }
+

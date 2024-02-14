@@ -432,10 +432,6 @@ impl LanguageServer for Backend {
     }
 
 
-    async fn completion_resolve(&self, params: CompletionItem) -> Result<CompletionItem> {
-        completion::resolve_completion(&params, &self.client).await
-    }
-
     async fn execute_command(&self, params: ExecuteCommandParams) -> Result<Option<Value>> {
         match params {
             ExecuteCommandParams { command, .. }  if *command == *"apply_edits" => {

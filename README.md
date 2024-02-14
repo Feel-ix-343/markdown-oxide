@@ -87,8 +87,9 @@ NOTE: To get references on files, you must place your cursor/pointer on the firs
 - [ ] Completions
     - [X] File completions (requires extra nvim cmp configuration)
     - [X] Heading Completions (requires extra nvim cmp config)
-    - [X] Indexed block completions. Somehow using Ripgrep to find the paragraphs/blocks in the vault, then appending an index in the file, then inserting a link (workaround supported; using "_" instead of any non_word characters)
+    - [X] Established Indexed block completions. 
     - [X] Footnotes
+    - [X] New Block Completions: to use this, type `[[ `, and after you press space, completions for every block in the vault will appear; continue typing to fuzzy match the block that you want; finally, select the block; a link will be inserter to the text document and an index (ex ^1j239) will be appended to the block in its respective file
     - [ ] Create file completions
     - [ ] Make file completions faster in NvimCmp (this is mostly a neovim issue as moxide generates very many completions for large vaults)
     - [ ] Callout completions
