@@ -112,10 +112,10 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
                 return Some(CompletionResponse::List(CompletionList {
                     is_incomplete: true,
                     items: matches
-                        .into_iter()
-                        .take(100)
+                        .into_par_iter()
+                        .take(50)
                         .filter(|(block, _)| String::from_iter(selected_line.clone()).trim() != block.text)
-                        .filter_map(|(block, rank)| {
+                        .flat_map(|(block, rank)| {
                             let path_ref = get_obsidian_ref_path(&vault.root_dir(), &block.file)?;
                             let url = Url::from_file_path(&block.file).ok()?;
                             Some(CompletionItem {
@@ -123,7 +123,7 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
                                 sort_text: Some(rank.to_string()),
                                 documentation: Some(Documentation::MarkupContent(MarkupContent{
                                     kind: MarkupKind::Markdown,
-                                    value: (block.range.start.line as isize -1..=block.range.start.line as isize+1)
+                                    value: (block.range.start.line as isize -5..=block.range.start.line as isize+5)
                                         .flat_map(|i| vault.select_line(&block.file, i))
                                         .map(String::from_iter)
                                         .join("")

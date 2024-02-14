@@ -394,16 +394,6 @@ impl LanguageServer for Backend {
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
 
-        self.client
-            .log_message(MessageType::LOG, "Getting Completions")
-            .await;
-
-        let progress = self
-            .client
-            .progress(ProgressToken::Number(1), "Calculating Completions")
-            .begin()
-            .await;
-
         let timer = std::time::Instant::now();
 
         let path = params_position_path!(params)?;
@@ -416,10 +406,6 @@ impl LanguageServer for Backend {
         self.client.log_message(MessageType::LOG, format!("Completions: {:?}", res)).await;
 
         let elapsed = timer.elapsed();
-
-        progress
-            .finish_with_message(format!("Finished in {}ms", elapsed.as_millis()))
-            .await;
 
         self.client
             .log_message(
