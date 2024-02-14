@@ -15,7 +15,7 @@ pub fn workspace_symbol(
     let referenceables = vault.select_referenceable_nodes(None);
     let symbol_informations = referenceables
         .into_iter()
-        .filter_map(|referenceable| {
+        .flat_map(|referenceable| {
             Some(SymbolInformation {
                 name: referenceable.get_refname(vault.root_dir())?,
                 kind: match referenceable {
