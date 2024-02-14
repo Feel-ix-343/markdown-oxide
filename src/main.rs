@@ -244,8 +244,8 @@ impl LanguageServer for Backend {
                     TextDocumentSyncKind::FULL,
                 )),
                 completion_provider: Some(CompletionOptions {
-                    resolve_provider: Some(false),
-                    trigger_characters: Some(vec!["[".into()]),
+                    resolve_provider: Some(true),
+                    trigger_characters: Some(vec!["[".into(), " ".into()]),
                     work_done_progress_options: Default::default(),
                     all_commit_characters: None,
                     completion_item: None,
@@ -384,7 +384,10 @@ impl LanguageServer for Backend {
         .await
     }
 
+
+
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+
         self.client
             .log_message(MessageType::LOG, "Getting Completions")
             .await;
@@ -404,6 +407,8 @@ impl LanguageServer for Backend {
             .bind_vault(|vault| Ok(get_completions(vault, &files, &params, &path)))
             .await;
 
+        self.client.log_message(MessageType::LOG, format!("Completions: {:?}", res)).await;
+
         let elapsed = timer.elapsed();
 
         progress
@@ -419,6 +424,12 @@ impl LanguageServer for Backend {
 
         res
     }
+
+
+    async fn completion_resolve(&self, params: CompletionItem) -> Result<CompletionItem> {
+        completion::resolve_completion(&params, &self.client).await
+    }
+
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         self.bind_vault(|vault| {

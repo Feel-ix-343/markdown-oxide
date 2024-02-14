@@ -2,16 +2,31 @@ use std::{hash::{DefaultHasher, Hash, Hasher}, path::{PathBuf, Path}, collection
 
 use cached::proc_macro::cached;
 use itertools::Itertools;
+use nanoid::nanoid;
+use nucleo_matcher::{pattern::{Normalization, self}, Matcher};
 use rayon::prelude::*;
-use tower_lsp::lsp_types::{
+use serde::{Serialize, Deserialize};
+use tower_lsp::{lsp_types::{
     CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionParams,
-    CompletionResponse, Documentation, CompletionTextEdit, TextEdit, Range, Position, CompletionList,
-};
+    CompletionResponse, Documentation, CompletionTextEdit, TextEdit, Range, Position, CompletionList, Url,
+}, jsonrpc::Result, Client};
 
 use crate::{
     ui::preview_referenceable,
-    vault::{Preview, Referenceable, Vault}, params_position_path,
+    vault::{Preview, Referenceable, Vault, get_obsidian_ref_path, Block}, params_position_path,
 };
+
+fn get_link_index(line: &Vec<char>, cursor_character: usize) -> Option<usize> {
+    line.get(0..=cursor_character)? // select only the characters up to the cursor
+        .iter()
+        .enumerate() // attach indexes
+        .tuple_windows() // window into pairs of characters
+        .collect::<Vec<(_, _)>>()
+        .into_iter()
+        .rev() // search from the cursor back
+        .find(|((_,&c1), (_,&c2))| c1 == '[' && c2 == '[')
+        .map(|(_, (i, _))| i) // only take the index; using map because find returns an option
+}
 
 pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], params: &CompletionParams, path: &Path) -> Option<CompletionResponse> {
     let Ok(path) = params
@@ -28,148 +43,139 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
 
     let selected_line = vault.select_line(&path.to_path_buf(), line)?;
 
-    if character
-        .checked_sub(2)
-        .and_then(|start| selected_line.get(start..character))
-    == Some(&['[', '[']) {
 
-        Some(CompletionResponse::List(CompletionList{
-            items: initial_completion_files
-                .iter()
-                .filter_map(|path_i| {
-                    Some(vault
-                        .select_referenceable_nodes(Some(path_i))
-                        .into_iter()
-                        .filter(|referenceable| {
-                            if initial_completion_files.len() > 1 {
 
-                                if *path_i != path {
+    let link_index = get_link_index(&selected_line, character);
+
+
+    if let Some(index) = link_index {
+
+        let range = Range {
+            start: Position {
+                line: line as u32,
+                character: index as u32 + 1
+            },
+            end: Position {
+                line: line as u32,
+                character: character as u32
+            }
+        };
+
+        let cmp_text = selected_line.get(index + 1 .. character)?;
+
+        return match *cmp_text {
+            [] => Some(CompletionResponse::List(CompletionList{
+                items: initial_completion_files
+                    .iter()
+                    .filter_map(|path_i| {
+                        Some(vault
+                            .select_referenceable_nodes(Some(path_i))
+                            .into_iter()
+                            .filter(|referenceable| {
+                                if initial_completion_files.len() > 1 {
+
+                                    if *path_i != path {
+                                        !matches!(referenceable, Referenceable::Tag(_, _))
+                                        && !matches!(referenceable, Referenceable::Footnote(_, _))
+                                    } else {
+                                        false
+                                    }
+
+                                } else {
+
                                     !matches!(referenceable, Referenceable::Tag(_, _))
                                     && !matches!(referenceable, Referenceable::Footnote(_, _))
-                                } else {
-                                    false
+
                                 }
+                            })
+                            .collect_vec()
+                        )})
+                    .flatten()
+                    .filter_map(|referenceable| completion_item(vault, &referenceable, None))
+                    .collect::<Vec<_>>(),
+                is_incomplete: true
+            })),
+            [' ', ref text @ ..] => {
+                let blocks = vault.select_blocks();
 
-                            } else {
+                let mut matcher = Matcher::new(nucleo_matcher::Config::DEFAULT);
+                let mut matches = pattern::Pattern::parse(String::from_iter(text).as_str(), pattern::CaseMatching::Ignore, Normalization::Smart).match_list(blocks, &mut matcher);
+                matches.par_sort_by_key(|(_, rank)| -(*rank as i32));
 
-                                !matches!(referenceable, Referenceable::Tag(_, _))
-                                && !matches!(referenceable, Referenceable::Footnote(_, _))
 
-                            }
+                let rand_id = nanoid!(5);
+
+
+
+                return Some(CompletionResponse::List(CompletionList {
+                    is_incomplete: true,
+                    items: matches
+                        .into_iter()
+                        .take(50)
+                        .filter(|(block, _)| String::from_iter(selected_line.clone()).trim() != block.text)
+                        .filter_map(|(block, rank)| {
+                            let path_ref = get_obsidian_ref_path(&vault.root_dir(), &block.file)?;
+                            Some(CompletionItem {
+                                label: block.text.clone(),
+                                sort_text: Some(rank.to_string()),
+                                filter_text: Some(format!(" {}", block.text)),
+                                text_edit: Some(CompletionTextEdit::Edit(TextEdit {
+                                    range,
+                                    new_text: format!("{}#^{}", path_ref, rand_id)
+                                })),
+                                data: Some(serde_json::to_value(BlockCompletionRequest {
+                                    block: block.clone(),
+                                    index: rand_id.clone()
+                                }).ok()?),
+                                ..Default::default()
+                            })
                         })
-                        .collect_vec()
-                    )})
-                .flatten()
-                .filter_map(|referenceable| completion_item(vault, &referenceable))
-                .collect::<Vec<_>>(),
-            is_incomplete: true
-        }))
+                        .collect()
+                }))
+            }
+            [filter_char] => {
 
-    } else if character
-        .checked_sub(3)
-        .and_then(|start| selected_line.get(start..character-1))
-    == Some(&['[', '['])
-    {
-        // we have a link
+                let all_links = vault
+                    .select_referenceable_nodes(None)
+                    .into_par_iter()
+                    .filter(|referenceable| {
+                        matches!(referenceable, Referenceable::File(_, _))
+                    });
 
 
+                return Some(CompletionResponse::List(CompletionList{
+                    is_incomplete: true,
+                    items: all_links
+                        .filter(|referenceable| referenceable.get_refname(&vault.root_dir()).map(|name| name.to_lowercase().starts_with(filter_char.to_ascii_lowercase())) == Some(true))
+                        .filter_map(|referenceable| { completion_item(vault, &referenceable, Some(range)) })
+                        .collect::<Vec<_>>(),
 
-        // let all_links = get_links(vault)?;
+                }));
 
+            },
+            [filter_c1, filter_c2, ..] => {
 
-        let all_links = vault
-            .select_referenceable_nodes(None)
-            .into_par_iter()
-            .filter(|referenceable| {
-                matches!(referenceable, Referenceable::File(_, _))
-            });
+                let all_links = vault
+                    .select_referenceable_nodes(None)
+                    .into_par_iter()
+                    .filter(|referenceable| {
+                        !matches!(referenceable, Referenceable::Tag(..))
+                        && !matches!(referenceable, Referenceable::Footnote(..))
+                    });
 
-
-
-        let range = Range {
-            start: Position {line: line as u32, character: (character - 1) as u32},
-            end: Position {line: line as u32, character: character as u32}
-        };
-
-        let filter_char = &selected_line[character - 1..character][0];
-
-
-        return Some(CompletionResponse::List(CompletionList{
-            is_incomplete: true,
-            items: all_links
-                .filter(|referenceable| referenceable.get_refname(&vault.root_dir()).map(|name| name.to_lowercase().starts_with(filter_char.to_ascii_lowercase())) == Some(true))
-                .filter_map(|referenceable| {
-                    completion_item(vault, &referenceable)
-                        .and_then(|completion| Some(CompletionItem {
-                            text_edit: Some(CompletionTextEdit::Edit(TextEdit {
-                                range,
-                                new_text: referenceable.get_refname(&vault.root_dir())?
-                            })),
-                            ..completion
+                return Some(CompletionResponse::List(CompletionList{
+                    is_incomplete: false,
+                    items: all_links
+                        .filter(|referenceable| referenceable.get_refname(&vault.root_dir()).map(|name| name.to_lowercase().contains(filter_c1.to_ascii_lowercase())) == Some(true)
+                            && referenceable.get_refname(&vault.root_dir()).map(|name| name.to_lowercase().contains(filter_c2.to_ascii_lowercase())) == Some(true)
+                        )
+                        .filter_map(|referenceable| {
+                            completion_item(vault, &referenceable, Some(range))
                         })
-                    )
-                })
-                .collect::<Vec<_>>(),
-
+                        .collect::<Vec<_>>(),
+                }));
+            }
         }
-
-
-        ));
-
-    } else if character
-        .checked_sub(4)
-        .and_then(|start| selected_line.get(start..character-2))
-    == Some(&['[', '['])
-    {
-        // we have a link
-
-
-
-        // let all_links = get_links(vault)?;
-
-
-        let all_links = vault
-            .select_referenceable_nodes(None)
-            .into_par_iter()
-            .filter(|referenceable| {
-                !matches!(referenceable, Referenceable::Tag(..))
-                && !matches!(referenceable, Referenceable::Footnote(..))
-
-            });
-
-
-
-        let range = Range {
-            start: Position {line: line as u32, character: (character - 2) as u32},
-            end: Position {line: line as u32, character: (character) as u32}
-        };
-
-        let filter_char = &selected_line[character - 2..character-1][0];
-        let filter_char_2 = &selected_line[character - 1..character][0];
-
-
-        return Some(CompletionResponse::List(CompletionList{
-            is_incomplete: false,
-            items: all_links
-                .filter(|referenceable| referenceable.get_refname(&vault.root_dir()).map(|name| name.to_lowercase().contains(filter_char.to_ascii_lowercase())) == Some(true)
-                    && referenceable.get_refname(&vault.root_dir()).map(|name| name.to_lowercase().contains(filter_char_2.to_ascii_lowercase())) == Some(true)
-                )
-                .filter_map(|referenceable| {
-                    completion_item(vault, &referenceable)
-                        .and_then(|completion| Some(CompletionItem {
-                            text_edit: Some(CompletionTextEdit::Edit(TextEdit {
-                                range,
-                                new_text: referenceable.get_refname(&vault.root_dir())?
-                            })),
-                            ..completion
-                        }))
-                })
-                .collect::<Vec<_>>(),
-
-        }
-
-
-        ));
 
     } else if character
         .checked_sub(1)
@@ -265,32 +271,105 @@ fn get_links(vault: &Vault) -> Option<Vec<Referenceable>> {
 
 
 
-fn completion_item(vault: &Vault, referenceable: &Referenceable) -> Option<CompletionItem> {
+fn completion_item(vault: &Vault, referenceable: &Referenceable, range: Option<Range>) -> Option<CompletionItem> {
     let refname = referenceable.get_refname(&vault.root_dir())?;
     let completion = CompletionItem {
-            kind: Some(CompletionItemKind::FILE),
-            label: refname.clone(),
-            label_details: match referenceable.is_unresolved() {
-                true => Some(CompletionItemLabelDetails {
-                    detail: Some("Unresolved".into()),
-                    description: None,
-                }),
-                false => None,
-            },
-            documentation: preview_referenceable(vault, &referenceable)
-                .map(Documentation::MarkupContent),
-            filter_text: match referenceable {
-                Referenceable::IndexedBlock(_, _) => vault
-                    .select_referenceable_preview(&referenceable)
-                    .and_then(|preview| match preview {
-                        Preview::Text(string) => Some(string),
-                        Preview::Empty => None,
-                    })
-                    .map(|text| format!("{}{}", refname, &text)),
-                _ => None,
-            },
-            ..Default::default()
-        };
+        kind: Some(CompletionItemKind::FILE),
+        label: refname.clone(),
+        label_details: match referenceable.is_unresolved() {
+            true => Some(CompletionItemLabelDetails {
+                detail: Some("Unresolved".into()),
+                description: None,
+            }),
+            false => None,
+        },
+        text_edit: range.map(|range| CompletionTextEdit::Edit(TextEdit {
+            range,
+            new_text: refname.clone(),
+        })),
+        documentation: preview_referenceable(vault, &referenceable)
+            .map(Documentation::MarkupContent),
+        filter_text: match referenceable {
+            Referenceable::IndexedBlock(_, _) => vault
+                .select_referenceable_preview(&referenceable)
+                .and_then(|preview| match preview {
+                    Preview::Text(string) => Some(string),
+                    Preview::Empty => None,
+                })
+                .map(|text| format!("{}{}", refname, &text)),
+            _ => None,
+        },
+        ..Default::default()
+    };
 
     Some(completion)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct BlockCompletionRequest {
+    block: Block,
+    index: String
+}
+
+
+pub async fn resolve_completion(completion: &CompletionItem, client: &Client)  -> Result<CompletionItem> {
+
+    if let Some(block_completion_request)  = completion.data.clone().and_then(|data| serde_json::from_value::<BlockCompletionRequest>(data).ok() ) {
+
+
+        let Ok(url) = Url::from_file_path(&block_completion_request.block.file) else {
+            return Ok(completion.clone())
+        };
+
+        let _ = client.apply_edit(tower_lsp::lsp_types::WorkspaceEdit { 
+            changes: Some(
+                vec![( url, vec![
+                    TextEdit {
+                        range: Range {
+                            start: Position {
+                                line: block_completion_request.block.range.end.line,
+                                character: block_completion_request.block.range.end.character - 1
+                            },
+                            end: Position {
+                                line: block_completion_request.block.range.end.line,
+                                character: block_completion_request.block.range.end.character - 1
+                            }
+                        },
+                        new_text: format!("   ^{}", block_completion_request.index)
+                    }
+                ])]
+                    .into_iter()
+                    .collect()),
+         change_annotations: None,
+         document_changes: None
+        }).await;
+
+
+        return Ok(completion.clone())
+
+
+} else {
+    return Ok(completion.clone())
+    }
+
+}
+
+
+
+#[cfg(test)]
+mod tests {
+    use super::get_link_index;
+
+    #[test]
+    fn test_index() {
+        let s = "test [[linjfkdfjds]]";
+
+        let expected = 6;
+
+        let actual = get_link_index(&s.chars().collect(), 10);
+
+        assert_eq!(Some(expected), actual);
+
+        assert_eq!(Some("lin"), s.get(expected + 1 .. 10));
+    }
 }

@@ -12,7 +12,8 @@ use pathdiff::diff_paths;
 use rayon::prelude::*;
 use regex::Regex;
 use ropey::Rope;
-use tower_lsp::lsp_types::Position;
+use serde::{Serialize, Deserialize};
+use tower_lsp::lsp_types::{Position};
 use walkdir::WalkDir;
 
 impl Vault {
@@ -30,7 +31,7 @@ impl Vault {
             .collect_vec();
 
         let md_files: HashMap<PathBuf, MDFile> = md_file_paths
-            .par_iter()
+            .iter()
             .flat_map(|p| {
                 let text = std::fs::read_to_string(p.path())?;
                 let md_file = MDFile::new(&text, PathBuf::from(p.path()));
@@ -40,7 +41,7 @@ impl Vault {
             .collect();
 
         let ropes: HashMap<PathBuf, Rope> = md_file_paths
-            .par_iter()
+            .iter()
             .flat_map(|p| {
                 let text = std::fs::read_to_string(p.path())?;
                 let rope = Rope::from_str(&text);
@@ -364,6 +365,51 @@ impl Vault {
             _ => None,
         }
     }
+
+
+    pub fn select_blocks(&self) -> Vec<Block> {
+
+        return self.ropes
+            .par_iter()
+            .map(|(path, rope)| rope
+                .lines()
+                .enumerate()
+                .filter_map(|(i, line)| {
+                    let string = line.as_str()?;
+
+                    Some(Block { 
+                        text: String::from(string.trim()),    
+                        range: MyRange(tower_lsp::lsp_types::Range {
+                            start: Position {
+                                line: i as u32,
+                                character: 0
+                            },
+                            end: Position {
+                                line: i as u32,
+                                character: string.len() as u32
+                            }
+                        }),
+                        file: path.clone()
+                    })
+                }).collect_vec()
+            )
+            .flatten() 
+            .filter(|block| !block.text.is_empty())
+            .collect()
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct Block {
+    pub text: String,
+    pub range: MyRange,
+    pub file: PathBuf
+}
+
+impl AsRef<str> for Block {
+    fn as_ref(&self) -> &str {
+        &self.text
+    }
 }
 
 fn range_to_position(rope: &Rope, range: Range<usize>) -> MyRange {
@@ -387,7 +433,7 @@ fn range_to_position(rope: &Rope, range: Range<usize>) -> MyRange {
             character: end_offset as u32,
         },
     }
-    .into()
+        .into()
 }
 
 #[derive(Debug, PartialEq, Eq, Default, Hash, Clone)]
@@ -422,13 +468,13 @@ impl MDFile {
 impl MDFile {
     fn get_referenceables(&self) -> Vec<Referenceable> {
         let MDFile {
-            references: _,
-            headings,
-            indexed_blocks,
-            tags,
-            footnotes,
-            path: _,
-        } = self;
+        references: _,
+        headings,
+        indexed_blocks,
+        tags,
+        footnotes,
+        path: _,
+    } = self;
 
         iter::once(Referenceable::File(&self.path, self))
             .chain(
@@ -521,11 +567,11 @@ impl Reference {
                     capture.name("infileref"),
                     capture.name("display"),
                 ) {
-                    (Some(full), Some(fileref), infileref, display) => {
-                        Some((full, fileref, infileref, display))
+                        (Some(full), Some(fileref), infileref, display) => {
+                            Some((full, fileref, infileref, display))
+                        }
+                        _ => None,
                     }
-                    _ => None,
-                }
             })
             .map(|linkmatch| {
                 match linkmatch {
@@ -539,21 +585,21 @@ impl Reference {
                     }
                     (full, filepath, Some(infile), display)
                         if infile.as_str().get(0..1) == Some("^") =>
-                    {
-                        return IndexedBlockLink(
-                            ReferenceData {
-                                reference_text: format!(
-                                    "{}#{}",
-                                    filepath.as_str(),
-                                    infile.as_str()
-                                ),
-                                range: range_to_position(&Rope::from_str(text), full.range()),
-                                display_text: display.map(|d| d.as_str().into()),
-                            },
-                            filepath.as_str().into(),
-                            infile.as_str().into(),
-                        )
-                    }
+                        {
+                            return IndexedBlockLink(
+                                ReferenceData {
+                                    reference_text: format!(
+                                        "{}#{}",
+                                        filepath.as_str(),
+                                        infile.as_str()
+                                    ),
+                                    range: range_to_position(&Rope::from_str(text), full.range()),
+                                    display_text: display.map(|d| d.as_str().into()),
+                                },
+                                filepath.as_str().into(),
+                                infile.as_str().into(),
+                            )
+                        }
                     (full, filepath, Some(infile), display) => {
                         return HeadingLink(
                             ReferenceData {
@@ -585,7 +631,7 @@ impl Reference {
             .collect();
 
         static FOOTNOTE_LINK_RE: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"[^\[](?<full>\[(?<index>\^[^\[\] ]+)\])[^\:]").unwrap());
+        Lazy::new(|| Regex::new(r"[^\[](?<full>\[(?<index>\^[^\[\] ]+)\])[^\:]").unwrap());
         let footnote_references: Vec<Reference> = FOOTNOTE_LINK_RE
             .captures_iter(text)
             .flat_map(
@@ -620,36 +666,36 @@ impl Reference {
         match referenceable {
             &Referenceable::Tag(_, _) => {
                 matches!(self, Tag(_))
-                    && referenceable.get_refname(root_dir) == Some(text.to_string())
+                && referenceable.get_refname(root_dir) == Some(text.to_string())
             }
             &Referenceable::Footnote(path, _footnote) => {
                 matches!(self, Footnote(_))
-                    && referenceable.get_refname(root_dir).as_ref() == Some(text)
-                    && path.as_path() == file_path
+                && referenceable.get_refname(root_dir).as_ref() == Some(text)
+                && path.as_path() == file_path
             }
             &Referenceable::File(_path, _file) => {
                 matches!(self, FileLink(_))
-                    && referenceable.get_refname(root_dir).as_ref() == Some(text)
+                && referenceable.get_refname(root_dir).as_ref() == Some(text)
             }
             &Referenceable::Heading(_path, _file) => {
                 matches!(self, HeadingLink(..))
-                    && referenceable.get_refname(root_dir).as_ref() == Some(text)
+                && referenceable.get_refname(root_dir).as_ref() == Some(text)
             }
             &Referenceable::IndexedBlock(_path, _file) => {
                 matches!(self, IndexedBlockLink(..))
-                    && referenceable.get_refname(root_dir).as_ref() == Some(text)
+                && referenceable.get_refname(root_dir).as_ref() == Some(text)
             }
             &Referenceable::UnresovledFile(..) => {
                 matches!(self, FileLink(_))
-                    && referenceable.get_refname(root_dir).as_ref() == Some(text)
+                && referenceable.get_refname(root_dir).as_ref() == Some(text)
             }
             &Referenceable::UnresolvedHeading(..) => {
                 matches!(self, HeadingLink(..))
-                    && referenceable.get_refname(root_dir).as_ref() == Some(text)
+                && referenceable.get_refname(root_dir).as_ref() == Some(text)
             }
             &Referenceable::UnresovledIndexedBlock(..) => {
                 matches!(self, IndexedBlockLink(..))
-                    && referenceable.get_refname(root_dir).as_ref() == Some(text)
+                && referenceable.get_refname(root_dir).as_ref() == Some(text)
             }
         }
     }
@@ -678,7 +724,7 @@ impl Hash for MDHeading {
     }
 }
 
-#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub struct MyRange(pub tower_lsp::lsp_types::Range);
 
 impl Hash for MyRange {
@@ -706,7 +752,7 @@ impl From<tower_lsp::lsp_types::Range> for MyRange {
 impl MDHeading {
     fn new(text: &str) -> Vec<MDHeading> {
         static HEADING_RE: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"(?<starter>#+) (?<heading_text>.+)").unwrap());
+        Lazy::new(|| Regex::new(r"(?<starter>#+) (?<heading_text>.+)").unwrap());
 
         let headings: Vec<MDHeading> = HEADING_RE
             .captures_iter(text)
@@ -744,7 +790,7 @@ impl Hash for MDIndexedBlock {
 impl MDIndexedBlock {
     fn new(text: &str) -> Vec<MDIndexedBlock> {
         static INDEXED_BLOCK_RE: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r".+ (\^(?<index>\w+))").unwrap());
+        Lazy::new(|| Regex::new(r".+ (\^(?<index>\w+))").unwrap());
 
         let indexed_blocks: Vec<MDIndexedBlock> = INDEXED_BLOCK_RE
             .captures_iter(text)
@@ -780,7 +826,7 @@ impl MDFootnote {
     fn new(text: &str) -> Vec<MDFootnote> {
         // static FOOTNOTE_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r".+ (\^(?<index>\w+))").unwrap());
         static FOOTNOTE_RE: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"\[(?<index>\^[^ \[\]]+)\]\:(?<text>.+)").unwrap());
+        Lazy::new(|| Regex::new(r"\[(?<index>\^[^ \[\]]+)\]\:(?<text>.+)").unwrap());
 
         let footnotes: Vec<MDFootnote> = FOOTNOTE_RE
             .captures_iter(text)
@@ -816,7 +862,7 @@ impl Hash for MDTag {
 impl MDTag {
     fn new(text: &str) -> Vec<MDTag> {
         static TAG_RE: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"(\n|\A| )(?<full>#(?<tag>[.[^ \n\#]]+))(\n|\z| )").unwrap());
+        Lazy::new(|| Regex::new(r"(\n|\A| )(?<full>#(?<tag>[.[^ \n\#]]+))(\n|\z| )").unwrap());
 
         let tagged_blocks = TAG_RE
             .captures_iter(text)
@@ -858,7 +904,7 @@ pub enum Referenceable<'a> {
 }
 
 /// Utility function
-fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
+pub fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
     diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(String::from))
 }
 
@@ -903,13 +949,13 @@ impl Referenceable<'_> {
             }
             Referenceable::Footnote(path, _footnote) => {
                 matches!(reference, Footnote(_data))
-                    && self.get_refname(root_dir).as_ref() == Some(text)
-                    && path.as_path() == reference_path
+                && self.get_refname(root_dir).as_ref() == Some(text)
+                && path.as_path() == reference_path
             }
             Referenceable::File(_path, _file) => {
                 matches!(reference, FileLink(data) if Some(&data.reference_text) == self.get_refname(root_dir).as_ref())
-                    || matches!(reference, HeadingLink(.., file, _) if Some(file) == self.get_refname(root_dir).as_ref())
-                    || matches!(reference, IndexedBlockLink(.., file, _) if Some(file) == self.get_refname(root_dir).as_ref())
+                || matches!(reference, HeadingLink(.., file, _) if Some(file) == self.get_refname(root_dir).as_ref())
+                || matches!(reference, IndexedBlockLink(.., file, _) if Some(file) == self.get_refname(root_dir).as_ref())
             }
             Referenceable::Heading(_path, _file) => {
                 matches!(reference, HeadingLink(data, ..) if Some(&data.reference_text) == self.get_refname(root_dir).as_ref())
@@ -919,8 +965,8 @@ impl Referenceable<'_> {
             }
             Referenceable::UnresovledFile(_, _path) => {
                 matches!(reference, FileLink(data) if Some(&data.reference_text) == self.get_refname(root_dir).as_ref())
-                    || matches!(reference, HeadingLink(.., file, _) if Some(file) == self.get_refname(root_dir).as_ref())
-                    || matches!(reference, IndexedBlockLink(.., file, _) if Some(file) == self.get_refname(root_dir).as_ref())
+                || matches!(reference, HeadingLink(.., file, _) if Some(file) == self.get_refname(root_dir).as_ref())
+                || matches!(reference, IndexedBlockLink(.., file, _) if Some(file) == self.get_refname(root_dir).as_ref())
             }
             Referenceable::UnresolvedHeading(_, _path, _heading) => {
                 matches!(reference, HeadingLink(data, ..) if Some(&data.reference_text) == self.get_refname(root_dir).as_ref())
@@ -957,15 +1003,15 @@ impl Referenceable<'_> {
                         character: 1,
                     },
                 }
-                .into(),
+                    .into(),
             ),
             &Referenceable::Heading(_, heading) => Some(heading.range),
             &Referenceable::IndexedBlock(_, indexed_block) => Some(indexed_block.range),
             &Referenceable::Tag(_, tag) => Some(tag.range),
             &Referenceable::Footnote(_, footnote) => Some(footnote.range),
             &Referenceable::UnresovledFile(..)
-            | &Referenceable::UnresolvedHeading(..)
-            | &Referenceable::UnresovledIndexedBlock(..) => None,
+                | &Referenceable::UnresolvedHeading(..)
+                | &Referenceable::UnresovledIndexedBlock(..) => None,
         }
     }
 
@@ -973,8 +1019,8 @@ impl Referenceable<'_> {
         matches!(
             self,
             Referenceable::UnresolvedHeading(..)
-                | Referenceable::UnresovledFile(..)
-                | Referenceable::UnresovledIndexedBlock(..)
+            | Referenceable::UnresovledFile(..)
+            | Referenceable::UnresovledIndexedBlock(..)
         )
     }
 }
@@ -1010,7 +1056,7 @@ mod vault_tests {
                         character: 18,
                     },
                 }
-                .into(),
+                    .into(),
                 ..ReferenceData::default()
             }),
             FileLink(ReferenceData {
@@ -1025,7 +1071,7 @@ mod vault_tests {
                         character: 29,
                     },
                 }
-                .into(),
+                    .into(),
                 ..ReferenceData::default()
             }),
             FileLink(ReferenceData {
@@ -1040,7 +1086,7 @@ mod vault_tests {
                         character: 10,
                     },
                 }
-                .into(),
+                    .into(),
                 ..ReferenceData::default()
             }),
         ];
@@ -1066,7 +1112,7 @@ mod vault_tests {
                         character: 39,
                     },
                 }
-                .into(),
+                    .into(),
                 display_text: Some("but called different".into()),
             }),
             FileLink(ReferenceData {
@@ -1081,7 +1127,7 @@ mod vault_tests {
                         character: 54,
                     },
                 }
-                .into(),
+                    .into(),
                 display_text: Some("222".into()),
             }),
             FileLink(ReferenceData {
@@ -1096,7 +1142,7 @@ mod vault_tests {
                         character: 14,
                     },
                 }
-                .into(),
+                    .into(),
                 display_text: Some("333".into()),
             }),
         ];
@@ -1122,7 +1168,7 @@ mod vault_tests {
                     character: 22,
                 },
             }
-            .into(),
+                .into(),
             ..ReferenceData::default()
         })];
 
@@ -1167,7 +1213,7 @@ more text
                         character: 19,
                     },
                 }
-                .into(),
+                    .into(),
                 ..Default::default()
             },
             MDHeading {
@@ -1182,7 +1228,7 @@ more text
                         character: 28,
                     },
                 }
-                .into(),
+                    .into(),
                 level: HeadingLevel(2),
             },
         ];
@@ -1274,7 +1320,7 @@ more text
                         character: 18,
                     },
                 }
-                .into(),
+                    .into(),
                 ..ReferenceData::default()
             }),
             FileLink(ReferenceData {
@@ -1289,7 +1335,7 @@ more text
                         character: 29,
                     },
                 }
-                .into(),
+                    .into(),
                 ..ReferenceData::default()
             }),
             FileLink(ReferenceData {
@@ -1304,7 +1350,7 @@ more text
                         character: 10,
                     },
                 }
-                .into(),
+                    .into(),
                 ..ReferenceData::default()
             }),
         ];
@@ -1349,7 +1395,7 @@ and a third tag#notatag [[link#not a tag]]
                         character: 14,
                     },
                 }
-                .into(),
+                    .into(),
             },
             MDTag {
                 tag_ref: "tag/ttagg".into(),
@@ -1363,7 +1409,7 @@ and a third tag#notatag [[link#not a tag]]
                         character: 22,
                     },
                 }
-                .into(),
+                    .into(),
             },
             MDTag {
                 tag_ref: "MapOfContext/apworld".into(),
@@ -1377,7 +1423,7 @@ and a third tag#notatag [[link#not a tag]]
                         character: 21,
                     },
                 }
-                .into(),
+                    .into(),
             },
         ];
 
@@ -1403,7 +1449,7 @@ and a third tag#notatag [[link#not a tag]]
                     character: 24,
                 },
             }
-            .into(),
+                .into(),
         }];
 
         assert_eq!(parsed, expected);
@@ -1434,7 +1480,7 @@ Continued
                         character: 19,
                     },
                 }
-                .into(),
+                    .into(),
             },
             MDFootnote {
                 index: "^2".into(),
@@ -1449,7 +1495,7 @@ Continued
                         character: 22,
                     },
                 }
-                .into(),
+                    .into(),
             },
             MDFootnote {
                 index: "^a".into(),
@@ -1464,7 +1510,7 @@ Continued
                         character: 19,
                     },
                 }
-                .into(),
+                    .into(),
             },
         ];
 
