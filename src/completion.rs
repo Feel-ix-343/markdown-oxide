@@ -183,8 +183,12 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
                     items: matches
                         .into_iter()
                         .take(100)
-                        .filter_map(|(MatchableReferenceable(referenceable, _), _)| {
+                        .filter_map(|(MatchableReferenceable(referenceable, _), rank)| {
                             completion_item(vault, &referenceable, Some(range))
+                            .map(|item| CompletionItem {
+                                    sort_text: Some(rank.to_string()),
+                                    ..item
+                                })
                         })
                         .collect::<Vec<_>>(),
                 }));
