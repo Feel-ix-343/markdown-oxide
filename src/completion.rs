@@ -113,7 +113,7 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
                     is_incomplete: true,
                     items: matches
                         .into_iter()
-                        .take(50)
+                        .take(100)
                         .filter(|(block, _)| String::from_iter(selected_line.clone()).trim() != block.text)
                         .filter_map(|(block, rank)| {
                             let path_ref = get_obsidian_ref_path(&vault.root_dir(), &block.file)?;
@@ -182,7 +182,8 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
                     is_incomplete: true,
                     items: matches
                         .into_iter()
-                        .take(100)
+                        .take(30)
+                        .filter(|(MatchableReferenceable(_, name), _)| *name != String::from_iter(filter_text))
                         .filter_map(|(MatchableReferenceable(referenceable, _), rank)| {
                             completion_item(vault, &referenceable, Some(range))
                             .map(|item| CompletionItem {
