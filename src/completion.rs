@@ -13,7 +13,7 @@ use tower_lsp::{lsp_types::{
 
 use crate::{
     ui::preview_referenceable,
-    vault::{Preview, Referenceable, Vault, get_obsidian_ref_path, Block}, params_position_path,
+    vault::{Preview, Referenceable, Vault, get_obsidian_ref_path, Block, Reference}, params_position_path,
 };
 
 fn get_link_index(line: &Vec<char>, cursor_character: usize) -> Option<usize> {
@@ -160,27 +160,28 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
                         .collect()
                 }))
             }
-            [filter_char] => {
+            // [filter_char] => {
+            //
+            //     let all_links = vault
+            //         .select_referenceable_nodes(None)
+            //         .into_par_iter()
+            //         .filter(|referenceable| {
+            //             matches!(referenceable, Referenceable::File(_, _))
+            //         });
+            //
+            //
+            //     return Some(CompletionResponse::List(CompletionList{
+            //         is_incomplete: true,
+            //         items: all_links
+            //             .filter(|referenceable| referenceable.get_refname(&vault.root_dir()).map(|name| name.to_lowercase().starts_with(filter_char.to_ascii_lowercase())) == Some(true))
+            //             .filter_map(|referenceable| { completion_item(vault, &referenceable, Some(range)) })
+            //             .collect::<Vec<_>>(),
+            //
+            //     }));
+            //
+            // },
+            ref filter_text @ [..] => {
 
-                let all_links = vault
-                    .select_referenceable_nodes(None)
-                    .into_par_iter()
-                    .filter(|referenceable| {
-                        matches!(referenceable, Referenceable::File(_, _))
-                    });
-
-
-                return Some(CompletionResponse::List(CompletionList{
-                    is_incomplete: true,
-                    items: all_links
-                        .filter(|referenceable| referenceable.get_refname(&vault.root_dir()).map(|name| name.to_lowercase().starts_with(filter_char.to_ascii_lowercase())) == Some(true))
-                        .filter_map(|referenceable| { completion_item(vault, &referenceable, Some(range)) })
-                        .collect::<Vec<_>>(),
-
-                }));
-
-            },
-            [filter_c1, filter_c2, ..] => {
 
                 let all_links = vault
                     .select_referenceable_nodes(None)
@@ -188,15 +189,21 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
                     .filter(|referenceable| {
                         !matches!(referenceable, Referenceable::Tag(..))
                         && !matches!(referenceable, Referenceable::Footnote(..))
-                    });
+                    })
+                    .filter_map(|referenceable| referenceable.get_refname(&vault.root_dir()).map(|string| MatchableReferenceable(referenceable, string)))
+                    .collect::<Vec<_>>();
+
+
+                let mut matcher = Matcher::new(nucleo_matcher::Config::DEFAULT);
+                let mut matches = pattern::Pattern::parse(String::from_iter(filter_text).as_str(), pattern::CaseMatching::Ignore, Normalization::Smart).match_list(all_links, &mut matcher);
+                matches.par_sort_by_key(|(_, rank)| -(*rank as i32));
 
                 return Some(CompletionResponse::List(CompletionList{
-                    is_incomplete: false,
-                    items: all_links
-                        .filter(|referenceable| referenceable.get_refname(&vault.root_dir()).map(|name| name.to_lowercase().contains(filter_c1.to_ascii_lowercase())) == Some(true)
-                            && referenceable.get_refname(&vault.root_dir()).map(|name| name.to_lowercase().contains(filter_c2.to_ascii_lowercase())) == Some(true)
-                        )
-                        .filter_map(|referenceable| {
+                    is_incomplete: true,
+                    items: matches
+                        .into_iter()
+                        .take(100)
+                        .filter_map(|(MatchableReferenceable(referenceable, _), _)| {
                             completion_item(vault, &referenceable, Some(range))
                         })
                         .collect::<Vec<_>>(),
@@ -330,6 +337,15 @@ fn completion_item(vault: &Vault, referenceable: &Referenceable, range: Option<R
     };
 
     Some(completion)
+}
+
+
+struct MatchableReferenceable<'a>(Referenceable<'a>, String);
+
+impl AsRef<str> for MatchableReferenceable<'_> {
+    fn as_ref(&self) -> &str {
+        self.1.as_str()
+    }
 }
 
 
