@@ -271,7 +271,12 @@ impl LanguageServer for Backend {
                 code_lens_provider: Some(CodeLensOptions {
                     resolve_provider: None,
                 }),
+                execute_command_provider: Some(ExecuteCommandOptions {
+                    commands: vec!["apply_edits".into()],
+                    ..Default::default()
+                }),
                 ..Default::default()
+                            
             },
         });
     }
