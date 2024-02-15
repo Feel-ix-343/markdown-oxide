@@ -128,8 +128,8 @@ impl Hash for Vault {
 /// The in memory representation of the obsidian vault files. This data is exposed through an interface of methods to select the vaults data.
 /// These methods do not do any interpretation or analysis of the data. That is up to the consumer of this struct. The methods are analogous to selecting on a database.
 pub struct Vault {
-    md_files: MyHashMap<MDFile>,
-    ropes: MyHashMap<Rope>,
+    pub md_files: MyHashMap<MDFile>,
+    pub ropes: MyHashMap<Rope>,
     root_dir: PathBuf,
 }
 
