@@ -35,7 +35,7 @@ pub fn code_actions(
 
     Some(
         code_action_unresolved
-            .filter_map(|(_path, reference)| {
+            .flat_map(|(_path, reference)| {
                 let mut new_path_buf = PathBuf::new();
                 new_path_buf.push(vault.root_dir());
                 new_path_buf.push(&reference.data().reference_text);
