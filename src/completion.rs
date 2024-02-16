@@ -3,7 +3,9 @@ use std::{hash::{DefaultHasher, Hash, Hasher}, path::{PathBuf, Path}, collection
 use cached::proc_macro::cached;
 use itertools::Itertools;
 use nanoid::nanoid;
-use nucleo_matcher::{pattern::{Normalization, self}, Matcher};
+
+
+use nucleo_matcher::{pattern::{Normalization, self, Matchable}, Matcher};
 use rayon::prelude::*;
 use serde::{Serialize, Deserialize};
 use tower_lsp::{lsp_types::{
@@ -99,8 +101,7 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
                 let blocks = vault.select_blocks();
 
                 let mut matcher = Matcher::new(nucleo_matcher::Config::DEFAULT);
-                let mut matches = pattern::Pattern::parse(String::from_iter(text).as_str(), pattern::CaseMatching::Ignore, Normalization::Smart).match_list(blocks, &mut matcher);
-                matches.par_sort_by_key(|(_, rank)| -(*rank as i32));
+                let matches = pattern::Pattern::parse(String::from_iter(text).as_str(), pattern::CaseMatching::Ignore, Normalization::Smart).match_list(blocks, &mut matcher);
 
 
                 let rand_id = nanoid!(5);
@@ -335,9 +336,16 @@ fn completion_item(vault: &Vault, referenceable: &Referenceable, range: Option<R
 
 struct MatchableReferenceable<'a>(Referenceable<'a>, String);
 
-impl AsRef<str> for MatchableReferenceable<'_> {
-    fn as_ref(&self) -> &str {
-        self.1.as_str()
+
+impl Matchable for MatchableReferenceable<'_> {
+    fn string(&self) -> &str {
+        &self.1
+    }
+}
+
+impl Matchable for Block {
+    fn string(&self) -> &str {
+        &self.text
     }
 }
 

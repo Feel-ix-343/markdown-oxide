@@ -10,7 +10,7 @@ cached = "0.48.1"
 futures = "0.3.29"
 itertools = "0.10.5"
 nanoid = "0.4.0"
-nucleo-matcher = "0.3.0"
+nucleo-matcher = {path = "./matcher"}
 once_cell = "1.18.0"
 pathdiff = "0.2.1"
 rand = "0.8.5"
