@@ -107,7 +107,7 @@ pub fn code_actions(
                                         },
                                         edits: vec![
                                             OneOf::Left(TextEdit{
-                                                new_text, // move this to vault
+                                                new_text,
                                                 range: Range {
                                                     start: Position {
                                                         line: (length + 1) as u32,
