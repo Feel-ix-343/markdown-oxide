@@ -32,6 +32,7 @@ mod rename;
 mod symbol;
 mod ui;
 mod vault;
+mod tokens;
 
 #[derive(Debug)]
 struct Backend {
@@ -275,6 +276,13 @@ impl LanguageServer for Backend {
                     commands: vec!["apply_edits".into()],
                     ..Default::default()
                 }),
+                semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(SemanticTokensOptions{
+                    full: Some(SemanticTokensFullOptions::Bool(true)), range: Some(false), legend: SemanticTokensLegend {
+                        token_types: vec![SemanticTokenType::DECORATOR],
+                        token_modifiers: vec![SemanticTokenModifier::DECLARATION]
+                    },
+                    ..Default::default()
+                })),
                 ..Default::default()
                             
             },
@@ -478,6 +486,24 @@ impl LanguageServer for Backend {
         })
         .await
     }
+
+
+    async fn semantic_tokens_full(
+        &self,
+        params: SemanticTokensParams,
+    ) -> Result<Option<SemanticTokensResult>> {
+
+        let path = params_path!(params)?;
+        let res = self.bind_vault(|vault| {
+            Ok(tokens::semantic_tokens_full(vault, &path, params))
+        }).await;
+
+        self.client.log_message(MessageType::LOG, format!("{:?}", res)).await;
+
+        return res
+
+    }
+
 }
 
 #[tokio::main]
