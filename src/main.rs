@@ -282,7 +282,8 @@ impl LanguageServer for Backend {
     }
 
     async fn shutdown(&self) -> Result<()> {
-        Ok(())
+        // TODO: remove all code lenses
+        std::process::exit(0);
     }
 
     async fn code_lens(&self, params: CodeLensParams) -> Result<Option<Vec<CodeLens>>> {
