@@ -5,8 +5,7 @@ use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 
-use completion::get_completions;
-use diagnostics::diagnostics;
+use completion::get_completions; use diagnostics::diagnostics;
 use itertools::Itertools;
 use references::references;
 use serde_json::Value;

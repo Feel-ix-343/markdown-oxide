@@ -1,21 +1,21 @@
-use std::{hash::{DefaultHasher, Hash, Hasher}, path::{PathBuf, Path}, collections::HashSet};
+use std::{hash::{DefaultHasher, Hash, Hasher}, path::{PathBuf, Path}};
 
-use cached::proc_macro::cached;
+
 use itertools::Itertools;
 use nanoid::nanoid;
 
 
 use nucleo_matcher::{pattern::{Normalization, self, Matchable}, Matcher};
 use rayon::prelude::*;
-use serde::{Serialize, Deserialize};
+
 use tower_lsp::{lsp_types::{
     CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionParams,
     CompletionResponse, Documentation, CompletionTextEdit, TextEdit, Range, Position, CompletionList, Url, Command, MarkupContent, MarkupKind,
-}, jsonrpc::Result, Client};
+}};
 
 use crate::{
     ui::preview_referenceable,
-    vault::{Preview, Referenceable, Vault, get_obsidian_ref_path, Block, Reference}, params_position_path,
+    vault::{Preview, Referenceable, Vault, get_obsidian_ref_path, Block},
 };
 
 fn get_link_index(line: &Vec<char>, cursor_character: usize) -> Option<usize> {
@@ -30,7 +30,7 @@ fn get_link_index(line: &Vec<char>, cursor_character: usize) -> Option<usize> {
         .map(|(_, (i, _))| i) // only take the index; using map because find returns an option
 }
 
-pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], params: &CompletionParams, path: &Path) -> Option<CompletionResponse> {
+pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], params: &CompletionParams, _path: &Path) -> Option<CompletionResponse> {
     let Ok(path) = params
         .text_document_position
         .text_document
