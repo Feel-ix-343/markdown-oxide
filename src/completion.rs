@@ -1,21 +1,23 @@
-use std::path::{PathBuf, Path};
-
+use std::path::{Path, PathBuf};
 
 use itertools::Itertools;
 use nanoid::nanoid;
 
-
-use nucleo_matcher::{pattern::{Normalization, self, Matchable}, Matcher};
+use nucleo_matcher::{
+    pattern::{self, Matchable, Normalization},
+    Matcher,
+};
 use rayon::prelude::*;
 
 use tower_lsp::lsp_types::{
-    CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionParams,
-    CompletionResponse, Documentation, CompletionTextEdit, TextEdit, Range, Position, CompletionList, Url, Command, MarkupContent, MarkupKind,
+    Command, CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionList,
+    CompletionParams, CompletionResponse, CompletionTextEdit, Documentation, MarkupContent,
+    MarkupKind, Position, Range, TextEdit, Url,
 };
 
 use crate::{
     ui::preview_referenceable,
-    vault::{Preview, Referenceable, Vault, get_obsidian_ref_path, Block},
+    vault::{get_obsidian_ref_path, Block, Preview, Referenceable, Vault},
 };
 
 fn get_link_index(line: &Vec<char>, cursor_character: usize) -> Option<usize> {
@@ -26,11 +28,16 @@ fn get_link_index(line: &Vec<char>, cursor_character: usize) -> Option<usize> {
         .collect::<Vec<(_, _)>>()
         .into_iter()
         .rev() // search from the cursor back
-        .find(|((_,&c1), (_,&c2))| c1 == '[' && c2 == '[')
+        .find(|((_, &c1), (_, &c2))| c1 == '[' && c2 == '[')
         .map(|(_, (i, _))| i) // only take the index; using map because find returns an option
 }
 
-pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], params: &CompletionParams, _path: &Path) -> Option<CompletionResponse> {
+pub fn get_completions(
+    vault: &Vault,
+    initial_completion_files: &[PathBuf],
+    params: &CompletionParams,
+    _path: &Path,
+) -> Option<CompletionResponse> {
     let Ok(path) = params
         .text_document_position
         .text_document
@@ -45,184 +52,209 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
 
     let selected_line = vault.select_line(&path.to_path_buf(), line as isize)?;
 
-
-
     let link_index = get_link_index(&selected_line, character);
 
-
     if let Some(index) = link_index {
-
         let range = Range {
             start: Position {
                 line: line as u32,
-                character: index as u32 + 1
+                character: index as u32 + 1,
             },
             end: Position {
                 line: line as u32,
-                character: character as u32
-            }
+                character: character as u32,
+            },
         };
 
-        let cmp_text = selected_line.get(index + 1 .. character)?;
+        let cmp_text = selected_line.get(index + 1..character)?;
 
         return match *cmp_text {
-            [] => Some(CompletionResponse::List(CompletionList{
+            [] => Some(CompletionResponse::List(CompletionList {
                 items: initial_completion_files
                     .iter()
                     .filter_map(|path_i| {
-                        Some(vault
-                            .select_referenceable_nodes(Some(path_i))
-                            .into_iter()
-                            .filter(|referenceable| {
-                                if initial_completion_files.len() > 1 {
-
-                                    if *path_i != path {
-                                        !matches!(referenceable, Referenceable::Tag(_, _))
-                                        && !matches!(referenceable, Referenceable::Footnote(_, _))
+                        Some(
+                            vault
+                                .select_referenceable_nodes(Some(path_i))
+                                .into_iter()
+                                .filter(|referenceable| {
+                                    if initial_completion_files.len() > 1 {
+                                        if *path_i != path {
+                                            !matches!(referenceable, Referenceable::Tag(_, _))
+                                                && !matches!(
+                                                    referenceable,
+                                                    Referenceable::Footnote(_, _)
+                                                )
+                                        } else {
+                                            false
+                                        }
                                     } else {
-                                        false
+                                        !matches!(referenceable, Referenceable::Tag(_, _))
+                                            && !matches!(
+                                                referenceable,
+                                                Referenceable::Footnote(_, _)
+                                            )
                                     }
-
-                                } else {
-
-                                    !matches!(referenceable, Referenceable::Tag(_, _))
-                                    && !matches!(referenceable, Referenceable::Footnote(_, _))
-
-                                }
-                            })
-                            .collect_vec()
-                        )})
+                                })
+                                .collect_vec(),
+                        )
+                    })
                     .flatten()
                     .filter_map(|referenceable| completion_item(vault, &referenceable, None))
                     .collect::<Vec<_>>(),
-                is_incomplete: true
+                is_incomplete: true,
             })),
             [' ', ref text @ ..] if !text.contains(&']') => {
                 let blocks = vault.select_blocks();
 
                 let mut matcher = Matcher::new(nucleo_matcher::Config::DEFAULT);
-                let matches = pattern::Pattern::parse(String::from_iter(text).as_str(), pattern::CaseMatching::Ignore, Normalization::Smart).match_list(blocks, &mut matcher);
-
+                let matches = pattern::Pattern::parse(
+                    String::from_iter(text).as_str(),
+                    pattern::CaseMatching::Ignore,
+                    Normalization::Smart,
+                )
+                .match_list(blocks, &mut matcher);
 
                 let rand_id = nanoid!(5);
-
-
-
-
 
                 return Some(CompletionResponse::List(CompletionList {
                     is_incomplete: true,
                     items: matches
                         .into_par_iter()
                         .take(50)
-                        .filter(|(block, _)| String::from_iter(selected_line.clone()).trim() != block.text)
+                        .filter(|(block, _)| {
+                            String::from_iter(selected_line.clone()).trim() != block.text
+                        })
                         .flat_map(|(block, rank)| {
                             let path_ref = get_obsidian_ref_path(vault.root_dir(), &block.file)?;
                             let url = Url::from_file_path(&block.file).ok()?;
                             Some(CompletionItem {
                                 label: block.text.clone(),
                                 sort_text: Some(rank.to_string()),
-                                documentation: Some(Documentation::MarkupContent(MarkupContent{
+                                documentation: Some(Documentation::MarkupContent(MarkupContent {
                                     kind: MarkupKind::Markdown,
-                                    value: (block.range.start.line as isize -5..=block.range.start.line as isize+5)
+                                    value: (block.range.start.line as isize - 5
+                                        ..=block.range.start.line as isize + 5)
                                         .flat_map(|i| Some((vault.select_line(&block.file, i)?, i)))
-                                        .map(|(iter, ln)| if ln == block.range.start.line as isize {
-                                            format!("**{}**\n", String::from_iter(iter).trim()) // highlight the block to be references
-                                        } else {
+                                        .map(|(iter, ln)| {
+                                            if ln == block.range.start.line as isize {
+                                                format!("**{}**\n", String::from_iter(iter).trim())
+                                            // highlight the block to be references
+                                            } else {
                                                 String::from_iter(iter)
-                                            })
-                                        .join("")
+                                            }
+                                        })
+                                        .join(""),
                                 })),
                                 filter_text: Some(format!(" {}", block.text)),
                                 text_edit: Some(CompletionTextEdit::Edit(TextEdit {
                                     range,
-                                    new_text: format!("{}#^{}", path_ref, rand_id)
+                                    new_text: format!("{}#^{}", path_ref, rand_id),
                                 })),
                                 command: Some(Command {
                                     title: "Insert Block Reference Into File".into(),
                                     command: "apply_edits".into(),
-                                    arguments: Some(vec![
-                                        serde_json::to_value(tower_lsp::lsp_types::WorkspaceEdit { 
+                                    arguments: Some(vec![serde_json::to_value(
+                                        tower_lsp::lsp_types::WorkspaceEdit {
                                             changes: Some(
-                                                vec![( url, vec![
-                                                    TextEdit {
+                                                vec![(
+                                                    url,
+                                                    vec![TextEdit {
                                                         range: Range {
                                                             start: Position {
                                                                 line: block.range.end.line,
-                                                                character: block.range.end.character - 1
+                                                                character: block
+                                                                    .range
+                                                                    .end
+                                                                    .character
+                                                                    - 1,
                                                             },
                                                             end: Position {
                                                                 line: block.range.end.line,
-                                                                character: block.range.end.character - 1
-                                                            }
+                                                                character: block
+                                                                    .range
+                                                                    .end
+                                                                    .character
+                                                                    - 1,
+                                                            },
                                                         },
-                                                        new_text: format!("   ^{}", rand_id)
-                                                    }
-                                                ])]
-                                                    .into_iter()
-                                                    .collect()),
+                                                        new_text: format!("   ^{}", rand_id),
+                                                    }],
+                                                )]
+                                                .into_iter()
+                                                .collect(),
+                                            ),
                                             change_annotations: None,
-                                            document_changes: None
-                                        }).ok()?
-                                    ]),
+                                            document_changes: None,
+                                        },
+                                    )
+                                    .ok()?]),
                                 }),
                                 ..Default::default()
                             })
                         })
-                        .collect()
-                }))
+                        .collect(),
+                }));
             }
             ref filter_text @ [..] if !filter_text.contains(&']') => {
-
-
                 let all_links = vault
                     .select_referenceable_nodes(None)
                     .into_par_iter()
                     .filter(|referenceable| {
                         !matches!(referenceable, Referenceable::Tag(..))
-                        && !matches!(referenceable, Referenceable::Footnote(..))
+                            && !matches!(referenceable, Referenceable::Footnote(..))
                     })
-                    .filter_map(|referenceable| referenceable.get_refname(vault.root_dir()).map(|string| MatchableReferenceable(referenceable, string)))
+                    .filter_map(|referenceable| {
+                        referenceable
+                            .get_refname(vault.root_dir())
+                            .map(|string| MatchableReferenceable(referenceable, string))
+                    })
                     .collect::<Vec<_>>();
 
-
                 let mut matcher = Matcher::new(nucleo_matcher::Config::DEFAULT);
-                let mut matches = pattern::Pattern::parse(String::from_iter(filter_text).as_str(), pattern::CaseMatching::Ignore, Normalization::Smart).match_list(all_links, &mut matcher);
+                let mut matches = pattern::Pattern::parse(
+                    String::from_iter(filter_text).as_str(),
+                    pattern::CaseMatching::Ignore,
+                    Normalization::Smart,
+                )
+                .match_list(all_links, &mut matcher);
                 matches.par_sort_by_key(|(_, rank)| -(*rank as i32));
 
-                return Some(CompletionResponse::List(CompletionList{
+                return Some(CompletionResponse::List(CompletionList {
                     is_incomplete: true,
                     items: matches
                         .into_iter()
                         .take(30)
-                        .filter(|(MatchableReferenceable(_, name), _)| *name != String::from_iter(filter_text))
+                        .filter(|(MatchableReferenceable(_, name), _)| {
+                            *name != String::from_iter(filter_text)
+                        })
                         .filter_map(|(MatchableReferenceable(referenceable, _), rank)| {
-                            completion_item(vault, &referenceable, Some(range))
-                            .map(|item| CompletionItem {
+                            completion_item(vault, &referenceable, Some(range)).map(|item| {
+                                CompletionItem {
                                     sort_text: Some(rank.to_string()),
                                     ..item
-                                })
+                                }
+                            })
                         })
                         .collect::<Vec<_>>(),
                 }));
-            },
-            _ => None
-        }
-
+            }
+            _ => None,
+        };
     } else if character
         .checked_sub(1)
         .and_then(|start| selected_line.get(start..character))
-    == Some(&['#'])
+        == Some(&['#'])
     {
         // Initial Tag completion
         let tag_refereneables =
-        vault
-            .select_referenceable_nodes(None)
-            .into_iter()
-            .flat_map(|referenceable| match referenceable {
-                tag @ Referenceable::Tag(_, _) => Some(tag),
-                _ => None,
-            });
+            vault
+                .select_referenceable_nodes(None)
+                .into_iter()
+                .flat_map(|referenceable| match referenceable {
+                    tag @ Referenceable::Tag(_, _) => Some(tag),
+                    _ => None,
+                });
 
         return Some(CompletionResponse::Array(
             tag_refereneables
@@ -240,7 +272,7 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
     } else if character
         .checked_sub(1)
         .and_then(|start| selected_line.get(start..character))
-    == Some(&['['])
+        == Some(&['['])
     {
         let footnote_referenceables = vault
             .select_referenceable_nodes(Some(&path))
@@ -248,9 +280,9 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
             .flat_map(|referenceable| match referenceable {
                 Referenceable::Footnote(footnote_path, _)
                     if footnote_path.as_path() == path.as_path() =>
-                    {
-                        Some(referenceable)
-                    }
+                {
+                    Some(referenceable)
+                }
                 _ => None,
             });
 
@@ -282,8 +314,11 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
     }
 }
 
-
-fn completion_item(vault: &Vault, referenceable: &Referenceable, range: Option<Range>) -> Option<CompletionItem> {
+fn completion_item(
+    vault: &Vault,
+    referenceable: &Referenceable,
+    range: Option<Range>,
+) -> Option<CompletionItem> {
     let refname = referenceable.get_refname(vault.root_dir())?;
     let completion = CompletionItem {
         kind: Some(CompletionItemKind::FILE),
@@ -295,10 +330,12 @@ fn completion_item(vault: &Vault, referenceable: &Referenceable, range: Option<R
             }),
             false => None,
         },
-        text_edit: range.map(|range| CompletionTextEdit::Edit(TextEdit {
-            range,
-            new_text: refname.clone(),
-        })),
+        text_edit: range.map(|range| {
+            CompletionTextEdit::Edit(TextEdit {
+                range,
+                new_text: refname.clone(),
+            })
+        }),
         documentation: preview_referenceable(vault, referenceable)
             .map(Documentation::MarkupContent),
         filter_text: match referenceable {
@@ -317,9 +354,7 @@ fn completion_item(vault: &Vault, referenceable: &Referenceable, range: Option<R
     Some(completion)
 }
 
-
 struct MatchableReferenceable<'a>(Referenceable<'a>, String);
-
 
 impl Matchable for MatchableReferenceable<'_> {
     fn string(&self) -> &str {
@@ -332,8 +367,6 @@ impl Matchable for Block {
         &self.text
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -349,7 +382,6 @@ mod tests {
 
         assert_eq!(Some(expected), actual);
 
-        assert_eq!(Some("lin"), s.get(expected + 1 .. 10));
+        assert_eq!(Some("lin"), s.get(expected + 1..10));
     }
 }
-

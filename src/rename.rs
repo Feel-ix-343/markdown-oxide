@@ -72,7 +72,9 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
 
             match reference {
                 // todo: move the obsidian link formatting to the vault module; it should be centralized there; no honestly this code sucks; this whole file
-                Reference::WikiFileLink(data) if matches!(referenceable, Referenceable::File(..)) => {
+                Reference::WikiFileLink(data)
+                    if matches!(referenceable, Referenceable::File(..)) =>
+                {
                     let new_text = format!(
                         "[[{}{}]]",
                         new_ref_name,
@@ -164,7 +166,7 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                             new_text,
                         })],
                     })
-                },
+                }
                 Reference::MDFileLink(data) if matches!(referenceable, Referenceable::File(..)) => {
                     let new_text = format!(
                         "[{}]({})",
@@ -186,12 +188,12 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                             new_text,
                         })],
                     })
-                },
+                }
 
-                Reference::MDHeadingLink(data, _file, infile) | Reference::MDIndexedBlockLink(data, _file, infile)
-                    if matches!(referenceable, Referenceable::File(..)) => {
-
-
+                Reference::MDHeadingLink(data, _file, infile)
+                | Reference::MDIndexedBlockLink(data, _file, infile)
+                    if matches!(referenceable, Referenceable::File(..)) =>
+                {
                     let new_text = format!(
                         "[{}]({}#{})",
                         data.display_text
@@ -213,9 +215,10 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                             new_text,
                         })],
                     })
-
-                },
-                Reference::WikiHeadingLink(data, _file, _heading) if matches!(referenceable, Referenceable::Heading(..)) => {
+                }
+                Reference::WikiHeadingLink(data, _file, _heading)
+                    if matches!(referenceable, Referenceable::Heading(..)) =>
+                {
                     let new_text = format!(
                         "[{}]({})",
                         data.display_text
@@ -224,7 +227,6 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                             .unwrap_or_else(|| String::from("")),
                         new_ref_name,
                     );
-
 
                     Some(TextDocumentEdit {
                         text_document:

@@ -2,7 +2,8 @@ use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 
-use completion::get_completions; use diagnostics::diagnostics;
+use completion::get_completions;
+use diagnostics::diagnostics;
 use itertools::Itertools;
 use references::references;
 use serde_json::Value;
@@ -26,9 +27,9 @@ mod macros;
 mod references;
 mod rename;
 mod symbol;
+mod tokens;
 mod ui;
 mod vault;
-mod tokens;
 
 #[derive(Debug)]
 struct Backend {
@@ -272,15 +273,20 @@ impl LanguageServer for Backend {
                     commands: vec!["apply_edits".into()],
                     ..Default::default()
                 }),
-                semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(SemanticTokensOptions{
-                    full: Some(SemanticTokensFullOptions::Bool(true)), range: Some(false), legend: SemanticTokensLegend {
-                        token_types: vec![SemanticTokenType::DECORATOR],
-                        token_modifiers: vec![SemanticTokenModifier::DECLARATION]
-                    },
-                    ..Default::default()
-                })),
+                semantic_tokens_provider: Some(
+                    SemanticTokensServerCapabilities::SemanticTokensOptions(
+                        SemanticTokensOptions {
+                            full: Some(SemanticTokensFullOptions::Bool(true)),
+                            range: Some(false),
+                            legend: SemanticTokensLegend {
+                                token_types: vec![SemanticTokenType::DECORATOR],
+                                token_modifiers: vec![SemanticTokenModifier::DECLARATION],
+                            },
+                            ..Default::default()
+                        },
+                    ),
+                ),
                 ..Default::default()
-                            
             },
         });
     }
@@ -395,20 +401,21 @@ impl LanguageServer for Backend {
         .await
     }
 
-
-
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
-
         let timer = std::time::Instant::now();
 
         let path = params_position_path!(params)?;
-        let files = self.bind_opened_files(|files| Ok(files.clone().into_iter().collect::<Box<[_]>>())).await?;
+        let files = self
+            .bind_opened_files(|files| Ok(files.clone().into_iter().collect::<Box<[_]>>()))
+            .await?;
 
         let res = self
             .bind_vault(|vault| Ok(get_completions(vault, &files, &params, &path)))
             .await;
 
-        self.client.log_message(MessageType::LOG, format!("Completions: {:?}", res)).await;
+        self.client
+            .log_message(MessageType::LOG, format!("Completions: {:?}", res))
+            .await;
 
         let elapsed = timer.elapsed();
 
@@ -422,23 +429,24 @@ impl LanguageServer for Backend {
         res
     }
 
-
     async fn execute_command(&self, params: ExecuteCommandParams) -> Result<Option<Value>> {
         match params {
-            ExecuteCommandParams { command, .. }  if *command == *"apply_edits" => {
-                let edits = params.arguments.into_iter().filter_map(|arg| serde_json::from_value::<WorkspaceEdit>(arg).ok()).collect_vec();
+            ExecuteCommandParams { command, .. } if *command == *"apply_edits" => {
+                let edits = params
+                    .arguments
+                    .into_iter()
+                    .filter_map(|arg| serde_json::from_value::<WorkspaceEdit>(arg).ok())
+                    .collect_vec();
 
                 for edit in edits {
                     let _ = self.client.apply_edit(edit).await;
                 }
 
                 Ok(None)
-            },
-            _ => Ok(None)
+            }
+            _ => Ok(None),
         }
     }
-
-
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         self.bind_vault(|vault| {
@@ -483,23 +491,21 @@ impl LanguageServer for Backend {
         .await
     }
 
-
     async fn semantic_tokens_full(
         &self,
         params: SemanticTokensParams,
     ) -> Result<Option<SemanticTokensResult>> {
-
         let path = params_path!(params)?;
-        let res = self.bind_vault(|vault| {
-            Ok(tokens::semantic_tokens_full(vault, &path, params))
-        }).await;
+        let res = self
+            .bind_vault(|vault| Ok(tokens::semantic_tokens_full(vault, &path, params)))
+            .await;
 
-        self.client.log_message(MessageType::LOG, format!("{:?}", res)).await;
+        self.client
+            .log_message(MessageType::LOG, format!("{:?}", res))
+            .await;
 
-        return res
-
+        return res;
     }
-
 }
 
 #[tokio::main]
@@ -512,5 +518,5 @@ async fn main() {
         vault: None.into(),
         opened_files: HashSet::new().into(),
     });
-    Server::new(stdin, stdout, socket).serve(service).await; }
-
+    Server::new(stdin, stdout, socket).serve(service).await;
+}

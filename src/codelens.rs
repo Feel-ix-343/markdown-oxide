@@ -1,9 +1,7 @@
 use std::path::Path;
 
 use itertools::Itertools;
-use tower_lsp::{
-    lsp_types::{CodeLens, CodeLensParams, Command, Location, Position, Url},
-};
+use tower_lsp::lsp_types::{CodeLens, CodeLensParams, Command, Location, Position, Url};
 
 use crate::vault::Vault;
 
@@ -34,7 +32,6 @@ pub fn code_lens(vault: &Vault, path: &Path, _params: &CodeLensParams) -> Option
         .into_iter()
         .filter(|(_, references)| !references.is_empty())
         .filter_map(|(referenceable, references)| {
-
             let title = match references.len() {
                 1 => "1 reference".into(),
                 n => format!("{} references", n),

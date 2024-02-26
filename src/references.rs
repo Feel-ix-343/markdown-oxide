@@ -15,7 +15,9 @@ pub fn references(vault: &Vault, cursor_position: Position, path: &Path) -> Opti
                 let referenceables = vault.select_referenceables_for_reference(reference, path);
                 let references = referenceables
                     .into_iter()
-                    .filter_map(|referenceable| vault.select_references_for_referenceable(&referenceable)) // drop the Nones on the options
+                    .filter_map(|referenceable| {
+                        vault.select_references_for_referenceable(&referenceable)
+                    }) // drop the Nones on the options
                     .flatten()
                     .collect_vec();
 

@@ -2,8 +2,9 @@ use std::path::{Path, PathBuf};
 
 use pathdiff::diff_paths;
 use tower_lsp::lsp_types::{
-    CodeAction, CodeActionOrCommand, CodeActionParams, CreateFile, DocumentChangeOperation,
-    DocumentChanges, ResourceOp, Url, WorkspaceEdit, CreateFileOptions, TextDocumentEdit, OptionalVersionedTextDocumentIdentifier, OneOf, TextEdit, Range, Position,
+    CodeAction, CodeActionOrCommand, CodeActionParams, CreateFile, CreateFileOptions,
+    DocumentChangeOperation, DocumentChanges, OneOf, OptionalVersionedTextDocumentIdentifier,
+    Position, Range, ResourceOp, TextDocumentEdit, TextEdit, Url, WorkspaceEdit,
 };
 
 use crate::{
