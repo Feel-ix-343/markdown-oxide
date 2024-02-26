@@ -69,6 +69,12 @@ vim.api.nvim_exec_autocmds('User', { pattern = 'LspAttached' })
 
 NOTE: To get references on files, you must place your cursor/pointer on the first character of the first line of the file, and then get references. (In VSCode, you can also use the references code lens)
 
+## Note on Linking Syntax
+
+The linking syntax is that of obsidian's and can be found here https://help.obsidian.md/Linking+notes+and+files/Internal+links
+
+Generally, this is [[relativeFilePath(#heading)?(|display text|)?]] e.g. [[articles/markdown oxide#Features|Markdown Oxide Features]] to link to a heading in `Markdown Oxide.md` file in the `articles` folder or [[Obsidian]] for the `Obsidian.md` file in the root folder.  
+
 ## Features
 
 - Go to definition (or definitions) from ...
