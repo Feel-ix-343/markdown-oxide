@@ -125,8 +125,12 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
                                 documentation: Some(Documentation::MarkupContent(MarkupContent{
                                     kind: MarkupKind::Markdown,
                                     value: (block.range.start.line as isize -5..=block.range.start.line as isize+5)
-                                        .flat_map(|i| vault.select_line(&block.file, i))
-                                        .map(String::from_iter)
+                                        .flat_map(|i| Some((vault.select_line(&block.file, i)?, i)))
+                                        .map(|(iter, ln)| if ln == block.range.start.line as isize {
+                                            return format!("**{}**\n", String::from_iter(iter).trim()) // highlight the block to be references
+                                        } else {
+                                                String::from_iter(iter)
+                                            })
                                         .join("")
                                 })),
                                 filter_text: Some(format!(" {}", block.text)),
