@@ -149,7 +149,13 @@ Generally, this is [[relativeFilePath(#heading)?(|display text|)?]] e.g. [[artic
     - [ ] Support Completions for logseq tasks
     - [ ] Support https://docs.logseq.com/#/page/markdown
     - [ ] Influence from logseq shortcut completions; such as to dates like /tomorrow
+- Config
+    * [ ] Daily notes format
 - [ ] Proper integration tests
+- A simple CLI
+    - [ ] Working with daily notes (key to efficient PKM systems!)
+    - [ ] Logsec tasks
+    - [ ] ... (leave some ideas in the issues!)
 
 # Alternatives
 
