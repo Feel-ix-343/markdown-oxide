@@ -7,6 +7,8 @@ Implementing obsidian PKM features (and possibly more) in the form of a language
 
 ## Usage
 
+==I am trying to get this into package distributions right now!!! This should be easier soon==
+
 First, compile the plugin. Clone the repo and then run `cargo build --release`
 
 Next, follow the directions for your editor
