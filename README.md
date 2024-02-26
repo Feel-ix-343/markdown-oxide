@@ -1,10 +1,11 @@
 <meta name="google-site-verification" content="YWllrHxS71HepBAFJqguFgFjDXHZ7rAIeSUzJTPW91o" />
 
 # Markdown Oxide
-Obsidian Language Server: Obsidian-flavored-markdown language server 
-Implementing obsidian PKM features (and possibly more) in the form of a language server allows us to use these features in our favorite text editors (neovim or vscode!) and reuse other lsp related plugins (like Telescope, outline, and builtin lsp support)
 
-## Testing
+
+Implementing obsidian PKM features (and possibly more) in the form of a language server allows us to use these features in our favorite text editors and reuse other lsp related plugins (like Telescope, outline, refactoring tools, ...)
+
+## Usage
 
 First, compile the plugin. Clone the repo and then run `cargo build --release`
 
@@ -70,53 +71,50 @@ NOTE: To get references on files, you must place your cursor/pointer on the firs
 
 ## Features
 
-- [ ] Go to definition (or definitions) from ...
-    - [X] File references
-    - [X] Heading references
-    - [X] Indexed block references. (I call indexed blocks the blocks that you directly link to. The link will look like [[file#^index]]. When linking from the obsidian editor, an *index* ^index is appended to the paragraph/block you are referencing)
-    - [X] Tags: This will get the locations where the tag is placed; it will give all the locations where the #tag/subtag is written. This is different than the functionality of the reference, which will get all tag and subtag usages: references on #tag will give #tag, #tag/subtag, #tag/sub/subtag ... 
-    - [X] Footnotes
+- Go to definition (or definitions) from ...
+    - [X] File references [[file]]
+    - [X] Heading references [[file#heading]]
+    - [X] Block references. [[file#^index]] (I call indexed blocks the blocks that you directly link to. The link will look like [[file#^index]]. When linking from the obsidian editor, an *index* ^index is appended to the paragraph/block you are referencing)
+    - [X] Tags #tag and #tag/subtag/..
+    - [X] Footnotes: "paraphrased text[^footnoteindex]"
     - [ ] Metadata tag
-- [ ] Get references
-    - [X] To file
-    - [X] to heading
-    - [X] to indexed block
-    - [X] to tag (explained above)
-    - [X] Footnotes
-    - [ ] Metadata tag
-- [ ] Completions
-    - [X] File completions (requires extra nvim cmp configuration)
-    - [X] Heading Completions (requires extra nvim cmp config)
-    - [X] Established Indexed block completions. 
-    - [X] Footnotes
-    - [X] New Block Completions: to use this, type `[[ `, and after you press space, completions for every block in the vault will appear; continue typing to fuzzy match the block that you want; finally, select the block; a link will be inserter to the text document and an index (ex ^1j239) will be appended to the block in its respective file
-    - [ ] Create file completions
-    - [ ] Make file completions faster in NvimCmp (this is mostly a neovim issue as moxide generates very many completions for large vaults)
-    - [ ] Callout completions
+- Get references
+    - [X] For File when cursor is on the first character of the first line of the file. This will produce references not only to the file but also to headings and blocks in the file
+    - [X] For block when the cursor is on the blocks index "...text *^index*"
+    - [X] For tag when the cursor is on the tags declaration. Unlike go to definition for tags, this will produce all references to the tag and to the tag with subtags
+    - [X] Footnotes when the cursor is on the declaration line of the footnote; *[^1]: description...*
+- Completions (requires extra nvim cmp config; follow the directions above)
+    - [X] File link completions
+    - [X] Heading link Completions
+    - [X] Block link completions (searches the text of the block) 
+    - [X] Footnote link completions
+    - [X] New Block link Completions through grep: to use this, type `[[ `, and after you press space, completions for every block in the vault will appear; continue typing to fuzzy match the block that you want; finally, select the block; a link will be inserter to the text document and an index (ex ^1j239) will be appended to the block in its respective file
+    - [ ] Callout/admonition completions
     - [ ] Metadata completions
-    - [ ] Dataview?
-    - [ ] Metadata tag
-    - [ ] \`\`\`query\`\`\` code blocks
-- [X] Preview
+    - [ ] Dataview completions
+    - [ ] Metadata tag completions
+    - [ ] \`\`\`query\`\`\` code block completions
+- Hover Preview
     - [X] File
     - [X] Headings
     - [X] Indexed Blocks
     - [X] Footnotes
 - [ ] Code Actions
-    - [x] Missing file for link -> Create the file
+    - [x] Unresolved file link -> Create the file
+    - [x] Unresolved heading link -> append heading to file and create file
     - [ ] Link suggestions (by text match or other)
     - [ ] Refactoring: Move headers or selections to a new file
     - [ ] Link an unlinked reference
     - [ ] Link all unlinked references to a referenceable
 - [X] Diagnostics
-    - [X] Missing reference
+    - [X] Unresolved reference
     - [ ] Unlinked reference
 - [X] Symbols
     - [X] File symbols: Headings and subheadings
     - [X] Workspace headings: everythign linkable: files, headings, tags, ... Like a good search feature
     - [ ] Lists and indented lists
 - [ ] Rename
-    - [X] File
+    - [X] File (cursor must be in the first character of the first line)
     - [X] Headings
     - [X] Tags
     - [ ] Indexed Blocks
@@ -127,14 +125,6 @@ NOTE: To get references on files, you must place your cursor/pointer on the firs
     - [ ] Support Completions for logseq tasks
     - [ ] Support https://docs.logseq.com/#/page/markdown
     - [ ] Influence from logseq shortcut completions; such as to dates like /tomorrow
-
-
-
-### Dev Todo's
-
-- [X] Extract the RwLock read pattern
-- [ ] Fix: update vault (diagnostics and references) after code action
-- [ ] Caching: As of right now, the completions really don't need to be recalcualted; there are many other functions like this
 
 # Alternatives
 
