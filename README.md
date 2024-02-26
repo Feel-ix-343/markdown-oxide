@@ -5,17 +5,31 @@
 
 Implementing obsidian PKM features (and possibly more) in the form of a language server allows us to use these features in our favorite text editors and reuse other lsp related plugins (like Telescope, outline, refactoring tools, ...)
 
+## Installation
+
+> [!IMPORTANT]
+> I'm working on getting this into package distributions. Installation/configuration should be easier soon.
+
+
+### Arch Linux
+
+If you are using Arch Linux, you can install the latest Git version through the AUR. The package name is `markdown-oxide-git`. You can install it using your preferred AUR helper; for example:
+
+```sh
+paru -S markdown-oxide-git
+```
+
+### Manual
+
+Clone the repository and then run `cargo build --release`.
+
 ## Usage
 
-==I am trying to get this into package distributions right now!!! This should be easier soon==
-
-First, compile the plugin. Clone the repo and then run `cargo build --release`
-
-Next, follow the directions for your editor
+To use the language server, you need to follow the instructions for your editor of choice below.
 
 ### VSCode
 
-Go to [the vscode extension readme](./vscode-extension/README.md) and run the commands listed
+Go to [the VSCode extension readme](./vscode-extension/README.md) and run the commands listed
 
 ### Neovim
 
@@ -23,32 +37,34 @@ Make sure rust is installed properly and that you are using nvim cmp (I am not s
 
 Adjust your neovim config as follows
 
-```
+```lua
+local lspconfig = require('lspconfig')
 local configs = require("lspconfig.configs")
-configs["obsidian_ls"] = {
-default_config = {
-  root_dir = function() return vim.fn.getcwd() end,
-  filetypes = {"markdown"},
-  cmd = {"{path}"} -- replace {path} with the path to the --release build. 
-  -- {path} will be {where ever you cloned from}/obsidian-ls/target/release/markdown-oxide
-},
-on_attach = on_attach, -- do this only if you have an on_attach function already
+
+configs["markdown_oxide"] = {
+  default_config = {
+    root_dir = lspconfig.util.root_pattern('.git', vim.fn.getcwd()),
+    filetypes = {"markdown"},
+    cmd = {"markdown-oxide"} -- This needs to be the path to the markdown-oxide binary, either in your PATH or the full absolute path.
+  },
+  on_attach = on_attach, -- do this only if you have an on_attach function already
 }
-require("lspconfig").obsidian_ls.setup({
+
+require("lspconfig").markdown_oxide.setup({
     capabilities = capabilities -- ensure that capabilities.workspace.didChangeWatchedFiles.dynamicRegistration = true
 })
 ```
 
 then adjust your nvim-cmp source settings for the following. Note that this will likely change in the future.
 
-```
+```lua
 {
-    name = 'nvim_lsp',
-         option = {
-             obsidian_ls = {
-                 keyword_pattern = [[\(\k\| \|\/\|#\)\+]]
-             }
-         }
+name = 'nvim_lsp',
+  option = {
+    markdown_oxide = {
+      keyword_pattern = [[\(\k\| \|\/\|#\)\+]]
+    }
+  }
 },
 ```
 
@@ -56,12 +72,13 @@ then adjust your nvim-cmp source settings for the following. Note that this will
 I also recommend enabling codelens in neovim. Add this snippet to your on\_attach function for nvim-lspconfig
 
 
-```
+```lua
 -- refresh codelens on TextChanged and InsertLeave as well
 vim.api.nvim_create_autocmd({ 'TextChanged', 'InsertLeave', 'CursorHold', 'LspAttach' }, {
     buffer = bufnr,
     callback = vim.lsp.codelens.refresh,
 })
+
 -- trigger codelens refresh
 vim.api.nvim_exec_autocmds('User', { pattern = 'LspAttached' })
 ```
