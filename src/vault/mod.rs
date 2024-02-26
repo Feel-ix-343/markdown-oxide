@@ -779,8 +779,8 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(text: &str, RegexT
                         range: range_to_position(&Rope::from_str(text), full.range()),
                         display_text: display.map(|d| d.as_str().into()),
                     },
-                    filepath.as_str().into(),
-                    infile.as_str().into(),
+                    filepath.as_str(),
+                    infile.as_str(),
                 )
             }
         (full, filepath, Some(infile), display) => {
@@ -794,8 +794,8 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(text: &str, RegexT
                     range: range_to_position(&Rope::from_str(text), full.range()),
                     display_text: display.map(|d| d.as_str().into()),
                 },
-                filepath.as_str().into(),
-                infile.as_str().into(),
+                filepath.as_str(),
+                infile.as_str(),
             )
         }
     }
@@ -1047,8 +1047,8 @@ impl Referenceable<'_> {
                 matches!(reference, Tag(_))
                 && self.get_refname(root_dir)
                     .is_some_and(|refname| {
-                        let refname_split = refname.split("/").collect_vec();
-                        let text_split = text.split("/").collect_vec();
+                        let refname_split = refname.split('/').collect_vec();
+                        let text_split = text.split('/').collect_vec();
 
                         return text_split.get(0..refname_split.len()) == Some(&refname_split)
                     })
@@ -1066,7 +1066,7 @@ impl Referenceable<'_> {
                 }
             }
             Referenceable::File(..) | Referenceable::UnresovledFile(..) => {
-                return match reference {
+                match reference {
                     WikiFileLink(ReferenceData{ reference_text: file_ref_text, ..}) 
                         | WikiHeadingLink(.., file_ref_text, _) 
                         | WikiIndexedBlockLink(.., file_ref_text, _)

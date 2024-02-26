@@ -426,7 +426,7 @@ impl LanguageServer for Backend {
     async fn execute_command(&self, params: ExecuteCommandParams) -> Result<Option<Value>> {
         match params {
             ExecuteCommandParams { command, .. }  if *command == *"apply_edits" => {
-                let edits = params.arguments.into_iter().map(|arg| serde_json::from_value::<WorkspaceEdit>(arg).ok()).flatten().collect_vec();
+                let edits = params.arguments.into_iter().filter_map(|arg| serde_json::from_value::<WorkspaceEdit>(arg).ok()).collect_vec();
 
                 for edit in edits {
                     let _ = self.client.apply_edit(edit).await;

@@ -64,7 +64,7 @@ pub fn code_actions(
 
                         let mut new_path_buf = PathBuf::new();
                         new_path_buf.push(vault.root_dir());
-                        new_path_buf.push(&link_path);
+                        new_path_buf.push(link_path);
                         new_path_buf.set_extension("md");
 
                         let new_path = Url::from_file_path(&new_path_buf).ok()?;

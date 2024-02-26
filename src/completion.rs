@@ -117,7 +117,7 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
                         .take(50)
                         .filter(|(block, _)| String::from_iter(selected_line.clone()).trim() != block.text)
                         .flat_map(|(block, rank)| {
-                            let path_ref = get_obsidian_ref_path(&vault.root_dir(), &block.file)?;
+                            let path_ref = get_obsidian_ref_path(vault.root_dir(), &block.file)?;
                             let url = Url::from_file_path(&block.file).ok()?;
                             Some(CompletionItem {
                                 label: block.text.clone(),
@@ -127,7 +127,7 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
                                     value: (block.range.start.line as isize -5..=block.range.start.line as isize+5)
                                         .flat_map(|i| Some((vault.select_line(&block.file, i)?, i)))
                                         .map(|(iter, ln)| if ln == block.range.start.line as isize {
-                                            return format!("**{}**\n", String::from_iter(iter).trim()) // highlight the block to be references
+                                            format!("**{}**\n", String::from_iter(iter).trim()) // highlight the block to be references
                                         } else {
                                                 String::from_iter(iter)
                                             })
@@ -182,7 +182,7 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
                         !matches!(referenceable, Referenceable::Tag(..))
                         && !matches!(referenceable, Referenceable::Footnote(..))
                     })
-                    .filter_map(|referenceable| referenceable.get_refname(&vault.root_dir()).map(|string| MatchableReferenceable(referenceable, string)))
+                    .filter_map(|referenceable| referenceable.get_refname(vault.root_dir()).map(|string| MatchableReferenceable(referenceable, string)))
                     .collect::<Vec<_>>();
 
 
@@ -284,7 +284,7 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
 
 
 fn completion_item(vault: &Vault, referenceable: &Referenceable, range: Option<Range>) -> Option<CompletionItem> {
-    let refname = referenceable.get_refname(&vault.root_dir())?;
+    let refname = referenceable.get_refname(vault.root_dir())?;
     let completion = CompletionItem {
         kind: Some(CompletionItemKind::FILE),
         label: refname.clone(),
@@ -299,11 +299,11 @@ fn completion_item(vault: &Vault, referenceable: &Referenceable, range: Option<R
             range,
             new_text: refname.clone(),
         })),
-        documentation: preview_referenceable(vault, &referenceable)
+        documentation: preview_referenceable(vault, referenceable)
             .map(Documentation::MarkupContent),
         filter_text: match referenceable {
             Referenceable::IndexedBlock(_, _) => vault
-                .select_referenceable_preview(&referenceable)
+                .select_referenceable_preview(referenceable)
                 .and_then(|preview| match preview {
                     Preview::Text(string) => Some(string),
                     Preview::Empty => None,

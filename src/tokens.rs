@@ -48,6 +48,6 @@ pub fn semantic_tokens_full(
         .collect_vec(); // TODO: holy this is bad
 
 
-    return Some(SemanticTokensResult::Tokens(tower_lsp::lsp_types::SemanticTokens { result_id: None, data: tokens }))
+    Some(SemanticTokensResult::Tokens(tower_lsp::lsp_types::SemanticTokens { result_id: None, data: tokens }))
 
 }
