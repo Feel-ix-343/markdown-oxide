@@ -1,7 +1,7 @@
 use std::{path::Path, iter};
 
 use itertools::Itertools;
-use tower_lsp::{lsp_types::{SemanticTokensParams, SemanticTokensResult, SemanticToken}};
+use tower_lsp::lsp_types::{SemanticTokensParams, SemanticTokensResult, SemanticToken};
 
 use crate::vault::Vault;
 

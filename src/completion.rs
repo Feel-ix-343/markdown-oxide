@@ -1,4 +1,4 @@
-use std::{hash::{DefaultHasher, Hash, Hasher}, path::{PathBuf, Path}};
+use std::path::{PathBuf, Path};
 
 
 use itertools::Itertools;
@@ -8,10 +8,10 @@ use nanoid::nanoid;
 use nucleo_matcher::{pattern::{Normalization, self, Matchable}, Matcher};
 use rayon::prelude::*;
 
-use tower_lsp::{lsp_types::{
+use tower_lsp::lsp_types::{
     CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionParams,
     CompletionResponse, Documentation, CompletionTextEdit, TextEdit, Range, Position, CompletionList, Url, Command, MarkupContent, MarkupKind,
-}};
+};
 
 use crate::{
     ui::preview_referenceable,
@@ -281,26 +281,6 @@ pub fn get_completions(vault: &Vault, initial_completion_files: &[PathBuf], para
         return None;
     }
 }
-
-fn calculate_hash<T: Hash>(t: &T) -> u64 {
-    let mut s = DefaultHasher::new();
-    t.hash(&mut s);
-    s.finish()
-}
-
-fn get_links(vault: &Vault) -> Option<Vec<Referenceable>> {
-    let re = vault
-        .select_referenceable_nodes(None)
-        .into_iter()
-        .filter(|referenceable| {
-            !matches!(referenceable, Referenceable::Tag(_, _))
-            && !matches!(referenceable, Referenceable::Footnote(_, _))
-        })
-        .collect_vec();
-
-    Some(re)
-}
-
 
 
 fn completion_item(vault: &Vault, referenceable: &Referenceable, range: Option<Range>) -> Option<CompletionItem> {

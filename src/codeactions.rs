@@ -1,7 +1,6 @@
 use std::path::{Path, PathBuf};
 
 use pathdiff::diff_paths;
-use rayon::iter::*;
 use tower_lsp::lsp_types::{
     CodeAction, CodeActionOrCommand, CodeActionParams, CreateFile, DocumentChangeOperation,
     DocumentChanges, ResourceOp, Url, WorkspaceEdit, CreateFileOptions, TextDocumentEdit, OptionalVersionedTextDocumentIdentifier, OneOf, TextEdit, Range, Position,
