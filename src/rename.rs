@@ -72,7 +72,7 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
 
             match reference {
                 // todo: move the obsidian link formatting to the vault module; it should be centralized there; no honestly this code sucks; this whole file
-                Reference::FileLink(data) if matches!(referenceable, Referenceable::File(..)) => {
+                Reference::WikiFileLink(data) if matches!(referenceable, Referenceable::File(..)) => {
                     let new_text = format!(
                         "[[{}{}]]",
                         new_ref_name,
@@ -94,8 +94,8 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                         })],
                     })
                 }
-                Reference::HeadingLink(data, _file, infile)
-                | Reference::IndexedBlockLink(data, _file, infile)
+                Reference::WikiHeadingLink(data, _file, infile)
+                | Reference::WikiIndexedBlockLink(data, _file, infile)
                     if matches!(referenceable, Referenceable::File(..)) =>
                 {
                     let new_text = format!(
@@ -120,7 +120,7 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                         })],
                     })
                 }
-                Reference::HeadingLink(data, _file, _heading)
+                Reference::WikiHeadingLink(data, _file, _heading)
                     if matches!(referenceable, Referenceable::Heading(..)) =>
                 {
                     let new_text = format!(
@@ -164,11 +164,87 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                             new_text,
                         })],
                     })
+                },
+                Reference::MDFileLink(data) if matches!(referenceable, Referenceable::File(..)) => {
+                    let new_text = format!(
+                        "[{}]({})",
+                        data.display_text
+                            .as_ref()
+                            .map(|text| format!("|{text}"))
+                            .unwrap_or_else(|| String::from("")),
+                        new_ref_name,
+                    );
+
+                    Some(TextDocumentEdit {
+                        text_document:
+                            tower_lsp::lsp_types::OptionalVersionedTextDocumentIdentifier {
+                                uri: Url::from_file_path(path).ok()?,
+                                version: None,
+                            },
+                        edits: vec![OneOf::Left(TextEdit {
+                            range: *data.range,
+                            new_text,
+                        })],
+                    })
+                },
+
+                Reference::MDHeadingLink(data, _file, infile) | Reference::MDIndexedBlockLink(data, _file, infile)
+                    if matches!(referenceable, Referenceable::File(..)) => {
+
+
+                    let new_text = format!(
+                        "[{}]({}#{})",
+                        data.display_text
+                            .as_ref()
+                            .map(|text| format!("|{text}"))
+                            .unwrap_or_else(|| String::from("")),
+                        new_ref_name,
+                        infile,
+                    );
+
+                    Some(TextDocumentEdit {
+                        text_document:
+                            tower_lsp::lsp_types::OptionalVersionedTextDocumentIdentifier {
+                                uri: Url::from_file_path(path).ok()?,
+                                version: None,
+                            },
+                        edits: vec![OneOf::Left(TextEdit {
+                            range: *data.range,
+                            new_text,
+                        })],
+                    })
+
+                },
+                Reference::WikiHeadingLink(data, _file, _heading) if matches!(referenceable, Referenceable::Heading(..)) => {
+                    let new_text = format!(
+                        "[{}]({})",
+                        data.display_text
+                            .as_ref()
+                            .map(|text| format!("|{text}"))
+                            .unwrap_or_else(|| String::from("")),
+                        new_ref_name,
+                    );
+
+
+                    Some(TextDocumentEdit {
+                        text_document:
+                            tower_lsp::lsp_types::OptionalVersionedTextDocumentIdentifier {
+                                uri: Url::from_file_path(path).ok()?,
+                                version: None,
+                            },
+                        edits: vec![OneOf::Left(TextEdit {
+                            range: *data.range,
+                            new_text,
+                        })],
+                    })
                 }
-                Reference::Footnote(..)
-                | Reference::IndexedBlockLink(..)
-                | Reference::FileLink(..)
-                | Reference::HeadingLink(..) => None,
+                Reference::MDHeadingLink(_, _, _) => None,
+                Reference::MDIndexedBlockLink(_, _, _) => None,
+                Reference::WikiFileLink(..) => None,
+                Reference::WikiHeadingLink(..) => None,
+                Reference::WikiIndexedBlockLink(..) => None,
+                Reference::MDFileLink(..) => None,
+                Reference::Footnote(..) => None,
             }
         })
         .map(DocumentChangeOperation::Edit);

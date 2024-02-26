@@ -15,7 +15,9 @@ pub fn semantic_tokens_full(
 
     let references_in_file = vault.select_references(Some(path))?;
 
-    let tokens = references_in_file.into_iter()
+    let tokens = references_in_file
+        .into_iter()
+        .sorted_by_key(|(_, reference)| (reference.data().range.start.line, reference.data().range.start.character))
         .fold(vec![], |acc, (_, reference)| {
 
             let range = reference.data().range;

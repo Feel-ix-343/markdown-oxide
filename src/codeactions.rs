@@ -35,7 +35,7 @@ pub fn code_actions(
         code_action_unresolved
             .flat_map(|(_path, reference)| {
                 match reference {
-                    Reference::FileLink(_data) => {
+                    Reference::WikiFileLink(_data) => {
                         let mut new_path_buf = PathBuf::new();
                         new_path_buf.push(vault.root_dir());
                         new_path_buf.push(&reference.data().reference_text);
@@ -61,7 +61,7 @@ pub fn code_actions(
                             ..Default::default()
                         }))
                     }
-                    Reference::HeadingLink(_data, link_path, heading) => {
+                    Reference::WikiHeadingLink(_data, link_path, heading) => {
 
                         let mut new_path_buf = PathBuf::new();
                         new_path_buf.push(vault.root_dir());
