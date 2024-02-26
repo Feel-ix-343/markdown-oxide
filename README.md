@@ -151,6 +151,7 @@ Generally, this is [[relativeFilePath(#heading)?(|display text|)?]] e.g. [[artic
     - [ ] Influence from logseq shortcut completions; such as to dates like /tomorrow
 - Config
     * [ ] Daily notes format
+    * \[ \] (Opt-in dictionary or prose checking? Markdown syntax specific, of course; I am not sure how I feel about this feature yet; Let me know your thoughts)
 - [ ] Proper integration tests
 - A simple CLI
     - [ ] Working with daily notes (key to efficient PKM systems!)
