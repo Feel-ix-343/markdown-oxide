@@ -1,5 +1,3 @@
-<meta name="google-site-verification" content="YWllrHxS71HepBAFJqguFgFjDXHZ7rAIeSUzJTPW91o" />
-
 # Markdown Oxide
 
 
