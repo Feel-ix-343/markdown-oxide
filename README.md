@@ -159,15 +159,15 @@ Generally, this is [[relativeFilePath(#heading)?(|display text|)?]] e.g. [[artic
 
 # Alternatives
 
-**I love open source and all open source authors!! I also believe healthy competition is good! Moxide is competing with some alternatives, and I want to make it the best at its job!!**
+**I love open-source and all open-source authors!! I also believe healthy competition is good! Markdown-Oxide is competing with some alternatives, and I want to make it the best at its job!!**
 
-Here are the alternatives (open source authors are welcom to make PRs adding their projects here!)
+Here are the alternatives (open source authors are welcome to make PRs to add their projects here!)
 
-- https://github.com/gw31415/obsidian-lsp ; I have been in discussions with the author; he/she is a med student and doesn't have time to maintain . I of course love his idea, but the current LS doesn't provide many obsidian specific features yet. 
-- https://github.com/WhiskeyJack96/logseqlsp ; This is a cool project and a great inspiration for logseq support (which is upcoming). status: it doesn't seem that it is maintained; no commites for 3 months
-- The og https://github.com/artempyanykh/marksman ; I used this for a while, but it is not obsidian specific and didn't act well w my vault
+- https://github.com/gw31415/obsidian-lsp: I have been in discussions with the author; The author doesn't have time to maintain the project. Also, I, of course, love the idea, but the current LS doesn't provide many obsidian-specific features yet.
+- https://github.com/WhiskeyJack96/logseqlsp: This is a cool project and a great inspiration for Logseq support (which is upcoming). status: it doesn't seem that it is maintained and it (obviously) does not provide support for all of the obsidian syntax
+- The og https://github.com/artempyanykh/marksman: I used this for a while, but it is not obsidian specific and didn't act well with my vault. Additionally, the block completions in markdown-oxide allow for a fuzzy/grep search of the entire vault to generate the completions; I don't think Markman has any features like this; (this is a feature that Logseq signified for PKM; the concept that *anything is linkable* is quite powerful) 
 
 
-# ---The--bottom--line--------------------------------------------------------
+# ---The--bottom--line--------------------------------------------------
 
-Listen. I really like vim motions. I also really like low latency terminal editing. I very much so also like my neovim plugins and config. And wow I also like using obsidian (and other md apps). Can't I just have it all??? Can't I brute text edit in neovim and preview and fine edit in the JS madness? Well, I thought I could; that is why I am making this.
+Listen. I really like Vim motions. I also really love low-latency terminal editing. I very much so also like my Neovim LSP plugins, keymappings, and config. But Wow! I also like using Obsidian and Logseq. **Can't I just have it all???** Can't I be whisked away by the flow of Neovim while also experiencing the beauty of Obsidian???? Can't I detail my tasks on the CLI while viewing them in Logseq????? Well, I thought I could; for us all, there is markdown-oxide (which is still very pre-beta hah)
