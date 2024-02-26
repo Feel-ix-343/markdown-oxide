@@ -30,7 +30,11 @@ pub fn semantic_tokens_full(
                 })],
                 [.., (prev_ref, _)] => acc.into_iter().chain(iter::once((reference, SemanticToken {
                     delta_line: range.start.line - prev_ref.data().range.start.line,
-                    delta_start: range.start.character,
+                    delta_start: if range.start.line == prev_ref.data().range.start.line { 
+                        range.start.character - prev_ref.data().range.start.character
+                    } else {
+                        range.start.character
+                    },
                     length: range.end.character - range.start.character,
                     token_type: 0,
                     token_modifiers_bitset: 0
