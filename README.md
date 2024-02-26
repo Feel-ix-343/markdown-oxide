@@ -92,6 +92,7 @@ Generally, this is [[relativeFilePath(#heading)?(|display text|)?]] e.g. [[artic
 - Completions (requires extra nvim cmp config; follow the directions above)
     - [X] File link completions
     - [X] Heading link Completions
+    - [ ] Subheading compeltions in the form [[file#heading#subheading]] from https://help.obsidian.md/Linking+notes+and+files/Internal+links#Link+to+a+heading+in+a+note (Note: right now you can link to subheadings through [[file#subheading]])
     - [X] Block link completions (searches the text of the block) 
     - [X] Footnote link completions
     - [X] New Block link Completions through grep: to use this, type `[[ `, and after you press space, completions for every block in the vault will appear; continue typing to fuzzy match the block that you want; finally, select the block; a link will be inserter to the text document and an index (ex ^1j239) will be appended to the block in its respective file
