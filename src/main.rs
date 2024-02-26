@@ -1,6 +1,3 @@
-#![feature(slice_split_once)]
-#![feature(async_closure)]
-
 use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
