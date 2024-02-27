@@ -115,7 +115,13 @@ pub fn get_completions(
                 )
                 .match_list(blocks, &mut matcher);
 
-                let rand_id = nanoid!(5);
+                let rand_id = nanoid!(
+                    5,
+                    &[
+                        'a', 'b', 'c', 'd', 'e', 'f', 'g', '1', '2', '3', '4', '5', '6', '7', '8',
+                        '9'
+                    ]
+                );
 
                 return Some(CompletionResponse::List(CompletionList {
                     is_incomplete: true,
