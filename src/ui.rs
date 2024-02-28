@@ -10,11 +10,11 @@ fn referenceable_string(vault: &Vault, referenceable: &Referenceable) -> Option<
     match preview {
         Preview::Empty => Some("No Preview".into()),
         Preview::Text(text) => match referenceable {
-            Referenceable::File(_, _) => format!("File Preview:\n---\n\n{}", text).into(),
-            Referenceable::Heading(_, _) => format!("Heading Preview:\n---\n\n{}", text).into(),
-            Referenceable::IndexedBlock(_, _) => format!("Block Preview:\n---\n\n{}", text).into(),
-            Referenceable::Footnote(_, _) => format!("Footnote Preview:\n---\n\n{}", text).into(),
-            _ => format!("Preview:\n---\n\n{}", text).into(),
+            Referenceable::File(_, _) => format!("`File Preview:`\n\n{}", text).into(),
+            Referenceable::Heading(_, _) => format!("`Heading Preview:`\n\n{}", text).into(),
+            Referenceable::IndexedBlock(_, _) => format!("`Block Preview:`\n\n{}", text).into(),
+            Referenceable::Footnote(_, _) => format!("`Footnote Preview:`\n\n{}", text).into(),
+            _ => format!("`Preview:`\n{}", text).into(),
         },
     }
 }
