@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
     iter,
     ops::{Deref, DerefMut, Range},
-    path::{Path, PathBuf},
+    path::{Path, PathBuf}, char, str::FromStr,
 };
 
 use itertools::Itertools;
@@ -13,6 +13,7 @@ use rayon::prelude::*;
 use regex::{Captures, Match, Regex};
 use ropey::Rope;
 use serde::{Deserialize, Serialize};
+use serde_json::from_str;
 use tower_lsp::lsp_types::Position;
 use walkdir::WalkDir;
 
@@ -579,7 +580,7 @@ impl Reference {
             .collect_vec();
 
         static MD_LINK_RE: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r"\[(?<display>[^\[\]\.]+)\]\((\.\/)?(?<filepath>[^\[\]\|\.\#]+)(\.[^\# ]+)?(\#(?<infileref>[^\[\]\.\|]+))?\)")
+            Regex::new(r"\[(?<display>[^\[\]\.]+)\]\((?<filepath>(\.?\/)?[^\[\]\|\.\#]+)(\.[^\# ]+)?(\#(?<infileref>[^\[\]\.\|]+))?\)")
                 .expect("MD Link Not Constructing")
         }); // [display](relativePath)
 
@@ -661,9 +662,10 @@ impl Reference {
                 MDIndexedBlockLink(_, _, _) => false,
             },
             &Referenceable::File(..) | &Referenceable::UnresovledFile(..) => match self {
-                WikiFileLink(..) | MDFileLink(..) => {
+                WikiFileLink(..) => {
                     referenceable.get_refname(root_dir).as_ref() == Some(text)
-                }
+                },
+                MDFileLink(ReferenceData { reference_text: file_ref_text, .. }) => matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir)),
                 Tag(_) => false,
                 WikiHeadingLink(_, _, _) => false,
                 WikiIndexedBlockLink(_, _, _) => false,
@@ -671,30 +673,22 @@ impl Reference {
                 MDIndexedBlockLink(_, _, _) => false,
                 Footnote(_) => false,
             },
-            &Referenceable::Heading(..) | &Referenceable::UnresolvedHeading(..) => match self {
-                WikiHeadingLink(..) | MDHeadingLink(..) => {
-                    referenceable.get_refname(root_dir).as_ref() == Some(text)
-                }
-                Tag(_) => false,
-                WikiFileLink(_) => false,
-                WikiIndexedBlockLink(_, _, _) => false,
-                MDFileLink(_) => false,
-                MDIndexedBlockLink(_, _, _) => false,
-                Footnote(_) => false,
-            },
-            &Referenceable::IndexedBlock(..) | &Referenceable::UnresovledIndexedBlock(..) => {
-                match self {
-                    WikiIndexedBlockLink(..) | MDIndexedBlockLink(..) => {
+            &Referenceable::Heading(.., MDHeading { heading_text: infile_ref, ..}) 
+                | &Referenceable::UnresolvedHeading(.., infile_ref, _)
+                | &Referenceable::IndexedBlock(.., MDIndexedBlock { index: infile_ref, ..}) 
+                | &Referenceable::UnresovledIndexedBlock(.., infile_ref) => match self {
+                    WikiHeadingLink(..)
+                        | WikiIndexedBlockLink(..) => {
                         referenceable.get_refname(root_dir).as_ref() == Some(text)
                     }
+                    MDHeadingLink(.., file_ref_text, ref_heading)
+                        | MDIndexedBlockLink(.., file_ref_text, ref_heading) => 
+                        matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir)) && ref_heading == infile_ref,
                     Tag(_) => false,
                     WikiFileLink(_) => false,
-                    WikiHeadingLink(_, _, _) => false,
                     MDFileLink(_) => false,
-                    MDHeadingLink(_, _, _) => false,
                     Footnote(_) => false,
-                }
-            }
+            },
         }
     }
 }
@@ -1063,18 +1057,31 @@ impl Referenceable<'_> {
                     ..
                 })
                 | WikiHeadingLink(.., file_ref_text, _)
-                | WikiIndexedBlockLink(.., file_ref_text, _)
-                | MDFileLink(ReferenceData {
+                | WikiIndexedBlockLink(.., file_ref_text, _) => self
+                    .get_refname(root_dir)
+                    .is_some_and(|refname| refname == *file_ref_text),
+
+
+
+                MDFileLink(ReferenceData {
                     reference_text: file_ref_text,
                     ..
                 })
                 | MDHeadingLink(.., file_ref_text, _)
-                | MDIndexedBlockLink(.., file_ref_text, _) => self
-                    .get_refname(root_dir)
-                    .is_some_and(|refname| refname == *file_ref_text),
+                | MDIndexedBlockLink(.., file_ref_text, _) => {
+                        matches_path_or_file(file_ref_text, self.get_refname(root_dir))
+                    }
+
+
+
                 Tag(_) => false,
+
+
+
                 Footnote(_) => false,
             },
+
+
             Referenceable::Heading(..) | Referenceable::UnresolvedHeading(..) => match reference {
                 WikiHeadingLink(data, ..) | MDHeadingLink(data, ..) => {
                     Some(&data.reference_text) == self.get_refname(root_dir).as_ref()
@@ -1086,6 +1093,8 @@ impl Referenceable<'_> {
                 MDIndexedBlockLink(..) => false,
                 Footnote(..) => false,
             },
+
+
             Referenceable::IndexedBlock(..) | Referenceable::UnresovledIndexedBlock(..) => {
                 match reference {
                     WikiIndexedBlockLink(..) | MDIndexedBlockLink(..) => {
@@ -1101,6 +1110,8 @@ impl Referenceable<'_> {
             }
         }
     }
+
+
 
     pub fn get_path(&self) -> &Path {
         match self {
@@ -1150,6 +1161,23 @@ impl Referenceable<'_> {
     }
 }
 
+
+fn matches_path_or_file(file_ref_text: &str, refname: Option<String>) -> bool {
+    (|| {
+        if file_ref_text.contains('/') {
+            let chars: Vec<char> = String::from(file_ref_text).chars().collect();
+            match chars.as_slice() {
+                &['.', '/', ref path @ ..] | &['/', ref path @ ..] => Some(String::from_iter(path) == refname?),
+                path @ _ => Some( String::from_iter(path)  == refname?  )
+            }
+        } else {
+            let ref_name = refname?;
+            let last_segment = ref_name.split('/').last()?;
+            Some(file_ref_text == last_segment)
+        }
+    })().is_some_and(|b| b)
+}
+
 // tests
 #[cfg(test)]
 mod vault_tests {
@@ -1181,7 +1209,7 @@ mod vault_tests {
                         character: 18,
                     },
                 }
-                .into(),
+                    .into(),
                 ..ReferenceData::default()
             }),
             WikiFileLink(ReferenceData {
@@ -1196,7 +1224,7 @@ mod vault_tests {
                         character: 29,
                     },
                 }
-                .into(),
+                    .into(),
                 ..ReferenceData::default()
             }),
             WikiFileLink(ReferenceData {
@@ -1211,7 +1239,7 @@ mod vault_tests {
                         character: 10,
                     },
                 }
-                .into(),
+                    .into(),
                 ..ReferenceData::default()
             }),
         ];
@@ -1237,7 +1265,7 @@ mod vault_tests {
                         character: 39,
                     },
                 }
-                .into(),
+                    .into(),
                 display_text: Some("but called different".into()),
             }),
             WikiFileLink(ReferenceData {
@@ -1252,7 +1280,7 @@ mod vault_tests {
                         character: 54,
                     },
                 }
-                .into(),
+                    .into(),
                 display_text: Some("222".into()),
             }),
             WikiFileLink(ReferenceData {
@@ -1267,7 +1295,7 @@ mod vault_tests {
                         character: 14,
                     },
                 }
-                .into(),
+                    .into(),
                 display_text: Some("333".into()),
             }),
         ];
@@ -1294,7 +1322,7 @@ mod vault_tests {
                     character: 40,
                 },
             }
-            .into(),
+                .into(),
         })];
 
         assert_eq!(parsed, expected);
@@ -1304,7 +1332,7 @@ mod vault_tests {
         let parsed = Reference::new(text);
 
         let expected = vec![Reference::MDFileLink(ReferenceData {
-            reference_text: "path/to/link".into(),
+            reference_text: "./path/to/link".into(),
             display_text: Some("link".into()),
             range: Range {
                 start: Position {
@@ -1316,7 +1344,7 @@ mod vault_tests {
                     character: 42,
                 },
             }
-            .into(),
+                .into(),
         })];
 
         assert_eq!(parsed, expected);
@@ -1326,7 +1354,7 @@ mod vault_tests {
         let parsed = Reference::new(text);
 
         let expected = vec![Reference::MDFileLink(ReferenceData {
-            reference_text: "path/to/link".into(),
+            reference_text: "./path/to/link".into(),
             display_text: Some("link".into()),
             range: Range {
                 start: Position {
@@ -1338,7 +1366,7 @@ mod vault_tests {
                     character: 45,
                 },
             }
-            .into(),
+                .into(),
         })];
 
         assert_eq!(parsed, expected)
@@ -1364,7 +1392,7 @@ mod vault_tests {
                         character: 48,
                     },
                 }
-                .into(),
+                    .into(),
             },
             "path/to/link".into(),
             "heading".into(),
@@ -1390,7 +1418,7 @@ mod vault_tests {
                         character: 51,
                     },
                 }
-                .into(),
+                    .into(),
             },
             "path/to/link".into(),
             "heading".into(),
@@ -1417,7 +1445,7 @@ mod vault_tests {
                     character: 22,
                 },
             }
-            .into(),
+                .into(),
             ..ReferenceData::default()
         })];
 
@@ -1462,7 +1490,7 @@ more text
                         character: 19,
                     },
                 }
-                .into(),
+                    .into(),
                 ..Default::default()
             },
             MDHeading {
@@ -1477,7 +1505,7 @@ more text
                         character: 28,
                     },
                 }
-                .into(),
+                    .into(),
                 level: HeadingLevel(2),
             },
         ];
@@ -1569,7 +1597,7 @@ more text
                         character: 18,
                     },
                 }
-                .into(),
+                    .into(),
                 ..ReferenceData::default()
             }),
             WikiFileLink(ReferenceData {
@@ -1584,7 +1612,7 @@ more text
                         character: 29,
                     },
                 }
-                .into(),
+                    .into(),
                 ..ReferenceData::default()
             }),
             WikiFileLink(ReferenceData {
@@ -1599,7 +1627,7 @@ more text
                         character: 10,
                     },
                 }
-                .into(),
+                    .into(),
                 ..ReferenceData::default()
             }),
         ];
@@ -1644,7 +1672,7 @@ and a third tag#notatag [[link#not a tag]]
                         character: 14,
                     },
                 }
-                .into(),
+                    .into(),
             },
             MDTag {
                 tag_ref: "tag/ttagg".into(),
@@ -1658,7 +1686,7 @@ and a third tag#notatag [[link#not a tag]]
                         character: 22,
                     },
                 }
-                .into(),
+                    .into(),
             },
             MDTag {
                 tag_ref: "MapOfContext/apworld".into(),
@@ -1672,7 +1700,7 @@ and a third tag#notatag [[link#not a tag]]
                         character: 21,
                     },
                 }
-                .into(),
+                    .into(),
             },
         ];
 
@@ -1698,7 +1726,7 @@ and a third tag#notatag [[link#not a tag]]
                     character: 24,
                 },
             }
-            .into(),
+                .into(),
         }];
 
         assert_eq!(parsed, expected);
@@ -1729,7 +1757,7 @@ Continued
                         character: 19,
                     },
                 }
-                .into(),
+                    .into(),
             },
             MDFootnote {
                 index: "^2".into(),
@@ -1744,7 +1772,7 @@ Continued
                         character: 22,
                     },
                 }
-                .into(),
+                    .into(),
             },
             MDFootnote {
                 index: "^a".into(),
@@ -1759,7 +1787,7 @@ Continued
                         character: 19,
                     },
                 }
-                .into(),
+                    .into(),
             },
         ];
 
