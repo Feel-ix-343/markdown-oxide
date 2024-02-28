@@ -14,7 +14,7 @@ use regex::{Captures, Match, Regex};
 use ropey::Rope;
 use serde::{Deserialize, Serialize};
 use serde_json::from_str;
-use tower_lsp::lsp_types::Position;
+use tower_lsp::lsp_types::{Position, Url};
 use walkdir::WalkDir;
 
 impl Vault {
@@ -580,7 +580,7 @@ impl Reference {
             .collect_vec();
 
         static MD_LINK_RE: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r"\[(?<display>[^\[\]\.]+)\]\((?<filepath>(\.?\/)?[^\[\]\|\.\#]+)(\.[^\# ]+)?(\#(?<infileref>[^\[\]\.\|]+))?\)")
+            Regex::new(r"\[(?<display>[^\[\]\.]+)\]\(<?(?<filepath>(\.?\/)?[^\[\]\|\.\#<>]+)(\.[^\# <>]+)?(\#(?<infileref>[^\[\]\.\|<>]+))?>?\)")
                 .expect("MD Link Not Constructing")
         }); // [display](relativePath)
 
@@ -1165,6 +1165,10 @@ impl Referenceable<'_> {
 fn matches_path_or_file(file_ref_text: &str, refname: Option<String>) -> bool {
     (|| {
         if file_ref_text.contains('/') {
+
+            let file_ref_text = file_ref_text.replace(r"%20", " ");
+            let file_ref_text = file_ref_text.replace(r"\ ", " ");
+
             let chars: Vec<char> = String::from(file_ref_text).chars().collect();
             match chars.as_slice() {
                 &['.', '/', ref path @ ..] | &['/', ref path @ ..] => Some(String::from_iter(path) == refname?),
@@ -1368,6 +1372,60 @@ mod vault_tests {
             }
                 .into(),
         })];
+
+        assert_eq!(parsed, expected)
+    }
+
+
+    #[test]
+    fn advanced_md_link_parsing() {
+        let text = "Test text test text [link](<path to/link>)";
+
+        let parsed = Reference::new(text);
+
+        let expected = vec![Reference::MDFileLink(
+            ReferenceData {
+                reference_text: "path to/link".into(),
+                display_text: Some("link".into()),
+                range: Range {
+                    start: Position {
+                        line: 0,
+                        character: 20,
+                    },
+                    end: Position {
+                        line: 0,
+                        character: 42,
+                    },
+                }
+                    .into(),
+            },
+        )];
+
+        assert_eq!(parsed, expected);
+
+        let text = "Test text test text [link](<path/to/link.md#heading>)";
+
+        let parsed = Reference::new(text);
+
+        let expected = vec![Reference::MDHeadingLink(
+            ReferenceData {
+                reference_text: "path/to/link#heading".into(),
+                display_text: Some("link".into()),
+                range: Range {
+                    start: Position {
+                        line: 0,
+                        character: 20,
+                    },
+                    end: Position {
+                        line: 0,
+                        character: 53,
+                    },
+                }
+                    .into(),
+            },
+            "path/to/link".into(),
+            "heading".into(),
+        )];
 
         assert_eq!(parsed, expected)
     }
