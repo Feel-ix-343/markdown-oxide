@@ -16,7 +16,7 @@ If you are using Arch Linux, you can install the latest Git version through the 
 paru -S markdown-oxide-git
 ```
 
-### Manual
+### Manual (for MacOS, Windows, and *other* linux distributions)
 
 Clone the repository and then run `cargo build --release`.
 
