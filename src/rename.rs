@@ -37,7 +37,7 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                 )
                 .get_refname(vault.root_dir())?;
 
-                (Some(change_op), name)
+                (Some(change_op), name.to_string())
             }
             Referenceable::File(path, file) => {
                 let new_path = path.with_file_name(&params.new_name).with_extension("md");
@@ -51,7 +51,7 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
 
                 let name = Referenceable::File(&new_path, file).get_refname(vault.root_dir())?;
 
-                (Some(change_op), name)
+                (Some(change_op), name.to_string())
             }
             Referenceable::Tag(_path, _tag) => {
                 let new_ref_name = params.new_name.clone();
@@ -150,7 +150,7 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                     let new_text = format!(
                         "#{}",
                         data.reference_text.replacen(
-                            &referenceable.get_refname(vault.root_dir())?,
+                            &*referenceable.get_refname(vault.root_dir())?,
                             &new_ref_name,
                             1
                         )

@@ -213,7 +213,7 @@ pub fn get_completions(
                     .filter_map(|referenceable| {
                         referenceable
                             .get_refname(vault.root_dir())
-                            .map(|string| MatchableReferenceable(referenceable, string))
+                            .map(|string| MatchableReferenceable(referenceable, string.to_string()))
                     })
                     .collect::<Vec<_>>();
 
@@ -268,7 +268,7 @@ pub fn get_completions(
                     tag.get_refname(vault.root_dir())
                         .map(|root| CompletionItem {
                             kind: Some(CompletionItemKind::CONSTANT),
-                            label: root,
+                            label: root.to_string(),
                             ..Default::default()
                         })
                 })
@@ -308,7 +308,7 @@ pub fn get_completions(
                                     Preview::Text(string) => Some(string),
                                     Preview::Empty => None,
                                 })
-                                .map(|preview_string| root + &preview_string),
+                                .map(|preview_string| format!("{}{}", *root, &preview_string)),
                             ..Default::default()
                         })
                 })
@@ -351,7 +351,7 @@ fn completion_item(
                     Preview::Text(string) => Some(string),
                     Preview::Empty => None,
                 })
-                .map(|text| format!("{}{}", refname, &text)),
+                .map(|text| format!("{}{}", *refname, &text)),
             _ => None,
         },
         ..Default::default()

@@ -218,7 +218,7 @@ impl Vault {
 
                 let resolved_referenceables_refnames: HashSet<String> = resolved_referenceables
                     .iter()
-                    .filter_map(|resolved| resolved.get_refname(self.root_dir()))
+                    .filter_map(|resolved| resolved.get_refname(self.root_dir()).as_deref().cloned())
                     .collect();
 
                 let unresolved = self.select_references(None).map(|references| {
@@ -638,7 +638,7 @@ impl Reference {
         match referenceable {
             &Referenceable::Tag(_, _) => {
                 match self {
-                    Tag(..) => referenceable.get_refname(root_dir) == Some(text.to_string()),
+                    Tag(..) => referenceable.get_refname(root_dir) == Some(text.to_string().into()),
                     WikiFileLink(_) => false,
                     WikiHeadingLink(_, _, _) => false,
                     WikiIndexedBlockLink(_, _, _) => false,
@@ -650,7 +650,7 @@ impl Reference {
             }
             &Referenceable::Footnote(path, _footnote) => match self {
                 Footnote(..) => {
-                    referenceable.get_refname(root_dir).as_ref() == Some(text)
+                    referenceable.get_refname(root_dir).as_deref() == Some(text)
                         && path.as_path() == file_path
                 }
                 Tag(_) => false,
@@ -663,7 +663,7 @@ impl Reference {
             },
             &Referenceable::File(..) | &Referenceable::UnresovledFile(..) => match self {
                 WikiFileLink(..) => {
-                    referenceable.get_refname(root_dir).as_ref() == Some(text)
+                    referenceable.get_refname(root_dir).as_deref() == Some(text)
                 },
                 MDFileLink(ReferenceData { reference_text: file_ref_text, .. }) => matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir)),
                 Tag(_) => false,
@@ -679,11 +679,11 @@ impl Reference {
                 | &Referenceable::UnresovledIndexedBlock(.., infile_ref) => match self {
                     WikiHeadingLink(..)
                         | WikiIndexedBlockLink(..) => {
-                        referenceable.get_refname(root_dir).as_ref() == Some(text)
+                        referenceable.get_refname(root_dir).as_deref() == Some(text)
                     }
-                    MDHeadingLink(.., file_ref_text, ref_heading)
-                        | MDIndexedBlockLink(.., file_ref_text, ref_heading) => 
-                        matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir)) && ref_heading == infile_ref,
+                    MDHeadingLink(.., file_ref_text, link_infile_ref)
+                        | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => 
+                        matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir)) && link_infile_ref == infile_ref,
                     Tag(_) => false,
                     WikiFileLink(_) => false,
                     MDFileLink(_) => false,
@@ -778,7 +778,7 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
                     display_text: display.map(|d| d.as_str().into()),
                 },
                 filepath.as_str(),
-                infile.as_str(),
+                &infile.as_str()[1..], // drop the ^ for the index
             )
         }
         (full, filepath, Some(infile), display) => {
@@ -1000,24 +1000,67 @@ pub fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
     diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(String::from))
 }
 
+
+#[derive(Debug, PartialEq, Eq, Default)]
+pub struct Refname {
+    pub full_refname: String,
+    pub path: Option<String>,
+    pub infile_ref: Option<String>
+}
+
+impl Deref for Refname {
+    type Target = String;
+    fn deref(&self) -> &Self::Target {
+        &self.full_refname
+    }
+}
+
+impl From<String> for Refname {
+    fn from(value: String) -> Self {
+        Refname{full_refname: value.clone(), ..Default::default()}
+    }
+}
+
+
+impl From<&str> for Refname {
+    fn from(value: &str) -> Self {
+        Refname{full_refname: value.to_string(), ..Default::default()}
+    }
+}
+
 impl Referenceable<'_> {
     /// Gets the generic reference name for a referenceable. This will not include any display text. If trying to determine if text is a reference of a particular referenceable, use the `is_reference` function
-    pub fn get_refname(&self, root_dir: &Path) -> Option<String> {
+
+    pub fn get_refname(&self, root_dir: &Path) -> Option<Refname> {
         match self {
-            Referenceable::File(path, _) => get_obsidian_ref_path(root_dir, path),
+            Referenceable::File(path, _) => get_obsidian_ref_path(root_dir, path).map(|string| Refname{full_refname: string.to_owned(), path: string.to_owned().into(), ..Default::default()}),
+
             Referenceable::Heading(path, heading) => get_obsidian_ref_path(root_dir, path)
-                .map(|refpath| format!("{}#{}", refpath, heading.heading_text)),
-            Referenceable::IndexedBlock(path, heading) => get_obsidian_ref_path(root_dir, path)
-                .map(|refpath| format!("{}#^{}", refpath, heading.index)),
-            Referenceable::Tag(_, tag) => Some(format!("#{}", tag.tag_ref)),
-            Referenceable::Footnote(_, footnote) => Some(footnote.index.clone()),
+                .map(|refpath| (refpath.clone(), format!("{}#{}", refpath, heading.heading_text)))
+                .map(|(path, full_refname)| Refname{full_refname, path: path.into(), infile_ref: <std::string::String as Clone>::clone(&heading.heading_text).into()}),
+
+
+            Referenceable::IndexedBlock(path, index) => get_obsidian_ref_path(root_dir, path)
+                .map(|refpath| (refpath.clone(), format!("{}#^{}", refpath, index.index)))
+                .map(|(path, full_refname)| Refname{full_refname, path: path.into(), infile_ref: format!("^{}", index.index).into()}),
+
+            Referenceable::Tag(_, tag) => Some(format!("#{}", tag.tag_ref).into()),
+
+            Referenceable::Footnote(_, footnote) => Some(footnote.index.clone().into()),
+
             Referenceable::UnresolvedHeading(_, path, heading) => {
                 Some(format!("{}#{}", path, heading))
-            }
-            Referenceable::UnresovledFile(_, path) => Some(path.to_string()),
+                .map(|full_ref| Refname { full_refname: full_ref, path: path.to_string().into(), infile_ref: heading.to_string().into()})
+            },
+
+            Referenceable::UnresovledFile(_, path) => Some(Refname{full_refname: path.to_string(), path: Some(path.to_string()), ..Default::default()}),
+
+
             Referenceable::UnresovledIndexedBlock(_, path, index) => {
                 Some(format!("{}#{}", path, index))
+                .map(|full_ref| Refname{full_refname: full_ref, path: path.to_string().into(), infile_ref: format!("^{}", index.to_string()).into()} )
             }
+
         }
     }
 
@@ -1040,7 +1083,7 @@ impl Referenceable<'_> {
             }
             Referenceable::Footnote(path, _footnote) => match reference {
                 Footnote(..) => {
-                    self.get_refname(root_dir).as_ref() == Some(text)
+                    self.get_refname(root_dir).as_deref() == Some(text)
                         && path.as_path() == reference_path
                 }
                 MDFileLink(..) => false,
@@ -1059,7 +1102,7 @@ impl Referenceable<'_> {
                 | WikiHeadingLink(.., file_ref_text, _)
                 | WikiIndexedBlockLink(.., file_ref_text, _) => self
                     .get_refname(root_dir)
-                    .is_some_and(|refname| refname == *file_ref_text),
+                    .is_some_and(|refname| *refname == *file_ref_text),
 
 
 
@@ -1084,7 +1127,7 @@ impl Referenceable<'_> {
 
             Referenceable::Heading(..) | Referenceable::UnresolvedHeading(..) => match reference {
                 WikiHeadingLink(data, ..) | MDHeadingLink(data, ..) => {
-                    Some(&data.reference_text) == self.get_refname(root_dir).as_ref()
+                    Some(&data.reference_text) == self.get_refname(root_dir).as_deref()
                 }
                 Tag(..) => false,
                 WikiFileLink(..) => false,
@@ -1098,7 +1141,7 @@ impl Referenceable<'_> {
             Referenceable::IndexedBlock(..) | Referenceable::UnresovledIndexedBlock(..) => {
                 match reference {
                     WikiIndexedBlockLink(..) | MDIndexedBlockLink(..) => {
-                        Some(text) == self.get_refname(root_dir).as_ref()
+                        Some(text) == self.get_refname(root_dir).as_deref()
                     }
                     Tag(_) => false,
                     WikiFileLink(_) => false,
@@ -1162,21 +1205,25 @@ impl Referenceable<'_> {
 }
 
 
-fn matches_path_or_file(file_ref_text: &str, refname: Option<String>) -> bool {
+fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
     (|| {
+        let refname_path = refname?.path?; // this function should not be used for tags, ... only for heading, files, indexed blocks
+
+
         if file_ref_text.contains('/') {
 
             let file_ref_text = file_ref_text.replace(r"%20", " ");
             let file_ref_text = file_ref_text.replace(r"\ ", " ");
 
+
+
             let chars: Vec<char> = String::from(file_ref_text).chars().collect();
             match chars.as_slice() {
-                &['.', '/', ref path @ ..] | &['/', ref path @ ..] => Some(String::from_iter(path) == refname?),
-                path @ _ => Some( String::from_iter(path)  == refname?  )
+                &['.', '/', ref path @ ..] | &['/', ref path @ ..] => Some(String::from_iter(path) == refname_path),
+                path @ _ => Some( String::from_iter(path)  == refname_path  )
             }
         } else {
-            let ref_name = refname?;
-            let last_segment = ref_name.split('/').last()?;
+            let last_segment = refname_path.split('/').last()?;
             Some(file_ref_text == last_segment)
         }
     })().is_some_and(|b| b)
@@ -1189,6 +1236,7 @@ mod vault_tests {
 
     use tower_lsp::lsp_types::{Position, Range};
 
+    use crate::vault::Refname;
     use crate::vault::{HeadingLevel, ReferenceData};
 
     use super::Reference::*;
@@ -1196,7 +1244,7 @@ mod vault_tests {
     use super::{MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference, Referenceable};
 
     #[test]
-    fn link_parsing() {
+    fn wiki_link_parsing() {
         let text = "This is a [[link]] [[link 2]]\n[[link 3]]";
         let parsed = Reference::new(text);
 
@@ -1252,7 +1300,59 @@ mod vault_tests {
     }
 
     #[test]
-    fn link_parsin_with_display_text() {
+    fn wiki_link_heading_parsing() {
+        let text = "This is a [[link#heading]]";
+        let parsed = Reference::new(text);
+
+        let expected = vec![
+            WikiHeadingLink(ReferenceData {
+                reference_text: "link#heading".into(),
+                range: tower_lsp::lsp_types::Range {
+                    start: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 10,
+                    },
+                    end: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 26,
+                    },
+                }
+                    .into(),
+                ..ReferenceData::default()
+            }, "link".into(), "heading".into()),
+        ];
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn wiki_link_indexedblock_parsing() {
+        let text = "This is a [[link#^index1]]";
+        let parsed = Reference::new(text);
+
+        let expected = vec![
+            WikiIndexedBlockLink(ReferenceData {
+                reference_text: "link#^index1".into(),
+                range: tower_lsp::lsp_types::Range {
+                    start: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 10,
+                    },
+                    end: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 26,
+                    },
+                }
+                    .into(),
+                ..ReferenceData::default()
+            }, "link".into(), "index1".into()),
+        ];
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn wiki_link_parsin_with_display_text() {
         let text = "This is a [[link|but called different]] [[link 2|222]]\n[[link 3|333]]";
         let parsed = Reference::new(text);
 
@@ -1486,6 +1586,61 @@ mod vault_tests {
     }
 
     #[test]
+    fn md_block_link_parsing() {
+        let text = "Test text test text [link](path/to/link#^index1)";
+
+        let parsed = Reference::new(text);
+
+        let expected = vec![Reference::MDIndexedBlockLink(
+            ReferenceData {
+                reference_text: "path/to/link#^index1".into(),
+                display_text: Some("link".into()),
+                range: Range {
+                    start: Position {
+                        line: 0,
+                        character: 20,
+                    },
+                    end: Position {
+                        line: 0,
+                        character: 48,
+                    },
+                }
+                    .into(),
+            },
+            "path/to/link".into(),
+            "index1".into(),
+        )];
+
+        assert_eq!(parsed, expected);
+
+        let text = "Test text test text [link](path/to/link.md#^index1)";
+
+        let parsed = Reference::new(text);
+
+        let expected = vec![Reference::MDIndexedBlockLink(
+            ReferenceData {
+                reference_text: "path/to/link#^index1".into(),
+                display_text: Some("link".into()),
+                range: Range {
+                    start: Position {
+                        line: 0,
+                        character: 20,
+                    },
+                    end: Position {
+                        line: 0,
+                        character: 51,
+                    },
+                }
+                    .into(),
+            },
+            "path/to/link".into(),
+            "index1".into(),
+        )];
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
     fn footnote_link_parsing() {
         let text = "This is a footnote[^1]
 
@@ -1601,7 +1756,7 @@ more text
         let root_dir = Path::new("/home/vault");
         let refname = linkable.get_refname(root_dir);
 
-        assert_eq!(refname, Some("test".into()))
+        assert_eq!(refname, Some(Refname{full_refname: "test".into(), path: "test".to_string().into(), ..Default::default()}))
     }
 
     #[test]
@@ -1618,7 +1773,7 @@ more text
         let root_dir = Path::new("/home/vault");
         let refname = linkable.get_refname(root_dir);
 
-        assert_eq!(refname, Some("test#Test Heading".into()))
+        assert_eq!(refname, Some(Refname {full_refname: "test#Test Heading".to_string(), path: Some("test".to_string()), infile_ref: Some("Test Heading".to_string())}))
     }
 
     #[test]
@@ -1634,7 +1789,7 @@ more text
         let root_dir = Path::new("/home/vault");
         let refname = linkable.get_refname(root_dir);
 
-        assert_eq!(refname, Some("test#^12345".into()))
+        assert_eq!(refname, Some(Refname {full_refname: "test#^12345".into(), path: Some("test".into()), infile_ref: "^12345".to_string().into()}))
     }
 
     #[test]

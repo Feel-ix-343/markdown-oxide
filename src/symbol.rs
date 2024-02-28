@@ -17,7 +17,7 @@ pub fn workspace_symbol(
         .into_iter()
         .flat_map(|referenceable| {
             Some(SymbolInformation {
-                name: referenceable.get_refname(vault.root_dir())?,
+                name: referenceable.get_refname(vault.root_dir())?.to_string(),
                 kind: match referenceable {
                     Referenceable::File(_, _) => SymbolKind::FILE,
                     Referenceable::Tag(_, _) => SymbolKind::CONSTANT,
