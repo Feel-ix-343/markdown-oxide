@@ -20,6 +20,8 @@ paru -S markdown-oxide-git
 
 Clone the repository and then run `cargo build --release`.
 
+You will subsequently need the path to the release binary when you configure your editor. It can be found relative to the root of the project at `target/release/markdown-oxide`
+
 ## Usage
 
 To use the language server, you need to follow the instructions for your editor of choice below.
