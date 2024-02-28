@@ -16,9 +16,11 @@ If you are using Arch Linux, you can install the latest Git version through the 
 paru -S markdown-oxide-git
 ```
 
-### Manual
+### Manual (for MacOS, Windows, and *other* linux distributions)
 
 Clone the repository and then run `cargo build --release`.
+
+You will subsequently need the path to the release binary when you configure your editor. It can be found relative to the root of the project at `target/release/markdown-oxide`
 
 ## Usage
 
@@ -90,7 +92,7 @@ vim.api.nvim_exec_autocmds('User', { pattern = 'LspAttached' })
 
 The linking syntax is that of Obsidian's and can be found here https://help.obsidian.md/Linking+notes+and+files/Internal+links
 
-Generally, this is [[relativeFilePath(#heading)?(|display text|)?]] e.g. [[articles/markdown oxide#Features|Markdown Oxide Features]] to link to a heading in `Markdown Oxide.md` file in the `articles` folder or [[Obsidian]] for the `Obsidian.md` file in the root folder.  
+Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[articles/markdown oxide#Features|Markdown Oxide Features]] to link to a heading in `Markdown Oxide.md` file in the `articles` folder or [[Obsidian]] for the `Obsidian.md` file in the root folder.  
 
 ## Features
 
