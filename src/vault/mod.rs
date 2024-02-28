@@ -1057,7 +1057,7 @@ impl Referenceable<'_> {
 
 
             Referenceable::UnresovledIndexedBlock(_, path, index) => {
-                Some(format!("{}#{}", path, index))
+                Some(format!("{}#^{}", path, index))
                 .map(|full_ref| Refname{full_refname: full_ref, path: path.to_string().into(), infile_ref: format!("^{}", index.to_string()).into()} )
             }
 
