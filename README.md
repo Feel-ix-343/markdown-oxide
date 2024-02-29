@@ -40,15 +40,7 @@ Adjust your neovim config as follows
 local lspconfig = require('lspconfig')
 local configs = require("lspconfig.configs")
 
-configs["markdown_oxide"] = {
-  default_config = {
-    root_dir = lspconfig.util.root_pattern('.git', vim.fn.getcwd()),
-    filetypes = {"markdown"},
-    cmd = {"markdown-oxide"} -- This needs to be the path to the markdown-oxide binary, either in your PATH or the full absolute path.
-  },
-  on_attach = on_attach, -- do this only if you have an on_attach function already
-}
-
+-- Markdown_Oxide is now added to nvim-lspconfig; make sure to update
 require("lspconfig").markdown_oxide.setup({
     capabilities = capabilities -- ensure that capabilities.workspace.didChangeWatchedFiles.dynamicRegistration = true
 })
