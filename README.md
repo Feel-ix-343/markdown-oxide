@@ -20,7 +20,9 @@ paru -S markdown-oxide-git
 
 If you have cargo installed, you can easily install the binary for the LS by running the following command:
 
-`cargo install --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide`
+```sh
+cargo install --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
+```
 
 ### Manual (for MacOS, Windows, and *other* linux distributions)
 
