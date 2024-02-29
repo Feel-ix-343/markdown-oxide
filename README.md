@@ -40,7 +40,6 @@ Adjust your neovim config as follows
 local lspconfig = require('lspconfig')
 local configs = require("lspconfig.configs")
 
--- Markdown_Oxide is now added to nvim-lspconfig; make sure to update
 require("lspconfig").markdown_oxide.setup({
     capabilities = capabilities -- ensure that capabilities.workspace.didChangeWatchedFiles.dynamicRegistration = true
 })
