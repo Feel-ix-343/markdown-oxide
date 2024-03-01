@@ -662,10 +662,8 @@ impl Reference {
                 MDIndexedBlockLink(_, _, _) => false,
             },
             &Referenceable::File(..) | &Referenceable::UnresovledFile(..) => match self {
-                WikiFileLink(..) => {
-                    referenceable.get_refname(root_dir).as_deref() == Some(text)
-                },
-                MDFileLink(ReferenceData { reference_text: file_ref_text, .. }) => matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir)),
+                MDFileLink(ReferenceData { reference_text: file_ref_text, .. })
+                    | WikiFileLink(ReferenceData { reference_text: file_ref_text, .. }) => matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir)),
                 Tag(_) => false,
                 WikiHeadingLink(_, _, _) => false,
                 WikiIndexedBlockLink(_, _, _) => false,
@@ -677,11 +675,9 @@ impl Reference {
                 | &Referenceable::UnresolvedHeading(.., infile_ref, _)
                 | &Referenceable::IndexedBlock(.., MDIndexedBlock { index: infile_ref, ..}) 
                 | &Referenceable::UnresovledIndexedBlock(.., infile_ref) => match self {
-                    WikiHeadingLink(..)
-                        | WikiIndexedBlockLink(..) => {
-                        referenceable.get_refname(root_dir).as_deref() == Some(text)
-                    }
-                    MDHeadingLink(.., file_ref_text, link_infile_ref)
+                    WikiHeadingLink(.., file_ref_text, link_infile_ref)
+                        | WikiIndexedBlockLink(.., file_ref_text, link_infile_ref)
+                        | MDHeadingLink(.., file_ref_text, link_infile_ref)
                         | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => 
                         matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir)) && link_infile_ref == infile_ref,
                     Tag(_) => false,
@@ -1100,13 +1096,8 @@ impl Referenceable<'_> {
                     ..
                 })
                 | WikiHeadingLink(.., file_ref_text, _)
-                | WikiIndexedBlockLink(.., file_ref_text, _) => self
-                    .get_refname(root_dir)
-                    .is_some_and(|refname| *refname == *file_ref_text),
-
-
-
-                MDFileLink(ReferenceData {
+                | WikiIndexedBlockLink(.., file_ref_text, _)
+                | MDFileLink(ReferenceData {
                     reference_text: file_ref_text,
                     ..
                 })
@@ -1114,43 +1105,25 @@ impl Referenceable<'_> {
                 | MDIndexedBlockLink(.., file_ref_text, _) => {
                         matches_path_or_file(file_ref_text, self.get_refname(root_dir))
                     }
-
-
-
                 Tag(_) => false,
-
-
-
                 Footnote(_) => false,
             },
 
-
-            Referenceable::Heading(..) | Referenceable::UnresolvedHeading(..) => match reference {
-                WikiHeadingLink(data, ..) | MDHeadingLink(data, ..) => {
-                    Some(&data.reference_text) == self.get_refname(root_dir).as_deref()
+            Referenceable::Heading(.., MDHeading { heading_text: ref infile_ref, .. }) 
+                | Referenceable::UnresolvedHeading(.., &ref infile_ref)
+                | Referenceable::IndexedBlock(_, MDIndexedBlock { index: ref infile_ref, .. }) 
+                | Referenceable::UnresovledIndexedBlock(_, _, &ref infile_ref) => match reference {
+                    WikiHeadingLink(ReferenceData{reference_text: file_ref_text, ..}, _, ref_infile_ref) 
+                        | MDHeadingLink(ReferenceData{reference_text: file_ref_text, ..}, _, ref_infile_ref) => {
+                        matches_path_or_file(file_ref_text, self.get_refname(root_dir)) && infile_ref == ref_infile_ref
+                    },
+                    Tag(..) => false,
+                    WikiFileLink(..) => false,
+                    WikiIndexedBlockLink(..) => false,
+                    MDFileLink(..) => false,
+                    MDIndexedBlockLink(..) => false,
+                    Footnote(..) => false,
                 }
-                Tag(..) => false,
-                WikiFileLink(..) => false,
-                WikiIndexedBlockLink(..) => false,
-                MDFileLink(..) => false,
-                MDIndexedBlockLink(..) => false,
-                Footnote(..) => false,
-            },
-
-
-            Referenceable::IndexedBlock(..) | Referenceable::UnresovledIndexedBlock(..) => {
-                match reference {
-                    WikiIndexedBlockLink(..) | MDIndexedBlockLink(..) => {
-                        Some(text) == self.get_refname(root_dir).as_deref()
-                    }
-                    Tag(_) => false,
-                    WikiFileLink(_) => false,
-                    WikiHeadingLink(_, _, _) => false,
-                    MDFileLink(_) => false,
-                    MDHeadingLink(_, _, _) => false,
-                    Footnote(_) => false,
-                }
-            }
         }
     }
 
