@@ -16,6 +16,14 @@ If you are using Arch Linux, you can install the latest Git version through the 
 paru -S markdown-oxide-git
 ```
 
+### Cargo
+
+If you have cargo installed, you can easily install the binary for the LS by running the following command:
+
+```sh
+cargo install --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
+```
+
 ### Manual (for MacOS, Windows, and *other* linux distributions)
 
 Clone the repository and then run `cargo build --release`.
@@ -40,7 +48,6 @@ Adjust your neovim config as follows
 local lspconfig = require('lspconfig')
 local configs = require("lspconfig.configs")
 
--- Markdown_Oxide is now added to nvim-lspconfig; make sure to update
 require("lspconfig").markdown_oxide.setup({
     capabilities = capabilities -- ensure that capabilities.workspace.didChangeWatchedFiles.dynamicRegistration = true
 })
