@@ -39,7 +39,7 @@ pub fn preview_reference(
     reference: &Reference,
 ) -> Option<MarkupContent> {
     match reference {
-        WikiFileLink(..) | WikiHeadingLink(..) | WikiIndexedBlockLink(..) | Footnote(_) => {
+        WikiFileLink(..) | WikiHeadingLink(..) | WikiIndexedBlockLink(..) | Footnote(_) | MDFileLink(..) | MDHeadingLink(..) | MDIndexedBlockLink(..) => {
             let positions = vault.select_referenceable_nodes(None);
             let referenceable = positions
                 .iter()
@@ -52,6 +52,6 @@ pub fn preview_reference(
                 value: display,
             })
         }
-        _ => None,
+        Tag(_) => None,
     }
 }
