@@ -30,7 +30,7 @@ fn referenceable_string(vault: &Vault, referenceable: &Referenceable) -> Option<
 
                 Some(format!("- `{}`: `{}`", path, line)) // and select indented list
             })
-            .join(""),
+            .join("\n"),
         None => format!("No Backlinks")
     };
 
