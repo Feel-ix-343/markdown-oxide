@@ -1209,34 +1209,9 @@ impl Referenceable<'_> {
                 LinkRef(_) => false
             },
 
-            Referenceable::Heading(.., MDHeading { heading_text: ref infile_ref, .. }) 
-                | Referenceable::UnresolvedHeading(.., &ref infile_ref)
-                | Referenceable::IndexedBlock(_, MDIndexedBlock { index: ref infile_ref, .. }) 
-                | Referenceable::UnresovledIndexedBlock(_, _, &ref infile_ref) => match reference {
-                    WikiHeadingLink(ReferenceData{reference_text: file_ref_text, ..}, _, ref_infile_ref) 
-                        | MDHeadingLink(ReferenceData{reference_text: file_ref_text, ..}, _, ref_infile_ref) => {
-                            matches_path_or_file(file_ref_text, self.get_refname(root_dir)) && infile_ref == ref_infile_ref
-                        },
-                    Tag(..) => false,
-                    WikiFileLink(..) => false,
-                    WikiIndexedBlockLink(..) => false,
-                    MDFileLink(..) => false,
-                    MDIndexedBlockLink(..) => false,
-                    Footnote(..) => false,
-                    LinkRef(_) => false,
-                }
+            _ => reference.references(root_dir, reference_path, &self)
 
-            Referenceable::LinkRefDef(path, _) => match reference {
-                Tag(_) => false,
-                WikiFileLink(_) => false,
-                WikiHeadingLink(_, _, _) => false,
-                WikiIndexedBlockLink(_, _, _) => false,
-                MDFileLink(_) => false,
-                MDHeadingLink(_, _, _) => false,
-                MDIndexedBlockLink(_, _, _) => false,
-                Footnote(_) => false,
-                LinkRef(data) => Some(&data.reference_text) == self.get_refname(root_dir).as_deref() && *path == reference_path
-            }
+
         }
     }
 
