@@ -740,7 +740,7 @@ impl Reference {
                 LinkRef(_) => false,
             },
             &Referenceable::Heading(.., MDHeading { heading_text: infile_ref, ..}) 
-                | &Referenceable::UnresolvedHeading(.., infile_ref, _)
+                | &Referenceable::UnresolvedHeading(.., _, infile_ref)
                 | &Referenceable::IndexedBlock(.., MDIndexedBlock { index: infile_ref, ..}) 
                 | &Referenceable::UnresovledIndexedBlock(.., infile_ref) => match self {
                     WikiHeadingLink(.., file_ref_text, link_infile_ref)
@@ -2121,7 +2121,7 @@ Continued
 
     #[test]
     fn parse_link_ref() {
-        let text = "This is a [link]j\n[link]: linktext";
+        let text = "This is a [link]j\n\n[link]: linktext";
 
         let parsed = Reference::new(text);
 
