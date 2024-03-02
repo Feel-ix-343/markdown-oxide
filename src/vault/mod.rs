@@ -555,6 +555,13 @@ pub enum Reference {
     LinkRef(ReferenceData)
 }
 
+impl Deref for Reference {
+    type Target = ReferenceData;
+    fn deref(&self) -> &Self::Target {
+        self.data()
+    }
+}
+
 impl Default for Reference {
     fn default() -> Self {
         WikiFileLink(ReferenceData::default())
@@ -592,7 +599,7 @@ impl Reference {
         }
     }
 
-    fn new(text: &str) -> Vec<Reference> {
+    pub fn new(text: &str) -> Vec<Reference> {
         static WIKI_LINK_RE: Lazy<Regex> = Lazy::new(|| {
             Regex::new(r"\[\[(?<filepath>[^\[\]\|\.\#]+)(\#(?<infileref>[^\[\]\.\|]+))?(\|(?<display>[^\[\]\.\|]+))?\]\]")
                 .unwrap()
