@@ -362,8 +362,14 @@ impl Vault {
                     .map(Into::into)
             }
             Referenceable::File(_, _) => {
-                let file_text = self.ropes.get(referenceable.get_path()).unwrap();
-                Some(String::from(file_text).into())
+                let range = referenceable.get_range()?;
+                Some(
+                    (range.start.line..=range.end.line + 10)
+                        .filter_map(|ln| self.select_line(referenceable.get_path(), ln as isize)) // flatten those options!
+                        .map(String::from_iter)
+                        .join("")
+                        .into(),
+                )
             }
             Referenceable::Tag(_, _) => None,
             Referenceable::UnresovledFile(_, _) => None,
@@ -1209,7 +1215,7 @@ impl Referenceable<'_> {
                 LinkRef(_) => false
             },
 
-            _ => reference.references(root_dir, reference_path, &self)
+            _ => reference.references(root_dir, reference_path, self)
 
 
         }
