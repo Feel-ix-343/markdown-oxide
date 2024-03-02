@@ -247,6 +247,7 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                 Reference::WikiIndexedBlockLink(..) => None,
                 Reference::MDFileLink(..) => None,
                 Reference::Footnote(..) => None,
+                Reference::LinkRef(_) => None,
             }
         })
         .map(DocumentChangeOperation::Edit);
