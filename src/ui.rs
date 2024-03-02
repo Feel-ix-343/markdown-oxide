@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{path::Path, time::SystemTime};
 
 use itertools::Itertools;
 use tower_lsp::lsp_types::{MarkupContent, MarkupKind};
@@ -23,8 +23,14 @@ fn referenceable_string(vault: &Vault, referenceable: &Referenceable) -> Option<
 
     let backlinks_preview = match vault.select_references_for_referenceable(referenceable) {
         Some(references) => references.into_iter()
-            .take(5)
-            .flat_map(|(path, reference)| {
+            .take(20)
+            .map(|(path, reference)| match std::fs::metadata(path).and_then(|meta| meta.modified()) {
+                Ok(modified) => (path, reference, modified),
+                Err(_) => (path, reference, SystemTime::UNIX_EPOCH),
+            })
+            .sorted_by_key(|(_, _, modified)| *modified)
+            .rev()
+            .flat_map(|(path, reference, _)| {
                 let line = String::from_iter(vault.select_line(path, reference.data().range.start.line as isize)?);
 
                 let path = get_obsidian_ref_path(&vault.root_dir(), path)?;
