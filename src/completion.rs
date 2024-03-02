@@ -14,7 +14,7 @@ use regex::Regex;
 use tower_lsp::lsp_types::{
     Command, CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionList,
     CompletionParams, CompletionResponse, CompletionTextEdit, Documentation, MarkupContent,
-    MarkupKind, Position, Range, TextEdit, Url,
+    MarkupKind, Position, Range, TextEdit, Url, InsertTextFormat,
 };
 
 use crate::{
@@ -71,6 +71,7 @@ fn get_completable_mdlink (line: &Vec<char> , cursor_character: usize) -> Option
     let full_range = match reference_under_cursor {
         Some(reference @ (Reference::MDFileLink(..) | Reference::MDHeadingLink(..) | Reference::MDIndexedBlockLink(..))) => 
             reference.range.start.character as usize .. reference.range.end.character as usize,
+        None if line.get(cursor_character) == Some(&')') => full.range().start .. full.range().end + 1,
         _ => full.range()
     };
 
@@ -279,23 +280,22 @@ pub fn get_completions(
     } else if let Some(partialmdlink) = get_completable_mdlink(&selected_line, character) {
 
         match partialmdlink {
-            CompletableMDLink {path, infile_ref, ..} =>  {
+            CompletableMDLink {path, infile_ref, full_range, display, partial} =>  {
                 let inputted_refname = format!("{}{}", path.0, infile_ref.clone().map(|(string, _)| format!("#{}", string)).unwrap_or("".to_string()));
 
                 let all_links = MatchableReferenceable::from_vault(vault);
 
                 let matches = fuzzy_match(&inputted_refname, all_links);
 
-
                 return Some(CompletionResponse::List(CompletionList {
                     is_incomplete: true,
                     items: matches
                         .into_iter()
-                        .take(30)
+                        .take(50)
                         .filter(|(MatchableReferenceable(_, name), _)| {
                             *name != inputted_refname
                         })
-                        .filter_map(|(MatchableReferenceable(referenceable, _), rank)| {
+                        .flat_map(|(MatchableReferenceable(referenceable, _), rank)| {
                             default_completion_item(
                                 vault, 
                                 &referenceable, 
@@ -303,20 +303,56 @@ pub fn get_completions(
                                     range: Range {
                                         start: Position {
                                             line: line as u32,
-                                            character: path.1.start as u32,
+                                            character: full_range.start as u32,
                                         },
                                         end: Position {
                                             line: line as u32,
-                                            character: infile_ref.as_ref().map(|(_, range)| range.end as u32).unwrap_or(path.1.end as u32),
+                                            character: full_range.end as u32,
                                         },
                                     },
-                                    new_text: referenceable.get_refname(vault.root_dir())?.to_string(),
-                                }))
-                            ).map(|item| {
-                                    CompletionItem {
+                                    new_text: format!(
+                                        "[${{1:{}}}]({}{}{}{})",
+                                        match (display.0.as_str(), referenceable.get_refname(vault.root_dir())?.infile_ref) {
+                                            ("", Some(infile_ref_text)) => infile_ref_text.clone(),
+                                            ("", None) => {
+                                                match referenceable {
+                                                    Referenceable::File(_, mdfile) => {
+                                                        match mdfile.headings.first() {
+                                                            Some(heading) => heading.heading_text.clone(),
+                                                            None => "".to_string()
+                                                        }
+                                                    }
+
+                                                    _ => "".to_string()
+                                                }
+                                            }, 
+                                            (display_text, _) => display_text.to_string(),
+                                        },
+                                        if referenceable.get_refname(vault.root_dir())?.path?.contains(" ") {
+                                            "<"
+                                        } else {
+                                            ""
+                                        },
+                                        referenceable.get_refname(vault.root_dir())?.path?.to_string(),
+                                        match referenceable.get_refname(vault.root_dir())?.infile_ref {
+                                            Some(string) => format!("#{}", string),
+                                            None => "".to_string(),
+                                        },
+                                        if referenceable.get_refname(vault.root_dir())?.path?.contains(" ") {
+                                            ">"
+                                        } else {
+                                            ""
+                                        },
+                                    )
+                                })),
+                            ).and_then(|item| {
+                                    Some(CompletionItem {
                                         sort_text: Some(rank.to_string()),
+                                        insert_text_format: Some(InsertTextFormat::SNIPPET),
+                                        filter_text: Some(format!("[{}]({}", display.0, referenceable.get_refname(vault.root_dir())?.to_string())),
                                         ..item
-                                    }
+
+                                    })
                                 })
                         })
                         .collect::<Vec<_>>(),
@@ -418,16 +454,6 @@ fn default_completion_item(
         text_edit,
         documentation: preview_referenceable(vault, referenceable)
             .map(Documentation::MarkupContent),
-        filter_text: match referenceable {
-            Referenceable::IndexedBlock(_, _) => vault
-                .select_referenceable_preview(referenceable)
-                .and_then(|preview| match preview {
-                    Preview::Text(string) => Some(string),
-                    Preview::Empty => None,
-                })
-                .map(|text| format!("{}{}", *refname, &text)),
-            _ => None,
-        },
         ..Default::default()
     };
 

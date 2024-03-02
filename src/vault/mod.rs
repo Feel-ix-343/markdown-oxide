@@ -457,13 +457,13 @@ fn range_to_position(rope: &Rope, range: Range<usize>) -> MyRange {
 
 #[derive(Debug, PartialEq, Eq, Default, Hash, Clone)]
 pub struct MDFile {
-    references: Vec<Reference>,
-    headings: Vec<MDHeading>,
-    indexed_blocks: Vec<MDIndexedBlock>,
-    tags: Vec<MDTag>,
-    footnotes: Vec<MDFootnote>,
-    path: PathBuf,
-    link_reference_definitions: Vec<MDLinkReferenceDefinition>
+    pub references: Vec<Reference>,
+    pub headings: Vec<MDHeading>,
+    pub indexed_blocks: Vec<MDIndexedBlock>,
+    pub tags: Vec<MDTag>,
+    pub footnotes: Vec<MDFootnote>,
+    pub path: PathBuf,
+    pub link_reference_definitions: Vec<MDLinkReferenceDefinition>
 }
 
 impl MDFile {
