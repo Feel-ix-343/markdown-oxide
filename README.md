@@ -124,6 +124,7 @@ Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[arti
     - [X] Headings
     - [X] Indexed Blocks
     - [X] Footnotes
+    - [X] Show backlinks, sorted by the date modified, in the hover (I will write most of the content for a note not in the note itself, but in backlinks to the note; I also will write in notes at times. This feature is to combine the content related to the note including both backlinks in actual organized text)
 - [ ] Code Actions
     - [x] Unresolved file link -> Create the file
     - [x] Unresolved heading link -> append heading to file and create the file if necessary
