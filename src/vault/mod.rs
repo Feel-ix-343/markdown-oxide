@@ -371,7 +371,7 @@ impl Vault {
             Referenceable::File(_, _) => {
                 let range = referenceable.get_range()?;
                 Some(
-                    (range.start.line..=range.end.line + 10)
+                    (range.start.line..=range.end.line + 13)
                         .filter_map(|ln| self.select_line(referenceable.get_path(), ln as isize)) // flatten those options!
                         .map(String::from_iter)
                         .join("")
