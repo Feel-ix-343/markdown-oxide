@@ -23,14 +23,7 @@ fn referenceable_string(vault: &Vault, referenceable: &Referenceable) -> Option<
 
     let backlinks_preview = match vault.select_references_for_referenceable(referenceable) {
         Some(references) => references.into_iter()
-            .take(20)
-            .map(|(path, reference)| match std::fs::metadata(path).and_then(|meta| meta.modified()) {
-                Ok(modified) => (path, reference, modified),
-                Err(_) => (path, reference, SystemTime::UNIX_EPOCH),
-            })
-            .sorted_by_key(|(_, _, modified)| *modified)
-            .rev()
-            .flat_map(|(path, reference, _)| {
+            .flat_map(|(path, reference)| {
                 let line = String::from_iter(vault.select_line(path, reference.data().range.start.line as isize)?);
 
                 let path = get_obsidian_ref_path(&vault.root_dir(), path)?;

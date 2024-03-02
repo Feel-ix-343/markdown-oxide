@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
     iter,
     ops::{Deref, DerefMut, Range, Not},
-    path::{Path, PathBuf}, char,
+    path::{Path, PathBuf}, char, time::SystemTime,
 };
 
 use itertools::Itertools;
@@ -293,6 +293,13 @@ impl Vault {
                 .filter(|(ref_path, reference)| {
                     referenceable.matches_reference(&self.root_dir, reference, ref_path)
                 })
+                .map(|(path, reference)| match std::fs::metadata(path).and_then(|meta| meta.modified()) {
+                    Ok(modified) => (path, reference, modified),
+                    Err(_) => (path, reference, SystemTime::UNIX_EPOCH),
+                })
+                .sorted_by_key(|(_, _, modified)| *modified)
+                .rev()
+                .map(|(one, two, _)| (one, two))
                 .collect(),
         )
     }
