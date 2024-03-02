@@ -13,13 +13,15 @@ use rayon::prelude::*;
 use regex::Regex;
 use tower_lsp::lsp_types::{
     Command, CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionList,
-    CompletionParams, CompletionResponse, CompletionTextEdit, Documentation, MarkupContent,
-    MarkupKind, Position, Range, TextEdit, Url, InsertTextFormat,
+    CompletionParams, CompletionResponse, CompletionTextEdit, Documentation, InsertTextFormat,
+    MarkupContent, MarkupKind, Position, Range, TextEdit, Url,
 };
 
 use crate::{
     ui::preview_referenceable,
-    vault::{get_obsidian_ref_path, Block, Preview, Referenceable, Vault, MyRange, Refname, Reference},
+    vault::{
+        get_obsidian_ref_path, Block, MyRange, Preview, Reference, Referenceable, Refname, Vault,
+    },
 };
 
 fn get_wikilink_index(line: &Vec<char>, cursor_character: usize) -> Option<usize> {
@@ -46,8 +48,7 @@ struct CompletableMDLink {
     full_range: LineRange<usize>,
 }
 
-fn get_completable_mdlink (line: &Vec<char> , cursor_character: usize) -> Option<CompletableMDLink> {
-
+fn get_completable_mdlink(line: &Vec<char>, cursor_character: usize) -> Option<CompletableMDLink> {
     let line_to_cursor = line.get(0..cursor_character)?;
 
     static PARTIAL_MDLINK_REGEX: Lazy<Regex> = Lazy::new(|| {
@@ -56,34 +57,45 @@ fn get_completable_mdlink (line: &Vec<char> , cursor_character: usize) -> Option
 
     let string_to_char = String::from_iter(line_to_cursor);
 
+    let captures = PARTIAL_MDLINK_REGEX.captures(&string_to_char)?;
 
-    let captures = PARTIAL_MDLINK_REGEX
-        .captures(&string_to_char)?;
-
-    let (full, display, reftext, infileref) = (captures.get(0)?, captures.name("display")?, captures.name("path")?, captures.name("infileref"));
-
-
-    let reference_under_cursor = Reference::new(&String::from_iter(line)).into_iter().find(|reference| 
-        reference.range.start.character <= cursor_character as u32 
-        && reference.range.end.character >= cursor_character as u32
+    let (full, display, reftext, infileref) = (
+        captures.get(0)?,
+        captures.name("display")?,
+        captures.name("path")?,
+        captures.name("infileref"),
     );
 
+    let reference_under_cursor =
+        Reference::new(&String::from_iter(line))
+            .into_iter()
+            .find(|reference| {
+                reference.range.start.character <= cursor_character as u32
+                    && reference.range.end.character >= cursor_character as u32
+            });
+
     let full_range = match reference_under_cursor {
-        Some(reference @ (Reference::MDFileLink(..) | Reference::MDHeadingLink(..) | Reference::MDIndexedBlockLink(..))) => 
-            reference.range.start.character as usize .. reference.range.end.character as usize,
-        None if line.get(cursor_character) == Some(&')') => full.range().start .. full.range().end + 1,
-        _ => full.range()
+        Some(
+            reference @ (Reference::MDFileLink(..)
+            | Reference::MDHeadingLink(..)
+            | Reference::MDIndexedBlockLink(..)),
+        ) => reference.range.start.character as usize..reference.range.end.character as usize,
+        None if line.get(cursor_character) == Some(&')') => {
+            full.range().start..full.range().end + 1
+        }
+        _ => full.range(),
     };
 
     let partial = Some(CompletableMDLink {
         path: (reftext.as_str().to_string(), reftext.range()),
         display: (display.as_str().to_string(), display.range()),
-        infile_ref: infileref.map(|infile_ref| (infile_ref.as_str().to_string(), infile_ref.range())),
+        infile_ref: infileref
+            .map(|infile_ref| (infile_ref.as_str().to_string(), infile_ref.range())),
         partial: (full.as_str().to_string(), full.range()),
-        full_range
+        full_range,
     });
 
-    return partial
+    return partial;
 }
 
 pub fn get_completions(
@@ -106,7 +118,8 @@ pub fn get_completions(
 
     let selected_line = vault.select_line(&path.to_path_buf(), line as isize)?;
 
-    if let Some(index) = get_wikilink_index(&selected_line, character) { // completions for wikilinks `[[text|` where | is the cursor
+    if let Some(index) = get_wikilink_index(&selected_line, character) {
+        // completions for wikilinks `[[text|` where | is the cursor
         let range = Range {
             start: Position {
                 line: line as u32,
@@ -152,7 +165,9 @@ pub fn get_completions(
                         )
                     })
                     .flatten()
-                    .filter_map(|referenceable| default_completion_item(vault, &referenceable, None))
+                    .filter_map(|referenceable| {
+                        default_completion_item(vault, &referenceable, None)
+                    })
                     .collect::<Vec<_>>(),
                 is_incomplete: true,
             })),
@@ -249,7 +264,6 @@ pub fn get_completions(
                 }));
             }
             ref filter_text @ [..] if !filter_text.contains(&']') => {
-
                 let all_links = MatchableReferenceable::from_vault(vault);
                 let matches = fuzzy_match(&String::from_iter(filter_text), all_links);
 
@@ -262,15 +276,20 @@ pub fn get_completions(
                             *name != String::from_iter(filter_text)
                         })
                         .filter_map(|(MatchableReferenceable(referenceable, _), rank)| {
-                            default_completion_item(vault, &referenceable, Some(CompletionTextEdit::Edit(TextEdit {
-                                range,
-                                new_text: referenceable.get_refname(vault.root_dir())?.to_string(),
-                            }))).map(|item| {
-                                    CompletionItem {
-                                        sort_text: Some(rank.to_string()),
-                                        ..item
-                                    }
-                                })
+                            default_completion_item(
+                                vault,
+                                &referenceable,
+                                Some(CompletionTextEdit::Edit(TextEdit {
+                                    range,
+                                    new_text: referenceable
+                                        .get_refname(vault.root_dir())?
+                                        .to_string(),
+                                })),
+                            )
+                            .map(|item| CompletionItem {
+                                sort_text: Some(rank.to_string()),
+                                ..item
+                            })
                         })
                         .collect::<Vec<_>>(),
                 }));
@@ -278,10 +297,22 @@ pub fn get_completions(
             _ => None,
         };
     } else if let Some(partialmdlink) = get_completable_mdlink(&selected_line, character) {
-
         match partialmdlink {
-            CompletableMDLink {path, infile_ref, full_range, display, partial} =>  {
-                let inputted_refname = format!("{}{}", path.0, infile_ref.clone().map(|(string, _)| format!("#{}", string)).unwrap_or("".to_string()));
+            CompletableMDLink {
+                path,
+                infile_ref,
+                full_range,
+                display,
+                partial,
+            } => {
+                let inputted_refname = format!(
+                    "{}{}",
+                    path.0,
+                    infile_ref
+                        .clone()
+                        .map(|(string, _)| format!("#{}", string))
+                        .unwrap_or("".to_string())
+                );
 
                 let all_links = MatchableReferenceable::from_vault(vault);
 
@@ -292,13 +323,11 @@ pub fn get_completions(
                     items: matches
                         .into_iter()
                         .take(50)
-                        .filter(|(MatchableReferenceable(_, name), _)| {
-                            *name != inputted_refname
-                        })
+                        .filter(|(MatchableReferenceable(_, name), _)| *name != inputted_refname)
                         .flat_map(|(MatchableReferenceable(referenceable, _), rank)| {
                             default_completion_item(
-                                vault, 
-                                &referenceable, 
+                                vault,
+                                &referenceable,
                                 Some(CompletionTextEdit::Edit(TextEdit {
                                     range: Range {
                                         start: Position {
@@ -312,70 +341,90 @@ pub fn get_completions(
                                     },
                                     new_text: format!(
                                         "[${{1:{}}}]({}{}{}{})",
-                                        match (display.0.as_str(), referenceable.get_refname(vault.root_dir())?.infile_ref) {
+                                        match (
+                                            display.0.as_str(),
+                                            referenceable.get_refname(vault.root_dir())?.infile_ref
+                                        ) {
                                             ("", Some(infile_ref_text)) => infile_ref_text.clone(),
                                             ("", None) => {
                                                 match referenceable {
                                                     Referenceable::File(_, mdfile) => {
                                                         match mdfile.headings.first() {
-                                                            Some(heading) => heading.heading_text.clone(),
-                                                            None => "".to_string()
+                                                            Some(heading) => {
+                                                                heading.heading_text.clone()
+                                                            }
+                                                            None => "".to_string(),
                                                         }
                                                     }
 
-                                                    _ => "".to_string()
+                                                    _ => "".to_string(),
                                                 }
-                                            }, 
+                                            }
                                             (display_text, _) => display_text.to_string(),
                                         },
-                                        if referenceable.get_refname(vault.root_dir())?.path?.contains(" ") {
+                                        if referenceable
+                                            .get_refname(vault.root_dir())?
+                                            .path?
+                                            .contains(" ")
+                                        {
                                             "<"
                                         } else {
                                             ""
                                         },
-                                        referenceable.get_refname(vault.root_dir())?.path?.to_string(),
-                                        match referenceable.get_refname(vault.root_dir())?.infile_ref {
+                                        referenceable
+                                            .get_refname(vault.root_dir())?
+                                            .path?
+                                            .to_string(),
+                                        match referenceable
+                                            .get_refname(vault.root_dir())?
+                                            .infile_ref
+                                        {
                                             Some(string) => format!("#{}", string),
                                             None => "".to_string(),
                                         },
-                                        if referenceable.get_refname(vault.root_dir())?.path?.contains(" ") {
+                                        if referenceable
+                                            .get_refname(vault.root_dir())?
+                                            .path?
+                                            .contains(" ")
+                                        {
                                             ">"
                                         } else {
                                             ""
                                         },
-                                    )
+                                    ),
                                 })),
-                            ).and_then(|item| {
-                                    Some(CompletionItem {
-                                        sort_text: Some(rank.to_string()),
-                                        insert_text_format: Some(InsertTextFormat::SNIPPET),
-                                        filter_text: Some(format!("[{}]({}", display.0, referenceable.get_refname(vault.root_dir())?.to_string())),
-                                        ..item
-
-                                    })
+                            )
+                            .and_then(|item| {
+                                Some(CompletionItem {
+                                    sort_text: Some(rank.to_string()),
+                                    insert_text_format: Some(InsertTextFormat::SNIPPET),
+                                    filter_text: Some(format!(
+                                        "[{}]({}",
+                                        display.0,
+                                        referenceable.get_refname(vault.root_dir())?.to_string()
+                                    )),
+                                    ..item
                                 })
+                            })
                         })
                         .collect::<Vec<_>>(),
-                }))
-
+                }));
             }
         }
-
-
     } else if character
         .checked_sub(1)
         .and_then(|start| selected_line.get(start..character))
-    == Some(&['#'])
+        == Some(&['#'])
     {
         // Initial Tag completion
         let tag_refereneables =
-        vault
-            .select_referenceable_nodes(None)
-            .into_iter()
-            .flat_map(|referenceable| match referenceable {
-                tag @ Referenceable::Tag(_, _) => Some(tag),
-                _ => None,
-            });
+            vault
+                .select_referenceable_nodes(None)
+                .into_iter()
+                .flat_map(|referenceable| match referenceable {
+                    tag @ Referenceable::Tag(_, _) => Some(tag),
+                    _ => None,
+                });
 
         return Some(CompletionResponse::Array(
             tag_refereneables
@@ -393,7 +442,7 @@ pub fn get_completions(
     } else if character
         .checked_sub(1)
         .and_then(|start| selected_line.get(start..character))
-    == Some(&['['])
+        == Some(&['['])
     {
         let footnote_referenceables = vault
             .select_referenceable_nodes(Some(&path))
@@ -401,9 +450,9 @@ pub fn get_completions(
             .flat_map(|referenceable| match referenceable {
                 Referenceable::Footnote(footnote_path, _)
                     if footnote_path.as_path() == path.as_path() =>
-                    {
-                        Some(referenceable)
-                    }
+                {
+                    Some(referenceable)
+                }
                 _ => None,
             });
 
@@ -462,16 +511,14 @@ fn default_completion_item(
 
 struct MatchableReferenceable<'a>(Referenceable<'a>, String);
 
-
 impl MatchableReferenceable<'_> {
     fn from_vault<'a>(vault: &'a Vault) -> Vec<MatchableReferenceable<'a>> {
-
         let all_links = vault
             .select_referenceable_nodes(None)
             .into_par_iter()
             .filter(|referenceable| {
                 !matches!(referenceable, Referenceable::Tag(..))
-                && !matches!(referenceable, Referenceable::Footnote(..))
+                    && !matches!(referenceable, Referenceable::Footnote(..))
             })
             .filter_map(|referenceable| {
                 referenceable
@@ -513,75 +560,59 @@ mod tests {
         assert_eq!(Some("lin"), s.get(expected + 1..10));
     }
 
-
     #[test]
     fn test_partial_mdlink() {
         let line = "This is line [display](partialpa"; // (th)
 
-        let expected = Some(
-            CompletableMDLink {
-                partial: ("[display](partialpa".to_string(), 13..32),
-                display: ("display".to_string(), 14..21),
-                path: ("partialpa".to_string(), 23..32),
-                infile_ref: None,
-                full_range: 13..32
-            }
-        );
-
+        let expected = Some(CompletableMDLink {
+            partial: ("[display](partialpa".to_string(), 13..32),
+            display: ("display".to_string(), 14..21),
+            path: ("partialpa".to_string(), 23..32),
+            infile_ref: None,
+            full_range: 13..32,
+        });
 
         let actual = super::get_completable_mdlink(&line.chars().collect(), 32);
 
         assert_eq!(actual, expected);
-
 
         let line = "This is line [display](partialpath)"; // (th)
 
-        let expected = Some(
-            CompletableMDLink {
-                partial: ("[display](partialpa".to_string(), 13..32),
-                display: ("display".to_string(), 14..21),
-                path: ("partialpa".to_string(), 23..32),
-                infile_ref: None,
-                full_range: 13..35
-            }
-        );
-
+        let expected = Some(CompletableMDLink {
+            partial: ("[display](partialpa".to_string(), 13..32),
+            display: ("display".to_string(), 14..21),
+            path: ("partialpa".to_string(), 23..32),
+            infile_ref: None,
+            full_range: 13..35,
+        });
 
         let actual = super::get_completable_mdlink(&line.chars().collect(), 32);
 
         assert_eq!(actual, expected);
 
-
         let line = "[disp](pp) This is line [display](partialpath)"; // (th)
 
-        let expected = Some(
-            CompletableMDLink {
-                partial: ("[display](partialpa".to_string(), 24..43),
-                display: ("display".to_string(), 25..32),
-                path: ("partialpa".to_string(), 34..43),
-                infile_ref: None,
-                full_range: 24..46
-            }
-        );
-
+        let expected = Some(CompletableMDLink {
+            partial: ("[display](partialpa".to_string(), 24..43),
+            display: ("display".to_string(), 25..32),
+            path: ("partialpa".to_string(), 34..43),
+            infile_ref: None,
+            full_range: 24..46,
+        });
 
         let actual = super::get_completable_mdlink(&line.chars().collect(), 43);
 
         assert_eq!(actual, expected);
 
-
         let line = "[disp](pp) This is line [display](partialpath)"; // (th)
 
-        let expected = Some(
-            CompletableMDLink {
-                partial: ("[display](partialpath".to_string(), 24..45),
-                display: ("display".to_string(), 25..32),
-                path: ("partialpath".to_string(), 34..45),
-                infile_ref: None,
-                full_range: 24..46
-            }
-        );
-
+        let expected = Some(CompletableMDLink {
+            partial: ("[display](partialpath".to_string(), 24..45),
+            display: ("display".to_string(), 25..32),
+            path: ("partialpath".to_string(), 34..45),
+            infile_ref: None,
+            full_range: 24..46,
+        });
 
         let actual = super::get_completable_mdlink(&line.chars().collect(), 45);
 
@@ -592,16 +623,13 @@ mod tests {
     fn test_partial_mdlink_infile_refs() {
         let line = "This is line [display](partialpa#"; // (th)
 
-        let expected = Some(
-            CompletableMDLink {
-                partial: ("[display](partialpa#".to_string(), 13..33),
-                display: ("display".to_string(), 14..21),
-                path: ("partialpa".to_string(), 23..32),
-                infile_ref: Some(("".to_string(), 33..33)),
-                full_range: 13..33
-            }
-        );
-
+        let expected = Some(CompletableMDLink {
+            partial: ("[display](partialpa#".to_string(), 13..33),
+            display: ("display".to_string(), 14..21),
+            path: ("partialpa".to_string(), 23..32),
+            infile_ref: Some(("".to_string(), 33..33)),
+            full_range: 13..33,
+        });
 
         let actual = super::get_completable_mdlink(&line.chars().collect(), 33);
 
@@ -609,16 +637,13 @@ mod tests {
 
         let line = "[disp](pp) This is line [display](partialpath#Display)"; // (th)
 
-        let expected = Some(
-            CompletableMDLink {
-                partial: ("[display](partialpath#Display".to_string(), 24..53),
-                display: ("display".to_string(), 25..32),
-                path: ("partialpath".to_string(), 34..45),
-                infile_ref: Some(("Display".to_string(), 46..53)),
-                full_range: 24..54
-            }
-        );
-
+        let expected = Some(CompletableMDLink {
+            partial: ("[display](partialpath#Display".to_string(), 24..53),
+            display: ("display".to_string(), 25..32),
+            path: ("partialpath".to_string(), 34..45),
+            infile_ref: Some(("Display".to_string(), 46..53)),
+            full_range: 24..54,
+        });
 
         let actual = super::get_completable_mdlink(&line.chars().collect(), 53);
 
@@ -626,16 +651,13 @@ mod tests {
 
         let line = "[disp](pp) This is line [display](partialpath#Display)"; // (th)
 
-        let expected = Some(
-            CompletableMDLink {
-                partial: ("[display](partialpath#Disp".to_string(), 24..50),
-                display: ("display".to_string(), 25..32),
-                path: ("partialpath".to_string(), 34..45),
-                infile_ref: Some(("Disp".to_string(), 46..50)),
-                full_range: 24..54
-            }
-        );
-
+        let expected = Some(CompletableMDLink {
+            partial: ("[display](partialpath#Disp".to_string(), 24..50),
+            display: ("display".to_string(), 25..32),
+            path: ("partialpath".to_string(), 34..45),
+            infile_ref: Some(("Disp".to_string(), 46..50)),
+            full_range: 24..54,
+        });
 
         let actual = super::get_completable_mdlink(&line.chars().collect(), 50);
 
@@ -643,15 +665,17 @@ mod tests {
     }
 }
 
-fn fuzzy_match<T: Matchable>(filter_text: &str, items: impl IntoIterator<Item = T>) -> Vec<(T, u32)>  {
-
+fn fuzzy_match<T: Matchable>(
+    filter_text: &str,
+    items: impl IntoIterator<Item = T>,
+) -> Vec<(T, u32)> {
     let mut matcher = Matcher::new(nucleo_matcher::Config::DEFAULT);
     let matches = pattern::Pattern::parse(
         filter_text,
         pattern::CaseMatching::Ignore,
         Normalization::Smart,
     )
-        .match_list(items, &mut matcher);
+    .match_list(items, &mut matcher);
 
-    return matches
+    return matches;
 }

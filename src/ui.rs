@@ -3,7 +3,7 @@ use std::{path::Path, time::SystemTime};
 use itertools::Itertools;
 use tower_lsp::lsp_types::{MarkupContent, MarkupKind};
 
-use crate::vault::{Preview, Reference, Referenceable, Vault, get_obsidian_ref_path};
+use crate::vault::{get_obsidian_ref_path, Preview, Reference, Referenceable, Vault};
 
 fn referenceable_string(vault: &Vault, referenceable: &Referenceable) -> Option<String> {
     let preview = vault.select_referenceable_preview(referenceable);
@@ -20,26 +20,29 @@ fn referenceable_string(vault: &Vault, referenceable: &Referenceable) -> Option<
         None => "No Preview".into(),
     };
 
-
     let backlinks_preview = match vault.select_references_for_referenceable(referenceable) {
-        Some(references) => references.into_iter()
+        Some(references) => references
+            .into_iter()
             .flat_map(|(path, reference)| {
-                let line = String::from_iter(vault.select_line(path, reference.data().range.start.line as isize)?);
+                let line = String::from_iter(
+                    vault.select_line(path, reference.data().range.start.line as isize)?,
+                );
 
                 let path = get_obsidian_ref_path(&vault.root_dir(), path)?;
 
                 Some(format!("- `{}`: `{}`", path, line)) // and select indented list
             })
             .join("\n"),
-        None => format!("No Backlinks")
+        None => format!("No Backlinks"),
     };
 
-
-    return Some(format!("{}\n\n`...`\n\n---\n\n# Backlinks\n\n{}", written_text_preview, backlinks_preview))
+    return Some(format!(
+        "{}\n\n`...`\n\n---\n\n# Backlinks\n\n{}",
+        written_text_preview, backlinks_preview
+    ));
 }
 
 pub fn preview_referenceable(
-
     vault: &Vault,
     referenceable: &Referenceable,
 ) -> Option<MarkupContent> {
@@ -59,7 +62,14 @@ pub fn preview_reference(
     reference: &Reference,
 ) -> Option<MarkupContent> {
     match reference {
-        WikiFileLink(..) | WikiHeadingLink(..) | WikiIndexedBlockLink(..) | Footnote(_) | MDFileLink(..) | MDHeadingLink(..) | MDIndexedBlockLink(..) | LinkRef(..) => {
+        WikiFileLink(..)
+        | WikiHeadingLink(..)
+        | WikiIndexedBlockLink(..)
+        | Footnote(_)
+        | MDFileLink(..)
+        | MDHeadingLink(..)
+        | MDIndexedBlockLink(..)
+        | LinkRef(..) => {
             let positions = vault.select_referenceable_nodes(None);
             let referenceable = positions
                 .iter()
