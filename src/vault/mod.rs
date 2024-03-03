@@ -219,9 +219,10 @@ impl Vault {
 
                 let resolved_referenceables_refnames: HashSet<String> = resolved_referenceables
                     .iter()
-                    .filter_map(|resolved| {
-                        resolved.get_refname(self.root_dir()).as_deref().cloned()
+                    .flat_map(|resolved| {
+                        resolved.get_refname(self.root_dir()).and_then(|refname| vec![refname.to_string(), format!("{}{}", refname.link_file_key()?, refname.infile_ref.map(|refe| format!("#{}", refe)).unwrap_or("".to_string()))].into())
                     })
+                    .flatten()
                     .collect();
 
                 let unresolved = self.select_references(None).map(|references| {
@@ -1151,6 +1152,18 @@ pub struct Refname {
     pub infile_ref: Option<String>,
 }
 
+impl Refname {
+    fn link_file_key(&self) -> Option<String> {
+
+        let path = &self.path.clone()?;
+
+        let last = path.split('/').last()?;
+
+        return Some(last.to_string())
+
+    }
+}
+
 impl Deref for Refname {
     type Target = String;
     fn deref(&self) -> &Self::Target {
@@ -1350,7 +1363,8 @@ impl Referenceable<'_> {
 
 fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
     (|| {
-        let refname_path = refname?.path?; // this function should not be used for tags, ... only for heading, files, indexed blocks
+        let refname = refname?;
+        let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
 
         if file_ref_text.contains('/') {
             let file_ref_text = file_ref_text.replace(r"%20", " ");
@@ -1364,7 +1378,9 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
                 path @ _ => Some(String::from_iter(path) == refname_path),
             }
         } else {
-            let last_segment = refname_path.split('/').last()?;
+
+            let last_segment = refname.link_file_key()?;
+
             Some(file_ref_text == last_segment)
         }
     })()
