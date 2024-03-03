@@ -1153,7 +1153,7 @@ pub struct Refname {
 }
 
 impl Refname {
-    fn link_file_key(&self) -> Option<String> {
+    pub fn link_file_key(&self) -> Option<String> {
 
         let path = &self.path.clone()?;
 

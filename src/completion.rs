@@ -314,6 +314,7 @@ pub fn get_completions(
                         .unwrap_or("".to_string())
                 );
 
+
                 let all_links = MatchableReferenceable::from_vault(vault);
 
                 let matches = fuzzy_match(&inputted_refname, all_links);
@@ -373,8 +374,7 @@ pub fn get_completions(
                                         },
                                         referenceable
                                             .get_refname(vault.root_dir())?
-                                            .path?
-                                            .to_string(),
+                                            .link_file_key()?,
                                         match referenceable
                                             .get_refname(vault.root_dir())?
                                             .infile_ref
@@ -396,6 +396,10 @@ pub fn get_completions(
                             )
                             .and_then(|item| {
                                 Some(CompletionItem {
+                                    label: format!("{}{}", 
+                                        referenceable.get_refname(vault.root_dir())?.link_file_key()?,
+                                        referenceable.get_refname(vault.root_dir())?.infile_ref.map(|thing| format!("#{}", thing)).unwrap_or("".into())
+                                    ),
                                     sort_text: Some(rank.to_string()),
                                     insert_text_format: Some(InsertTextFormat::SNIPPET),
                                     filter_text: Some(format!(
