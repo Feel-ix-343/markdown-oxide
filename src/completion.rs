@@ -471,7 +471,7 @@ pub fn get_completions(
             matches
                 .into_iter()
                 .take(20)
-                .filter(|(MatchableReferenceable(_, tag_name), _)| *tag_name != completable_tag_name)
+                .filter(|(MatchableReferenceable(_, tag_name), _)| *tag_name == completable_tag_name)
                 .flat_map(|(MatchableReferenceable(tag, tag_name), ranking)| {
                     default_completion_item(vault, &tag, Some(CompletionTextEdit::Edit(TextEdit {
                         new_text: format!("#{}", tag_name.clone()),
@@ -549,7 +549,19 @@ fn default_completion_item(
 ) -> Option<CompletionItem> {
     let refname = referenceable.get_refname(vault.root_dir())?;
     let completion = CompletionItem {
-        kind: Some(CompletionItemKind::FILE),
+        kind: match &referenceable {
+            Referenceable::File(..) => Some(CompletionItemKind::FILE),
+            Referenceable::Heading(..) 
+                | Referenceable::IndexedBlock(..)
+                | Referenceable::Footnote(..)
+                | Referenceable::LinkRefDef(..)
+                => Some(CompletionItemKind::REFERENCE),
+            Referenceable::UnresovledFile(..)
+                | Referenceable::UnresolvedHeading(..)
+                | Referenceable::UnresovledIndexedBlock(..)
+                => Some(CompletionItemKind::KEYWORD),
+            Referenceable::Tag(..) => Some(CompletionItemKind::CONSTANT),
+        },
         label: refname.clone(),
         label_details: match referenceable.is_unresolved() {
             true => Some(CompletionItemLabelDetails {
