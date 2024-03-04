@@ -1054,7 +1054,7 @@ impl MDFootnote {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MDTag {
-    tag_ref: String,
+    pub tag_ref: String,
     range: MyRange,
 }
 
@@ -1223,7 +1223,7 @@ impl Referenceable<'_> {
                     infile_ref: format!("^{}", index.index).into(),
                 }),
 
-            Referenceable::Tag(_, tag) => Some(format!("#{}", tag.tag_ref).into()),
+            Referenceable::Tag(_, tag) => Some(Refname { full_refname: format!("#{}", tag.tag_ref).into(), path: Some(tag.tag_ref.clone()), infile_ref: None}),
 
             Referenceable::Footnote(_, footnote) => Some(footnote.index.clone().into()),
 

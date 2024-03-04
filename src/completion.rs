@@ -20,7 +20,7 @@ use tower_lsp::lsp_types::{
 use crate::{
     ui::preview_referenceable,
     vault::{
-        get_obsidian_ref_path, Block, MyRange, Preview, Reference, Referenceable, Refname, Vault,
+        get_obsidian_ref_path, Block, MyRange, Preview, Reference, Referenceable, Refname, Vault, MDTag,
     },
 };
 
@@ -98,6 +98,42 @@ fn get_completable_mdlink(line: &Vec<char>, cursor_character: usize) -> Option<C
     return partial;
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct CompletableTag {
+    full_range: LineRange<usize>,
+    /// Tag name and range not including the '#'
+    inputted_tag: (String, LineRange<usize>)
+}
+
+fn get_completable_tag(line: &Vec<char>, cursor_character: usize) -> Option<CompletableTag> {
+    static PARTIAL_TAG_REGEX: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(r"\#(?<text>[a-zA-Z0-9\/]*)").unwrap()
+    }); 
+
+    let line_string = String::from_iter(line);
+
+    let captures = PARTIAL_TAG_REGEX.captures(&line_string)?;
+
+    let (full, tag_text) = (
+        captures.get(0)?,
+        captures.name("text")?,
+    );
+
+
+    // check if the cursor is in the tag
+    let preceding_character = cursor_character - 1; // User is inserting into the position after the character they are looking at; "#tag|"  cursor is a position 4; I want pos 3; the end of the tag
+    if preceding_character >= full.range().start && preceding_character < full.range().end { // end is exclusive
+        return Some(CompletableTag {
+            full_range: full.range(),
+            inputted_tag: (tag_text.as_str().to_string(), tag_text.range())
+        })
+    } else {
+        return None
+    }
+
+
+}
+
 pub fn get_completions(
     vault: &Vault,
     initial_completion_files: &[PathBuf],
@@ -119,6 +155,7 @@ pub fn get_completions(
     let selected_line = vault.select_line(&path.to_path_buf(), line as isize)?;
 
     if let Some(index) = get_wikilink_index(&selected_line, character) {
+
         // completions for wikilinks `[[text|` where | is the cursor
         let range = Range {
             start: Position {
@@ -415,11 +452,7 @@ pub fn get_completions(
                 }));
             }
         }
-    } else if character
-        .checked_sub(1)
-        .and_then(|start| selected_line.get(start..character))
-        == Some(&['#'])
-    {
+    } else if let Some(CompletableTag{ full_range, inputted_tag: (completable_tag_name, tag_name_range) }) = get_completable_tag(&selected_line, character) {
         // Initial Tag completion
         let tag_refereneables =
             vault
@@ -428,16 +461,37 @@ pub fn get_completions(
                 .flat_map(|referenceable| match referenceable {
                     tag @ Referenceable::Tag(_, _) => Some(tag),
                     _ => None,
-                });
+                })
+                .flat_map(|tag| Some(MatchableReferenceable(tag.clone(), tag.get_refname(&vault.root_dir())?.path?)))
+                .collect_vec();
+
+        let matches = fuzzy_match(&completable_tag_name, tag_refereneables);
 
         return Some(CompletionResponse::Array(
-            tag_refereneables
-                .filter_map(|tag| {
-                    tag.get_refname(vault.root_dir())
-                        .map(|root| CompletionItem {
+            matches
+                .into_iter()
+                .take(20)
+                .filter(|(MatchableReferenceable(_, tag_name), _)| *tag_name != completable_tag_name)
+                .flat_map(|(MatchableReferenceable(tag, tag_name), ranking)| {
+                    default_completion_item(vault, &tag, Some(CompletionTextEdit::Edit(TextEdit {
+                        new_text: format!("#{}", tag_name.clone()),
+                        range: Range {
+                            start: Position {
+                                line: line as u32,
+                                character: full_range.start as u32,
+                            },
+                            end: Position {
+                                line: line as u32,
+                                character: full_range.end as u32,
+                            },
+                        }
+                    })))
+                        .map(|item| CompletionItem {
                             kind: Some(CompletionItemKind::CONSTANT),
-                            label: root.to_string(),
-                            ..Default::default()
+                            label: tag_name.clone(),
+                            sort_text: Some(ranking.to_string()),
+                            filter_text: Some(format!("#{}", tag_name)),
+                            ..item
                         })
                 })
                 .unique_by(|c| c.label.to_owned())
@@ -547,9 +601,26 @@ impl Matchable for Block {
     }
 }
 
+fn fuzzy_match<T: Matchable>(
+    filter_text: &str,
+    items: impl IntoIterator<Item = T>,
+) -> Vec<(T, u32)> {
+    let mut matcher = Matcher::new(nucleo_matcher::Config::DEFAULT);
+    let matches = pattern::Pattern::parse(
+        filter_text,
+        pattern::CaseMatching::Ignore,
+        Normalization::Smart,
+    )
+    .match_list(items, &mut matcher);
+
+    return matches;
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{get_wikilink_index, CompletableMDLink};
+    use itertools::Itertools;
+
+    use super::{get_wikilink_index, CompletableMDLink, CompletableTag, get_completable_tag};
 
     #[test]
     fn test_index() {
@@ -667,19 +738,56 @@ mod tests {
 
         assert_eq!(actual, expected);
     }
+
+    #[test]
+    fn test_completable_tag_parsing() {
+        //          0         1         2
+        //          01234567890123456789012345678
+        let text = "text over here #tag more text";
+
+        let insert_position = 19;
+
+        let expected = CompletableTag {
+            full_range: 15..19,
+            inputted_tag: ("tag".to_string(), 16..19) // not inclusive
+        };
+
+        let actual = get_completable_tag(&text.chars().collect_vec(), insert_position);
+
+
+        assert_eq!(Some(expected), actual);
+
+
+
+        //          0         1         2
+        //          01234567890123456789012345678
+        let text = "text over here #tag more text";
+
+        let insert_position = 20;
+
+        let actual = get_completable_tag(&text.chars().collect_vec(), insert_position);
+
+
+        assert_eq!(None, actual);
+
+
+        //          0         1         2
+        //          01234567890123456789012345678
+        let text = "text over here # more text";
+
+        let insert_position = 16;
+
+        let actual = get_completable_tag(&text.chars().collect_vec(), insert_position);
+
+        let expected = Some(CompletableTag {
+            full_range: 15..16,
+            inputted_tag: ("".to_string(), 16..16)
+        });
+
+
+        assert_eq!(expected, actual);
+
+
+    }
 }
 
-fn fuzzy_match<T: Matchable>(
-    filter_text: &str,
-    items: impl IntoIterator<Item = T>,
-) -> Vec<(T, u32)> {
-    let mut matcher = Matcher::new(nucleo_matcher::Config::DEFAULT);
-    let matches = pattern::Pattern::parse(
-        filter_text,
-        pattern::CaseMatching::Ignore,
-        Normalization::Smart,
-    )
-    .match_list(items, &mut matcher);
-
-    return matches;
-}
