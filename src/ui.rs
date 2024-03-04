@@ -21,7 +21,7 @@ fn referenceable_string(vault: &Vault, referenceable: &Referenceable) -> Option<
     };
 
     let backlinks_preview = match vault.select_references_for_referenceable(referenceable) {
-        Some(references) => references
+        Some(references) if references.len() > 0 => references
             .into_iter()
             .flat_map(|(path, reference)| {
                 let line = String::from_iter(
@@ -33,7 +33,7 @@ fn referenceable_string(vault: &Vault, referenceable: &Referenceable) -> Option<
                 Some(format!("- `{}`: `{}`", path, line)) // and select indented list
             })
             .join("\n"),
-        None => format!("No Backlinks"),
+        _ => format!("No Backlinks"),
     };
 
     return Some(format!(
