@@ -467,11 +467,12 @@ pub fn get_completions(
 
         let matches = fuzzy_match(&completable_tag_name, tag_refereneables);
 
-        return Some(CompletionResponse::Array(
-            matches
+        return Some(CompletionResponse::List(CompletionList {
+            is_incomplete: true,
+            items: matches
                 .into_iter()
                 .take(20)
-                .filter(|(MatchableReferenceable(_, tag_name), _)| *tag_name == completable_tag_name)
+                .filter(|(MatchableReferenceable(_, tag_name), _)| *tag_name != completable_tag_name)
                 .flat_map(|(MatchableReferenceable(tag, tag_name), ranking)| {
                     default_completion_item(vault, &tag, Some(CompletionTextEdit::Edit(TextEdit {
                         new_text: format!("#{}", tag_name.clone()),
@@ -487,7 +488,6 @@ pub fn get_completions(
                         }
                     })))
                         .map(|item| CompletionItem {
-                            kind: Some(CompletionItemKind::CONSTANT),
                             label: tag_name.clone(),
                             sort_text: Some(ranking.to_string()),
                             filter_text: Some(format!("#{}", tag_name)),
@@ -496,7 +496,7 @@ pub fn get_completions(
                 })
                 .unique_by(|c| c.label.to_owned())
                 .collect_vec(),
-        ));
+        }));
     } else if character
         .checked_sub(1)
         .and_then(|start| selected_line.get(start..character))
