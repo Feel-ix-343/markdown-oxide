@@ -16,7 +16,7 @@ If you are using Arch Linux, you can install the latest Git version through the 
 paru -S markdown-oxide-git
 ```
 
-### Cargo
+### Cargo (Linux, MacOS, Windows)
 
 If you have cargo installed, you can easily install the binary for the LS by running the following command:
 
@@ -24,7 +24,7 @@ If you have cargo installed, you can easily install the binary for the LS by run
 cargo install --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
 ```
 
-### Manual (for MacOS, Windows, and *other* linux distributions)
+### Manual (MacOS, Windows, Linux)
 
 Clone the repository and then run `cargo build --release`.
 
