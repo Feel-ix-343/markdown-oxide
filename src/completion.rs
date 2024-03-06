@@ -174,6 +174,7 @@ pub fn get_completions(
             [] => Some(CompletionResponse::List(CompletionList {
                 items: initial_completion_files
                     .iter()
+                    .take(5)
                     .filter_map(|path_i| {
                         Some(
                             vault
