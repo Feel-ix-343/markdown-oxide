@@ -1162,6 +1162,15 @@ impl Refname {
         return Some(last.to_string())
 
     }
+
+    pub fn file_refname(&self) -> Option<String> {
+        let file_key = self.link_file_key()?;
+
+        match &self.infile_ref {
+            Some(infile_ref) => format!("{}#{}", file_key, infile_ref),
+            None => file_key.clone()
+        }.into()
+    }
 }
 
 impl Deref for Refname {

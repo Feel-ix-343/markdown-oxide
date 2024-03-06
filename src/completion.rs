@@ -318,15 +318,14 @@ pub fn get_completions(
                                 &referenceable,
                                 Some(CompletionTextEdit::Edit(TextEdit {
                                     range,
-                                    new_text: referenceable
-                                        .get_refname(vault.root_dir())?
-                                        .to_string(),
+                                    new_text: referenceable.get_refname(&vault.root_dir())?.file_refname()?
                                 })),
                             )
-                            .map(|item| CompletionItem {
-                                sort_text: Some(rank.to_string()),
-                                ..item
-                            })
+                            .and_then(|item| Some(CompletionItem {
+                                    sort_text: Some(rank.to_string()),
+                                    filter_text: Some(referenceable.get_refname(&vault.root_dir())?.to_string()),
+                                    ..item
+                            }))
                         })
                         .collect::<Vec<_>>(),
                 }));
@@ -562,7 +561,7 @@ fn default_completion_item(
                 => Some(CompletionItemKind::KEYWORD),
             Referenceable::Tag(..) => Some(CompletionItemKind::CONSTANT),
         },
-        label: refname.clone(),
+        label: refname.file_refname()?,
         label_details: match referenceable.is_unresolved() {
             true => Some(CompletionItemLabelDetails {
                 detail: Some("Unresolved".into()),
