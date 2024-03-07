@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::{path::{Path, PathBuf}, time::SystemTime};
 
 use itertools::Itertools;
 use nanoid::nanoid;
@@ -174,8 +174,15 @@ pub fn get_completions(
             [] => Some(CompletionResponse::List(CompletionList {
                 items: initial_completion_files
                     .iter()
+                    .map(|path| {
+                        match std::fs::metadata(path).and_then(|meta| meta.modified()) {
+                            Ok(modified) => (path, modified),
+                            Err(_) => (path, SystemTime::UNIX_EPOCH),
+                        }
+                    })
+                    .sorted_by_key(|(_, modified)| *modified)
                     .take(5)
-                    .filter_map(|path_i| {
+                    .filter_map(|(path_i, _)| {
                         Some(
                             vault
                                 .select_referenceable_nodes(Some(path_i))
@@ -232,6 +239,8 @@ pub fn get_completions(
                         })
                         .flat_map(|(block, rank)| {
                             let path_ref = get_obsidian_ref_path(vault.root_dir(), &block.file)?;
+                            let file_name = block.file.file_stem()?.to_str()?;
+
                             let url = Url::from_file_path(&block.file).ok()?;
                             Some(CompletionItem {
                                 label: block.text.clone(),
@@ -254,7 +263,7 @@ pub fn get_completions(
                                 filter_text: Some(format!(" {}", block.text)),
                                 text_edit: Some(CompletionTextEdit::Edit(TextEdit {
                                     range,
-                                    new_text: format!("{}#^{}", path_ref, rand_id),
+                                    new_text: format!("{}#^{}", file_name, rand_id),
                                 })),
                                 command: Some(Command {
                                     title: "Insert Block Reference Into File".into(),
