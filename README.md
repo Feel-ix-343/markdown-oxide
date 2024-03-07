@@ -145,20 +145,12 @@ Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[arti
     - [X] Tags
     - [ ] Indexed Blocks
 - [ ] Dataview support
-- [ ] Take some influence from LogSeq!!!!! https://docs.logseq.com/#/page/start%20here
-    - [ ] Support Logseq syntax and completions/parsing for block references
-    - [ ] Support Logseq embeds
-    - [ ] Support Completions for Logseq tasks
-    - [ ] Support https://docs.logseq.com/#/page/markdown
-    - [ ] Influence from Logseq shortcut completions; such as to dates like /tomorrow
 - Config
     * [ ] Daily notes format
-    * \[ \] (Opt-in dictionary or prose checking? Markdown syntax specific, of course; I am not sure how I feel about this feature yet; Let me know your thoughts)
-- [ ] Proper integration tests
 - A simple CLI
     - [ ] Working with daily notes (key to efficient PKM systems!)
-    - [ ] Logsec tasks
     - [ ] ... (leave some ideas in the issues!)
+- [ ] Integrate with Obsidian.nvim
 
 # Alternatives
 
