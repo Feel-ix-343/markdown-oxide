@@ -23,6 +23,7 @@ fn referenceable_string(vault: &Vault, referenceable: &Referenceable) -> Option<
     let backlinks_preview = match vault.select_references_for_referenceable(referenceable) {
         Some(references) if references.len() > 0 => references
             .into_iter()
+            .take(20)
             .flat_map(|(path, reference)| {
                 let line = String::from_iter(
                     vault.select_line(path, reference.data().range.start.line as isize)?,
