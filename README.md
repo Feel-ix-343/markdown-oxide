@@ -107,6 +107,10 @@ Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[arti
     - [X] For block when the cursor is on the block's index "...text *^index*"
     - [X] For tag when the cursor is on the tags declaration. Unlike go-to-definition for tags, this will produce all references to the tag and to the tag with subtags
     - [X] Footnotes when the cursor is on the declaration line of the footnote; *[^1]: description...*
+
+> ![NOTE]
+> I strongly recommend using [Lspsaga](https://github.com/nvimdev/lspsaga.nvim) for references for two reasons. First because this LS sorts references by the date their files were modified and unlike `vim.lsp.buf.references()` and `Telescope lsp_references`, `Lspsaga finder` maintains this sorting order. Second it also allows you to edit the references in place, similar to Logseq
+
 - Completions (requires extra nvim-cmp config; follow the directions above)
     - [X] File link completions
     - [X] Heading link Completions
