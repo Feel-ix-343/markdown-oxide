@@ -25,7 +25,7 @@ use crate::{
 };
 
 fn get_wikilink_index(line: &Vec<char>, cursor_character: usize) -> Option<usize> {
-    line.get(0..=cursor_character)? // select only the characters up to the cursor
+    let index = line.get(0..=cursor_character)? // select only the characters up to the cursor
         .iter()
         .enumerate() // attach indexes
         .tuple_windows() // window into pairs of characters
@@ -33,7 +33,15 @@ fn get_wikilink_index(line: &Vec<char>, cursor_character: usize) -> Option<usize
         .into_iter()
         .rev() // search from the cursor back
         .find(|((_, &c1), (_, &c2))| c1 == '[' && c2 == '[')
-        .map(|(_, (i, _))| i) // only take the index; using map because find returns an option
+        .map(|(_, (i, _))| i); // only take the index; using map because find returns an option
+
+    index.and_then(|index| {
+        if line.get(index..cursor_character)?.into_iter().contains(&']') {
+            return None
+        } else {
+            return Some(index)
+        }
+    })
 }
 
 /// Range indexes for one line of the file; NOT THE WHOLE FILE
