@@ -327,8 +327,8 @@ pub fn get_completions(
                     items: matches
                         .into_iter()
                         .take(30)
-                        .filter(|(MatchableReferenceable(_, name), _)| {
-                            *name != String::from_iter(filter_text)
+                        .filter(|(MatchableReferenceable(r, name), _)| {
+                            !(*name == String::from_iter(filter_text) && matches!(r, Referenceable::UnresovledFile(..) | Referenceable::UnresolvedHeading(..) | Referenceable::UnresovledIndexedBlock(..)))
                         })
                         .filter_map(|(MatchableReferenceable(referenceable, _), rank)| {
                             default_completion_item(
@@ -378,7 +378,9 @@ pub fn get_completions(
                     items: matches
                         .into_iter()
                         .take(50)
-                        .filter(|(MatchableReferenceable(_, name), _)| *name != inputted_refname)
+                        .filter(|(MatchableReferenceable(r, name), _)| 
+                            !(*name == inputted_refname && matches!(r, Referenceable::UnresovledFile(..) | Referenceable::UnresolvedHeading(..) | Referenceable::UnresovledIndexedBlock(..)))
+                        )
                         .flat_map(|(MatchableReferenceable(referenceable, _), rank)| {
                             default_completion_item(
                                 vault,
