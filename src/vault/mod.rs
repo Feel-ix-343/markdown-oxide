@@ -155,25 +155,35 @@ impl Vault {
                     .collect(),
             ),
         }
-    } // TODO: less cloning?
+    } 
 
     pub fn select_referenceable_at_position<'a>(
         &'a self,
         path: &'a Path,
         position: Position,
     ) -> Option<Referenceable<'a>> {
-        let linkable_nodes = self.select_referenceable_nodes(Some(path));
-        let linkable = linkable_nodes.into_iter().find(|l| {
-            let Some(range) = l.get_range() else {
-                return false;
-            };
-            range.start.line <= position.line
+
+        // If no other referenceables are under the cursor, the file should be returned. 
+
+        let referenceable_nodes = self.select_referenceable_nodes(Some(path));
+
+
+        let referenceable = referenceable_nodes.into_iter()
+            .flat_map(|referenceable| {
+                Some((referenceable.clone(), referenceable.get_range()?))
+            })
+            .find(|(_, range)| {
+                range.start.line <= position.line
                 && range.end.line >= position.line
                 && range.start.character <= position.character
                 && range.end.character >= position.character
-        })?;
+            })
+            .map(|tupl| tupl.0);
 
-        Some(linkable)
+        match referenceable {
+            None => self.md_files.iter().find(|(iterpath, _)| *iterpath == path).map(|(pathbuf, mdfile)| Referenceable::File(pathbuf, mdfile)),
+            _ => referenceable
+        }
     }
 
     pub fn select_reference_at_position<'a>(
@@ -221,6 +231,7 @@ impl Vault {
                     .iter()
                     .flat_map(|resolved| {
                         resolved.get_refname(self.root_dir()).and_then(|refname| vec![refname.to_string(), format!("{}{}", refname.link_file_key()?, refname.infile_ref.map(|refe| format!("#{}", refe)).unwrap_or("".to_string()))].into())
+
                     })
                     .flatten()
                     .collect();
@@ -378,9 +389,8 @@ impl Vault {
                     .map(Into::into)
             }
             Referenceable::File(_, _) => {
-                let range = referenceable.get_range()?;
                 Some(
-                    (range.start.line..=range.end.line + 13)
+                    (0..=13)
                         .filter_map(|ln| self.select_line(referenceable.get_path(), ln as isize)) // flatten those options!
                         .map(String::from_iter)
                         .join("")
@@ -712,7 +722,8 @@ impl Reference {
         match referenceable {
             &Referenceable::Tag(_, _) => {
                 match self {
-                    Tag(..) => referenceable.get_refname(root_dir) == Some(text.to_string().into()),
+                    Tag(..) => referenceable.get_refname(root_dir).map(|thing| thing.to_string()) == Some(format!("#{}", text.to_string())),
+
                     WikiFileLink(_) => false,
                     WikiHeadingLink(_, _, _) => false,
                     WikiIndexedBlockLink(_, _, _) => false,
@@ -1336,19 +1347,7 @@ impl Referenceable<'_> {
 
     pub fn get_range(&self) -> Option<MyRange> {
         match self {
-            Referenceable::File(_, _) => Some(
-                tower_lsp::lsp_types::Range {
-                    start: Position {
-                        line: 0,
-                        character: 0,
-                    },
-                    end: Position {
-                        line: 0,
-                        character: 1,
-                    },
-                }
-                .into(),
-            ),
+            Referenceable::File(_, _) => None,
             Referenceable::Heading(_, heading) => Some(heading.range),
             Referenceable::IndexedBlock(_, indexed_block) => Some(indexed_block.range),
             Referenceable::Tag(_, tag) => Some(tag.range),

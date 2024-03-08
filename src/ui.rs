@@ -5,7 +5,10 @@ use tower_lsp::lsp_types::{MarkupContent, MarkupKind};
 
 use crate::vault::{get_obsidian_ref_path, Preview, Reference, Referenceable, Vault};
 
-fn referenceable_string(vault: &Vault, referenceable: &Referenceable) -> Option<String> {
+fn referenceable_string(vault: &Vault, referenceables: &[Referenceable]) -> Option<String> {
+
+    let referenceable = referenceables.get(0)?;
+
     let preview = vault.select_referenceable_preview(referenceable);
 
     let written_text_preview = match preview {
@@ -20,8 +23,13 @@ fn referenceable_string(vault: &Vault, referenceable: &Referenceable) -> Option<
         None => "No Preview".into(),
     };
 
-    let backlinks_preview = match vault.select_references_for_referenceable(referenceable) {
-        Some(references) if references.len() > 0 => references
+    let backlinks_preview = match referenceables
+        .iter()
+        .flat_map(|i| Some(vault.select_references_for_referenceable(i)?))
+        .flatten()
+        .collect_vec()
+        {
+        references if references.len() > 0 => references
             .into_iter()
             .take(20)
             .flat_map(|(path, reference)| {
@@ -47,7 +55,7 @@ pub fn preview_referenceable(
     vault: &Vault,
     referenceable: &Referenceable,
 ) -> Option<MarkupContent> {
-    let display = referenceable_string(vault, referenceable)?;
+    let display = referenceable_string(vault, &[referenceable.clone()])?;
 
     Some(MarkupContent {
         kind: MarkupKind::Markdown,
@@ -59,7 +67,7 @@ use Reference::*;
 
 pub fn preview_reference(
     vault: &Vault,
-    _reference_path: &Path,
+    reference_path: &Path,
     reference: &Reference,
 ) -> Option<MarkupContent> {
     match reference {
@@ -71,12 +79,10 @@ pub fn preview_reference(
         | MDHeadingLink(..)
         | MDIndexedBlockLink(..)
         | LinkRef(..) => {
-            let positions = vault.select_referenceable_nodes(None);
-            let referenceable = positions
-                .iter()
-                .find(|i| reference.references(vault.root_dir(), i.get_path(), i))?;
 
-            let display = referenceable_string(vault, referenceable)?;
+            let referenceables_for_reference = vault.select_referenceables_for_reference(reference, reference_path);
+
+            let display = referenceable_string(vault, &referenceables_for_reference)?;
 
             Some(MarkupContent {
                 kind: MarkupKind::Markdown,

@@ -85,13 +85,13 @@ vim.api.nvim_exec_autocmds('User', { pattern = 'LspAttached' })
 *Test it out! Go to definitions, get references, and more!*
 
 > [!NOTE]
-> To get references on files, you must place your cursor/pointer on the first character of the first line of the file, and then get references. (In VSCode, you can also use the references code lens)
+> To get references on files, you can have your cursor anywhere on the markdown file where there is not another referenceable (heading, tag, ...)
 
 ## Note on Linking Syntax
 
 The linking syntax is that of Obsidian's and can be found here https://help.obsidian.md/Linking+notes+and+files/Internal+links
 
-Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[articles/markdown oxide#Features|Markdown Oxide Features]] to link to a heading in `Markdown Oxide.md` file in the `articles` folder or [[Obsidian]] for the `Obsidian.md` file in the root folder.  
+Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[articles/markdown oxide#Features|Markdown Oxide Features]] to link to a heading in `Markdown Oxide.md` file in the `articles` folder or [[Obsidian]] for the `Obsidian.md` file in the root folder. Markdown oxide also support markdown links
 
 ## Features
 
@@ -103,7 +103,7 @@ Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[arti
     - [X] Footnotes: "paraphrased text[^footnoteindex]"
     - [ ] Metadata tag
 - Get references
-    - [X] For File when the cursor is on the **first character of the first line** of the file. This will produce references not only to the file but also to headings and blocks in the file
+    - [X] For File when the cursor is anywhere where there is not another referenceable. This will produce references not only to the file but also to headings and blocks in the file
     - [X] For block when the cursor is on the block's index "...text *^index*"
     - [X] For tag when the cursor is on the tags declaration. Unlike go-to-definition for tags, this will produce all references to the tag and to the tag with subtags
     - [X] Footnotes when the cursor is on the declaration line of the footnote; *[^1]: description...*

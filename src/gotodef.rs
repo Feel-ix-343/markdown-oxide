@@ -2,7 +2,7 @@ use std::path::Path;
 
 use tower_lsp::lsp_types::{Location, Position, Url};
 
-use crate::vault::Vault;
+use crate::vault::{Vault, Referenceable};
 
 pub fn goto_definition(
     vault: &Vault,
@@ -20,9 +20,24 @@ pub fn goto_definition(
         referenceables
             .into_iter()
             .filter_map(|linkable| {
+
+                let range = match linkable {
+                    Referenceable::File(..) => tower_lsp::lsp_types::Range { 
+                        start: Position{
+                            line: 0,
+                            character: 0
+                        }, end: Position {
+                            line: 0,
+                            character: 1
+                        }
+                    },
+                    _ => *linkable.get_range()?
+                };
+
+
                 Some(Location {
                     uri: Url::from_file_path(linkable.get_path().to_str()?).unwrap(),
-                    range: *linkable.get_range()?,
+                    range,
                 })
             })
             .collect(),

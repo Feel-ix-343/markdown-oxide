@@ -3,7 +3,7 @@ use std::path::Path;
 use itertools::Itertools;
 use tower_lsp::lsp_types::{CodeLens, CodeLensParams, Command, Location, Position, Url};
 
-use crate::vault::Vault;
+use crate::vault::{Vault, Referenceable};
 
 use serde::Serialize;
 
@@ -47,14 +47,27 @@ pub fn code_lens(vault: &Vault, path: &Path, _params: &CodeLensParams) -> Option
                 })
                 .collect_vec();
 
+            let range = match referenceable {
+                    Referenceable::File(..) => tower_lsp::lsp_types::Range { 
+                        start: Position{
+                            line: 0,
+                            character: 0
+                        }, end: Position {
+                            line: 0,
+                            character: 1
+                        }
+                    },
+                    _ => *referenceable.get_range()?
+                };
+
             Some(CodeLens {
-                range: *referenceable.get_range()?,
+                range,
                 command: Some(Command {
                     title,
                     command: "moxide.findReferences".into(),
                     arguments: Some(vec![serde_json::to_value(FindReferencesData {
                         uri: Url::from_file_path(path).ok()?,
-                        position: referenceable.get_range()?.start,
+                        position: range.start,
                         locations,
                     })
                     .ok()?]),
