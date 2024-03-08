@@ -722,7 +722,7 @@ impl Reference {
         match referenceable {
             &Referenceable::Tag(_, _) => {
                 match self {
-                    Tag(..) => referenceable.get_refname(root_dir).map(|thing| thing.to_string()) == Some(format!("#{}", text.to_string())),
+                    Tag(..) => referenceable.get_refname(root_dir).map(|thing| thing.to_string()) == Some(text.to_string()),
 
                     WikiFileLink(_) => false,
                     WikiHeadingLink(_, _, _) => false,
