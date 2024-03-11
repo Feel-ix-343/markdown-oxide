@@ -87,18 +87,19 @@ impl Backend {
 
         let timer = std::time::Instant::now();
 
-        let r = self
-            .bind_vault_mut(|vault| {
-                let Ok(new_vault) = Vault::construct_vault(vault.root_dir()) else {
-                    return Err(Error::new(ErrorCode::ServerError(0)));
-                };
+        {
+            let r = self
+                .bind_vault_mut(|vault| {
+                    let Ok(new_vault) = Vault::construct_vault(vault.root_dir()) else {
+                        return Err(Error::new(ErrorCode::ServerError(0)));
+                    };
 
-                *vault = new_vault;
+                    *vault = new_vault;
 
-                Ok(())
-            })
-        .await;
-        drop(r);
+                    Ok(())
+                })
+            .await;
+        }
 
         let elapsed = timer.elapsed();
 
@@ -141,7 +142,7 @@ impl Backend {
         let diagnostics = self
             .bind_vault(|vault| {
                 Ok(uris
-                    .iter()
+                    .par_iter()
                     .filter_map(|uri| {
                         let path = uri.to_file_path().ok()?;
 
@@ -154,8 +155,6 @@ impl Backend {
         for (uri, diags) in diagnostics {
             self.client.publish_diagnostics(uri, diags, None).await;
         }
-
-        self.client.log_message(MessageType::WARNING, "Published diagnostics").await;
 
         Ok(())
     }
@@ -326,24 +325,26 @@ impl LanguageServer for Backend {
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        let _new_files = self
-            .bind_opened_files_mut(|files| {
-                // diagnostics will only be published for the files that are opened; We must track which files are opened
-                let path = params_path!(params)?;
+        {
+            let _new_files = self
+                .bind_opened_files_mut(|files| {
+                    // diagnostics will only be published for the files that are opened; We must track which files are opened
+                    let path = params_path!(params)?;
 
-                files.insert(path);
+                    files.insert(path);
 
-                Ok(files.clone())
-            })
+                    Ok(files.clone())
+                })
             .await;
 
-        self.client.log_message(MessageType::LOG, "Added file").await;
+            self.client.log_message(MessageType::LOG, "Added file").await;
 
-        self.update_vault(TextDocumentItem {
-            uri: params.text_document.uri,
-            text: params.text_document.text,
-        })
-        .await; // usually, this is not necesary; however some may start the LS without saving a changed file, so it is necessary
+            self.update_vault(TextDocumentItem {
+                uri: params.text_document.uri,
+                text: params.text_document.text,
+            })
+            .await; // usually, this is not necesary; however some may start the LS without saving a changed file, so it is necessary
+        } // drop the lock
 
         match self.publish_diagnostics().await {
             Ok(_) => (),
