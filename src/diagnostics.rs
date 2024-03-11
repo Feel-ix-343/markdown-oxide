@@ -39,7 +39,7 @@ pub fn diagnostics(vault: &Vault, (path, _uri): (&PathBuf, &Url)) -> Option<Vec<
     let allreferences = vault.select_references(None)?;
 
     let diags: Vec<Diagnostic> = unresolved
-        .into_iter()
+        .into_par_iter()
         .map(|(path, reference)| Diagnostic {
             range: *reference.data().range,
             message: match allreferences
