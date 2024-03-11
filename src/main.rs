@@ -133,11 +133,12 @@ impl Backend {
     }
 
     async fn publish_diagnostics(&self) -> Result<()> {
-        let urls = self.bind_opened_files(|files| Ok(files.clone())).await?;
-        let uris = urls
-            .into_iter()
-            .filter_map(|url| Url::from_file_path(url).ok())
-            .collect_vec();
+        let uris = self.bind_opened_files(|files| {
+            Ok(files
+                        .into_par_iter()
+                        .filter_map(|url| Url::from_file_path(url).ok())
+                        .collect::<Vec<_>>())
+        }).await?;
 
         let diagnostics = self
             .bind_vault(|vault| {
