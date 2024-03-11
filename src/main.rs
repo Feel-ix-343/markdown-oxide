@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use completion::get_completions;
 use diagnostics::diagnostics;
 use itertools::Itertools;
+use rayon::prelude::*;
 use references::references;
 use serde_json::Value;
 use symbol::{document_symbol, workspace_symbol};
@@ -62,7 +63,7 @@ impl Backend {
             };
             let text = &params.text;
             Vault::update_vault(vault, (&path, text));
-        } // must close the write lock before publishing diagnostics; I don't really like how imperative this is; TODO: Fix this shit
+        } // must close the write lock before publishing diagnostics; I don't really like how imperative this is
 
         match self.publish_diagnostics().await {
             Ok(_) => (),
@@ -86,19 +87,18 @@ impl Backend {
 
         let timer = std::time::Instant::now();
 
-        {
-            let _ = self
-                .bind_vault_mut(|vault| {
-                    let Ok(new_vault) = Vault::construct_vault(vault.root_dir()) else {
-                        return Err(Error::new(ErrorCode::ServerError(0)));
-                    };
+        let r = self
+            .bind_vault_mut(|vault| {
+                let Ok(new_vault) = Vault::construct_vault(vault.root_dir()) else {
+                    return Err(Error::new(ErrorCode::ServerError(0)));
+                };
 
-                    *vault = new_vault;
+                *vault = new_vault;
 
-                    Ok(())
-                })
-                .await;
-        } // same issue as in the above function; TODO: Fix this
+                Ok(())
+            })
+        .await;
+        drop(r);
 
         let elapsed = timer.elapsed();
 
@@ -147,23 +147,15 @@ impl Backend {
 
                         diagnostics(vault, (&path, &uri)).map(|diags| (uri.clone(), diags))
                     })
-                    .collect_vec())
+                    .collect::<Vec<_>>())
             })
             .await?;
-
-        self.client
-            .log_message(
-                MessageType::LOG,
-                format!(
-                    "Calcualted Diagnostics for files: {:?}",
-                    diagnostics.iter().map(|(uri, _)| uri).collect_vec()
-                ),
-            )
-            .await;
 
         for (uri, diags) in diagnostics {
             self.client.publish_diagnostics(uri, diags, None).await;
         }
+
+        self.client.log_message(MessageType::WARNING, "Published diagnostics").await;
 
         Ok(())
     }
@@ -178,8 +170,8 @@ impl Backend {
     /// in the call back functions. (though to get aroudn this, the callback could return a Result of a writer style monad, which could be logged async outside of
     /// the callback)
     async fn bind_vault<T>(&self, callback: impl FnOnce(&Vault) -> Result<T>) -> Result<T> {
-        let vault_option = self.vault.read().await;
-        let Some(vault) = vault_option.deref() else {
+        let guard = self.vault.read().await;
+        let Some(vault) = guard.deref() else {
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
 
@@ -187,7 +179,8 @@ impl Backend {
     }
 
     async fn bind_vault_mut<T>(&self, callback: impl Fn(&mut Vault) -> Result<T>) -> Result<T> {
-        let Some(ref mut vault) = *self.vault.write().await else {
+        let mut guard = self.vault.write().await;
+        let Some(ref mut vault) = *guard else {
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
 
@@ -514,10 +507,6 @@ impl LanguageServer for Backend {
         let path = params_path!(params)?;
         let res = self
             .bind_vault(|vault| Ok(tokens::semantic_tokens_full(vault, &path, params)))
-            .await;
-
-        self.client
-            .log_message(MessageType::LOG, format!("{:?}", res))
             .await;
 
         return res;
