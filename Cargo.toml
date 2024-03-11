@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1.0.80"
 itertools = "0.10.5"
 nanoid = "0.4.0"
 nucleo-matcher = { path = "./matcher" }

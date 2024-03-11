@@ -333,16 +333,18 @@ impl LanguageServer for Backend {
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        let _ = self
+        let _new_files = self
             .bind_opened_files_mut(|files| {
                 // diagnostics will only be published for the files that are opened; We must track which files are opened
                 let path = params_path!(params)?;
 
                 files.insert(path);
 
-                Ok(())
+                Ok(files.clone())
             })
             .await;
+
+        self.client.log_message(MessageType::LOG, "Added file").await;
 
         self.update_vault(TextDocumentItem {
             uri: params.text_document.uri,
@@ -361,6 +363,20 @@ impl LanguageServer for Backend {
                     .await
             }
         }
+    }
+
+    async fn did_close(&self, params: DidCloseTextDocumentParams) {
+        let removed_file = self
+            .bind_opened_files_mut(|files| {
+                let path = params_path!(params)?;
+
+                Ok(files.take(&path))
+            }).await;
+
+        if let Ok(Some(file)) = removed_file {
+            self.client.log_message(MessageType::LOG, format!("Remove file {:?}", file)).await;
+        }
+            
     }
 
     async fn did_change(&self, mut params: DidChangeTextDocumentParams) {
