@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use completion::get_completions;
 use diagnostics::diagnostics;
@@ -32,11 +33,12 @@ mod tokens;
 mod ui;
 mod vault;
 
+
 #[derive(Debug)]
 struct Backend {
     client: Client,
-    vault: RwLock<Option<Vault>>,
-    opened_files: RwLock<HashSet<PathBuf>>,
+    vault: Arc<RwLock<Option<Vault>>>,
+    opened_files: Arc<RwLock<HashSet<PathBuf>>>,
 }
 
 struct TextDocumentItem {
@@ -522,8 +524,8 @@ async fn main() {
 
     let (service, socket) = LspService::new(|client| Backend {
         client,
-        vault: None.into(),
-        opened_files: HashSet::new().into(),
+        vault: Arc::new(None.into()),
+        opened_files: Arc::new(HashSet::new().into()),
     });
     Server::new(stdin, stdout, socket).serve(service).await;
 }
