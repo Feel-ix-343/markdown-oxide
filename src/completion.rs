@@ -120,24 +120,30 @@ fn get_completable_tag(line: &Vec<char>, cursor_character: usize) -> Option<Comp
 
     let line_string = String::from_iter(line);
 
-    let captures = PARTIAL_TAG_REGEX.captures(&line_string)?;
+    let captures_iter = PARTIAL_TAG_REGEX.captures_iter(&line_string);
 
-    let (full, tag_text) = (
-        captures.get(0)?,
-        captures.name("text")?,
-    );
+    return captures_iter
+        .flat_map(|captures| {
 
+            let (full, tag_text) = (
+                captures.get(0)?,
+                captures.name("text")?,
+            );
 
-    // check if the cursor is in the tag
-    let preceding_character = cursor_character - 1; // User is inserting into the position after the character they are looking at; "#tag|"  cursor is a position 4; I want pos 3; the end of the tag
-    if preceding_character >= full.range().start && preceding_character < full.range().end { // end is exclusive
-        return Some(CompletableTag {
-            full_range: full.range(),
-            inputted_tag: (tag_text.as_str().to_string(), tag_text.range())
+            // check if the cursor is in the tag
+            let preceding_character = cursor_character - 1; // User is inserting into the position after the character they are looking at; "#tag|"  cursor is a position 4; I want pos 3; the end of the tag
+            if preceding_character >= full.range().start && preceding_character < full.range().end { // end is exclusive
+                return Some(CompletableTag {
+                    full_range: full.range(),
+                    inputted_tag: (tag_text.as_str().to_string(), tag_text.range())
+                })
+            } else {
+                return None
+            }
+
         })
-    } else {
-        return None
-    }
+        .next()
+
 
 
 }
@@ -817,6 +823,23 @@ mod tests {
 
 
         assert_eq!(expected, actual);
+
+
+        //          0         1         2
+        //          01234567890123456789012345678
+        let text = "text over here #tag mor #tag ";
+
+        let insert_position = 28;
+
+        let expected = CompletableTag {
+            full_range: 24..28,
+            inputted_tag: ("tag".to_string(), 25..28) // not inclusive
+        };
+
+        let actual = get_completable_tag(&text.chars().collect_vec(), insert_position);
+
+
+        assert_eq!(Some(expected), actual);
 
 
     }
