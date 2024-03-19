@@ -18,6 +18,11 @@ use serde::{Deserialize, Serialize};
 use tower_lsp::lsp_types::Position;
 use walkdir::WalkDir;
 
+
+
+mod referenceable;
+
+
 impl Vault {
     pub fn construct_vault(root_dir: &Path) -> Result<Vault, std::io::Error> {
         let md_file_paths = WalkDir::new(root_dir)
@@ -993,8 +998,9 @@ impl MDHeading {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MDIndexedBlock {
-    index: String,
-    range: MyRange,
+    /// THe index of the block; does not include '^'
+    pub index: String,
+    pub range: MyRange,
 }
 
 impl Hash for MDIndexedBlock {
@@ -1147,6 +1153,7 @@ pub enum Referenceable<'a> {
     Footnote(&'a PathBuf, &'a MDFootnote),
     UnresovledFile(PathBuf, &'a String),
     UnresolvedHeading(PathBuf, &'a String, &'a String),
+    /// full path, link path, index (without ^)
     UnresovledIndexedBlock(PathBuf, &'a String, &'a String),
     LinkRefDef(&'a PathBuf, &'a MDLinkReferenceDefinition),
 }

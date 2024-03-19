@@ -1,3 +1,6 @@
+#![feature(closure_lifetime_binder)]
+#![feature(non_lifetime_binders)]
+
 use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
@@ -48,24 +51,26 @@ struct TextDocumentItem {
 
 impl Backend {
     async fn update_vault(&self, params: TextDocumentItem) {
+        self.client.log_message(MessageType::WARNING, "Update Vault Started").await;
+
+        let Ok(path) = params.uri.to_file_path() else {
+            self.client
+                .log_message(MessageType::ERROR, "Failed to parse URI path")
+            .await;
+            return;
+        };
+
         {
-            let Some(ref mut vault) = *self.vault.write().await else {
-                self.client
-                    .log_message(MessageType::ERROR, "Vault is not initialized")
-                    .await;
+            let _ = self.bind_vault_mut(|vault| {
+                let text = &params.text;
+                Vault::update_vault(vault, (&path, text));
 
-                return;
-            };
+                Ok(())
+            }).await;
 
-            let Ok(path) = params.uri.to_file_path() else {
-                self.client
-                    .log_message(MessageType::ERROR, "Failed to parse URI path")
-                    .await;
-                return;
-            };
-            let text = &params.text;
-            Vault::update_vault(vault, (&path, text));
-        } // must close the write lock before publishing diagnostics; I don't really like how imperative this is
+        } // close the lock
+
+        self.client.log_message(MessageType::WARNING, "Update Vault Done").await;
 
         match self.publish_diagnostics().await {
             Ok(_) => (),
@@ -135,6 +140,8 @@ impl Backend {
     }
 
     async fn publish_diagnostics(&self) -> Result<()> {
+        self.client.log_message(MessageType::WARNING, "Diagnostics Started").await;
+
         let uris = self.bind_opened_files(|files| {
             Ok(files
                         .into_par_iter()
@@ -159,6 +166,9 @@ impl Backend {
             self.client.publish_diagnostics(uri, diags, None).await;
         }
 
+
+        self.client.log_message(MessageType::WARNING, "Diagnostics Done").await;
+
         Ok(())
     }
 
@@ -181,6 +191,12 @@ impl Backend {
     }
 
     async fn bind_vault_mut<T>(&self, callback: impl Fn(&mut Vault) -> Result<T>) -> Result<T> {
+        if let Err(e) = self.vault.try_write() {
+            self.client.log_message(MessageType::ERROR, format!("Failed to get VAULT lock for write {:?}", e)).await;
+        } else {
+            self.client.log_message(MessageType::ERROR, "VAULT Lock is good").await;
+        }
+
         let mut guard = self.vault.write().await;
         let Some(ref mut vault) = *guard else {
             return Err(Error::new(ErrorCode::ServerError(0)));
@@ -201,6 +217,14 @@ impl Backend {
         &self,
         callback: impl Fn(&mut HashSet<PathBuf>) -> Result<T>,
     ) -> Result<T> {
+
+
+        if let Err(e) = self.opened_files.try_write() {
+            self.client.log_message(MessageType::ERROR, format!("Failed to get FILES lock for write {:?}", e)).await;
+        } else {
+            self.client.log_message(MessageType::ERROR, "FILES Lock is good").await;
+        }
+
         let mut opened_files = self.opened_files.write().await;
         callback(opened_files.deref_mut())
     }
@@ -415,6 +439,8 @@ impl LanguageServer for Backend {
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+        self.client.log_message(MessageType::WARNING, "Completions Started").await;
+
         let timer = std::time::Instant::now();
 
         let path = params_position_path!(params)?;
@@ -432,12 +458,7 @@ impl LanguageServer for Backend {
 
         let elapsed = timer.elapsed();
 
-        self.client
-            .log_message(
-                MessageType::WARNING,
-                format!("Completion Calculation took {}ms", elapsed.as_millis()),
-            )
-            .await;
+        self.client.log_message(MessageType::WARNING, format!("Completions Done took {}ms", elapsed.as_millis())).await;
 
         res
     }
