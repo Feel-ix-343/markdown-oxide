@@ -1,6 +1,3 @@
-#![feature(closure_lifetime_binder)]
-#![feature(non_lifetime_binders)]
-
 use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
