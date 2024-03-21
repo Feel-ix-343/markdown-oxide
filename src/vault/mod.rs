@@ -409,18 +409,18 @@ impl Vault {
         }
     }
 
-    pub fn select_blocks(&self) -> Vec<Block> {
-        return self
+    pub fn select_blocks(&self) -> Vec<Block<'_>> {
+        self
             .ropes
             .par_iter()
             .map(|(path, rope)| {
                 rope.lines()
                     .enumerate()
-                    .filter_map(|(i, line)| {
+                    .flat_map(|(i, line)| {
                         let string = line.as_str()?;
 
                         Some(Block {
-                            text: String::from(string.trim()),
+                            text: string.trim(),
                             range: MyRange(tower_lsp::lsp_types::Range {
                                 start: Position {
                                     line: i as u32,
@@ -431,25 +431,25 @@ impl Vault {
                                     character: string.len() as u32,
                                 },
                             }),
-                            file: path.clone(),
+                            file: path,
                         })
                     })
-                    .collect_vec()
+                    .collect::<Vec<_>>()
             })
             .flatten()
             .filter(|block| !block.text.is_empty())
-            .collect();
+            .collect()
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub struct Block {
-    pub text: String,
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Copy)]
+pub struct Block<'a> {
+    pub text: &'a str,
     pub range: MyRange,
-    pub file: PathBuf,
+    pub file: &'a Path 
 }
 
-impl AsRef<str> for Block {
+impl AsRef<str> for Block<'_> {
     fn as_ref(&self) -> &str {
         &self.text
     }

@@ -1,4 +1,4 @@
-use std::{path::{Path, PathBuf}, time::SystemTime};
+use std::{iter::once, path::{Path, PathBuf}, time::SystemTime};
 
 use itertools::Itertools;
 use nanoid::nanoid;
@@ -22,10 +22,12 @@ use crate::{
     },
 };
 
-use self::{link_completer::{MarkdownLinkCompleter, WikiLinkCompleter}, matcher::fuzzy_match};
+use self::{link_completer::MarkdownLinkCompleter, matcher::fuzzy_match, unindexed_block_completer::UnindexedBlockCompleter};
+use self::link_completer::WikiLinkCompleter;
 
 mod link_completer;
 mod matcher;
+mod unindexed_block_completer;
 
 #[derive(Clone, Copy)]
 pub struct Context<'a>{
@@ -33,18 +35,22 @@ pub struct Context<'a>{
     opened_files: &'a [PathBuf],
 }
 
-trait Completer<'a> {
+pub trait Completer<'a> : Sized {
     fn construct(context: Context<'a>, path: &Path, line: usize, character: usize) -> Option<Self>
-    where Self: Sized;
+    where Self: Sized + Completer<'a>;
 
     fn completions(&self) -> Vec<impl Completable<'a, Self>> where Self: Sized;
+
+    type FilterParams;
+    /// Completere like nvim-cmp are odd so manually define the filter text as a situational workaround
+    fn completion_filter_text(&self, params: Self::FilterParams) -> String;
 
     // fn compeltion_resolve(&self, vault: &Vault, resolve_item: CompletionItem) -> Option<CompletionItem>;
 }
 
 
-trait Completable<'a, T: Completer<'a>> {
-    fn completion(&self, completer: &T) -> CompletionItem;
+pub trait Completable<'a, T: Completer<'a>> : Sized {
+    fn completions(&self, completer: &T) -> impl Iterator<Item = CompletionItem>;
 }
 
 /// Range indexes for one line of the file; NOT THE WHOLE FILE
@@ -112,7 +118,9 @@ pub fn get_completions(
         opened_files: initial_completion_files
     };
 
-    run_completer::<MarkdownLinkCompleter>(completion_context, &path, params.text_document_position.position.line, params.text_document_position.position.character)
+    run_completer::<UnindexedBlockCompleter<MarkdownLinkCompleter>>(completion_context, &path, params.text_document_position.position.line, params.text_document_position.position.character)
+        .or_else(|| run_completer::<UnindexedBlockCompleter<WikiLinkCompleter>>(completion_context, &path, params.text_document_position.position.line, params.text_document_position.position.character))
+        .or_else(|| run_completer::<MarkdownLinkCompleter>(completion_context, &path, params.text_document_position.position.line, params.text_document_position.position.character))
         .or_else(|| run_completer::<WikiLinkCompleter>(completion_context, &path, params.text_document_position.position.line, params.text_document_position.position.character))
 
 }
@@ -760,15 +768,16 @@ pub fn get_completions(
 fn run_completer<'a, T: Completer<'a>>(context: Context<'a>, path: &Path, line: u32, character: u32) -> Option<CompletionResponse> {
 
     let completer = T::construct(context, path, line as usize, character as usize)?;
+    let completions = completer.completions();
 
-    let completions = completer.completions()
+    let completions = completions
         .into_iter()
         .take(50)
-        .map(|completable| completable.completion(&completer))
-        .collect_vec();
+        .map(|completable| completable.completions(&completer).collect::<Vec<_>>().into_iter()) // Hate this
+        .flatten()
+        .collect::<Vec<CompletionItem>>();
 
     Some(CompletionResponse::List(CompletionList { is_incomplete: true, items: completions }))
-
 
 }
 

@@ -6,26 +6,67 @@ use rayon::prelude::*;
 use regex::Regex;
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionTextEdit, InsertTextFormat, Position, Range, TextEdit};
 
-use crate::vault::{get_obsidian_ref_path, MDFile, MDHeading, MDIndexedBlock, Reference, Referenceable, Vault};
+use crate::vault::{MDFile, MDHeading, MDIndexedBlock, Reference, Referenceable, Vault};
 
-use super::{matcher::{fuzzy_match, fuzzy_match_completions, Matchable, OrderedCompletion}, Completable, Completer, Context};
+use super::{matcher::{fuzzy_match_completions, Matchable, OrderedCompletion}, Completable, Completer, Context};
 
 /// Range on a single line; assumes that the line number is known. 
 type LineRange = std::ops::Range<usize>;
 
 pub struct MarkdownLinkCompleter<'a> {
     /// The display text of a link to be completed
-    display: (String, LineRange),
+    pub display: (String, LineRange),
     /// the filepath of the markdown link to be completed
-    path: (String, LineRange),
+    pub path: (String, LineRange),
     /// the infile ref; the range is the whole span of the infile ref. (including the ^ for Block refs)
-    infile_ref: Option<(PartialInfileRef, LineRange)>,
+    pub infile_ref: Option<(PartialInfileRef, LineRange)>,
 
-    partial_link: (String, LineRange),
-    full_range: LineRange,
-    line_nr: usize,
-    file_path: std::path::PathBuf,
-    vault: &'a Vault
+    pub partial_link: (String, LineRange),
+    pub full_range: LineRange,
+    pub line_nr: usize,
+    pub file_path: std::path::PathBuf,
+    pub vault: &'a Vault
+}
+
+pub trait LinkCompleter<'a> : Completer<'a> {
+    fn completion_text_edit(&self, display: Option<&str>, refname: &str) -> CompletionTextEdit;
+    fn entered_refname(&self) -> String;
+    fn vault(&self) -> &'a Vault;
+}
+
+impl<'a> LinkCompleter<'a> for MarkdownLinkCompleter<'a> {
+
+    fn vault(&self) -> &'a Vault {
+        self.vault
+    }
+
+    fn entered_refname(&self) -> String {
+        format!("{}{}", self.path.0, self.infile_ref.as_ref().map(|infile| infile.0.to_string()).unwrap_or("".to_string()))
+    }
+
+    /// Will add <$1> to the refname if it contains spaces
+    fn completion_text_edit(&self, display: Option<&str>, refname: &str) -> CompletionTextEdit {
+
+
+        let link_ref_text = match refname.contains(' ') {
+            true => format!("<{}>", refname),
+            false => refname.to_owned()
+        };
+
+        CompletionTextEdit::Edit(TextEdit {
+            range: Range {
+                start: Position {
+                    line: self.line_nr as u32,
+                    character: self.full_range.start as u32,
+                },
+                end: Position {
+                    line: self.line_nr as u32,
+                    character: self.full_range.end as u32,
+                },
+            },
+            new_text: format!("[{}]({})", display.unwrap_or(""), link_ref_text)
+        })
+    }
 }
 
 impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
@@ -125,15 +166,38 @@ impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
         let filtered = fuzzy_match_completions(&filter_text, completions);
 
         filtered
+    }
+
+    /// The completions refname
+    type FilterParams = &'a str;
+
+    fn completion_filter_text(&self, params: Self::FilterParams) -> String {
+        let filter_text = format!(
+            "[{}]({}",
+            self.display.0,
+            params
+        );
+
+        filter_text
 
     }
 }
 
 #[derive(Debug, Clone)]
-enum PartialInfileRef {
+pub enum PartialInfileRef {
     HeadingRef(String),
     /// The partial reference to a block, not including the ^ index
     BlockRef(String)
+}
+
+
+impl ToString for PartialInfileRef {
+    fn to_string(&self) -> String {
+        match self {
+            Self::HeadingRef(string) => string.to_owned(),
+            Self::BlockRef(string) => format!("^{}", string)
+        }
+    }
 }
 
 impl PartialInfileRef {
@@ -210,11 +274,11 @@ impl LinkCompletion<'_> {
 
 
 impl<'a> Completable<'a, MarkdownLinkCompleter<'a>>  for LinkCompletion<'a> {
-    fn completion(&self, markdown_link_completer: &MarkdownLinkCompleter) -> CompletionItem {
+    fn completions(&self, markdown_link_completer: &MarkdownLinkCompleter<'a>) -> impl Iterator<Item = CompletionItem> {
 
         let label = self.match_string();
 
-        let MarkdownLinkCompleter { display, path: _, infile_ref: _, partial_link: _, full_range, line_nr, file_path: _, vault: _ } = markdown_link_completer;
+        let MarkdownLinkCompleter { display, path: _, infile_ref: _, partial_link: _, full_range: _, line_nr: _, file_path: _, vault: _ } = markdown_link_completer;
 
         let link_infile_ref = match self {
             File { mdfile: _, match_string: _ } 
@@ -227,7 +291,7 @@ impl<'a> Completable<'a, MarkdownLinkCompleter<'a>>  for LinkCompletion<'a> {
         let binding = (display.0.as_str(), link_infile_ref);
         let link_display_text = match binding {
             ("", Some(ref infile)) => &infile,
-                // Get the first heading of the file, if possible. 
+            // Get the first heading of the file, if possible. 
             ("", None) => match self {
                 Self::File { mdfile, match_string: _ } => mdfile.headings.get(0).map(|heading| heading.heading_text.as_str()).unwrap_or(""),
                 _ => ""
@@ -235,72 +299,35 @@ impl<'a> Completable<'a, MarkdownLinkCompleter<'a>>  for LinkCompletion<'a> {
             (display, _) => display,
         };
 
-
-        let link_ref_text = match label.contains(' ') {
-            true => format!("<{}>", label),
-            false => label.to_owned()
-        };
-
-        let link_text = format!(
-            "[${{1:{}}}]({})",
+        let link_display_text = format!(
+            "${{1:{}}}",
             link_display_text,
-            link_ref_text
         );
 
-
-        let text_edit = CompletionTextEdit::Edit(TextEdit {
-            range: Range {
-                start: Position {
-                    line: *line_nr as u32,
-                    character: full_range.start as u32,
-                },
-                end: Position {
-                    line: *line_nr as u32,
-                    character: full_range.end as u32,
-                },
-            },
-            new_text: link_text.to_string(),
-        });
-
-        let filter_text = format!(
-            "[{}]({}",
-            markdown_link_completer.display.0,
-            label
-        );
+        let text_edit = markdown_link_completer.completion_text_edit(Some(&link_display_text), &label);
 
 
-        CompletionItem {
+        let filter_text = markdown_link_completer.completion_filter_text(label);
+
+        std::iter::once(CompletionItem {
             insert_text_format: Some(InsertTextFormat::SNIPPET),
             ..self.default_completion(&label, text_edit, &filter_text)
-        }
+        })
 
     }
 }
 
 
 impl<'a> Completable<'a, WikiLinkCompleter<'a>> for LinkCompletion<'a> {
-    fn completion(&self, completer: &WikiLinkCompleter<'a>) -> CompletionItem {
+    fn completions(&self, completer: &WikiLinkCompleter<'a>) -> impl Iterator<Item = CompletionItem> {
 
         let refname = self.match_string();
 
+        let text_edit = completer.completion_text_edit(None, refname);
 
-        let text_edit = CompletionTextEdit::Edit(TextEdit {
-            range: Range {
-                start: Position {
-                    line: completer.line as u32,
-                    character: completer.index + 1 as u32, // index is right at the '[' in [[link]]; we want one more than that
-                },
-                end: Position {
-                    line: completer.line as u32,
-                    character: completer.character as u32,
-                },
-            },
-            new_text: refname.to_string(),
-        });
+        let filter_text = completer.completion_filter_text(refname);
 
-        let filter_text = &refname;
-
-        self.default_completion(&refname, text_edit, filter_text)
+        std::iter::once(self.default_completion(&refname, text_edit, &filter_text))
     }
 }
 
@@ -325,6 +352,36 @@ pub struct WikiLinkCompleter<'a> {
     index: u32,
     character: u32,
     line: u32
+}
+
+impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
+
+    fn vault(&self) -> &'a Vault {
+        self.vault
+    }
+
+    fn entered_refname(&self) -> String {
+        String::from_iter(&self.cmp_text)
+    }
+
+    fn completion_text_edit(&self, display: Option<&str>, refname: &str) -> CompletionTextEdit {
+        
+        let text_edit = CompletionTextEdit::Edit(TextEdit {
+            range: Range {
+                start: Position {
+                    line: self.line as u32,
+                    character: self.index + 1 as u32, // index is right at the '[' in [[link]]; we want one more than that
+                },
+                end: Position {
+                    line: self.line as u32,
+                    character: self.character as u32,
+                },
+            },
+            new_text: format!("{}{}", refname, display.map(|display| format!("|{}", display)).unwrap_or("".to_string()))
+        });
+
+        text_edit
+    }
 }
 
 impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
@@ -420,6 +477,11 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
             },
             _ => vec![]
         }
+    }
+
+    type FilterParams = &'a str;
+    fn completion_filter_text(&self, params: Self::FilterParams) -> String {
+        params.to_string()
     }
 }
 

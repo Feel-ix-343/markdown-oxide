@@ -45,13 +45,13 @@ impl<'a, C: Completer<'a>, T: Completable<'a, C>> OrderedCompletion<'a, C, T> {
 }
 
 impl<'a, C: Completer<'a>, T: Completable<'a, C>> Completable<'a, C> for OrderedCompletion<'a, C, T> {
-    fn completion(&self, completer: &C) -> tower_lsp::lsp_types::CompletionItem {
-        let completion = self.completable.completion(completer);
+    fn completions(&self, completer: &C) -> impl Iterator<Item = tower_lsp::lsp_types::CompletionItem> {
+        let completions = self.completable.completions(completer);
 
-        CompletionItem {
+        completions.map(|completion| CompletionItem {
             sort_text: Some(self.rank.to_string()),
             ..completion
-        }
+        })
     }
 }
 
