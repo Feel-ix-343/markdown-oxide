@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use rayon::prelude::*;
 use tower_lsp::lsp_types::{Command, CompletionItem, CompletionItemKind, CompletionItemLabelDetails, Documentation, InsertTextFormat, MarkupContent, MarkupKind, Position, Range, TextEdit, Url};
 
 use crate::{ui::preview_referenceable, vault::{get_obsidian_ref_path, Block, Referenceable}};
@@ -42,10 +43,17 @@ impl<'a, C: LinkCompleter<'a>> UnindexedBlockCompleter<'a, C> {
 
     fn completables(&self) -> Vec<UnindexedBlock<'a>> {
         let blocks = self.link_completer.vault().select_blocks();
+        let position = self.link_completer.position();
 
-        let completables = blocks.into_iter()
+        let completables = blocks.into_par_iter()
+            .filter(|block| 
+                !(block.range.start.line <= position.line
+                && block.range.start.character <= position.character
+                && block.range.end.line >= position.line
+                && block.range.end.character >= position.character)
+            )
             .map(|block| UnindexedBlock(block))
-            .collect_vec();
+            .collect::<Vec<_>>();
 
         completables
     }

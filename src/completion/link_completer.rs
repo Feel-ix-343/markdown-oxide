@@ -6,7 +6,7 @@ use rayon::prelude::*;
 use regex::Regex;
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionTextEdit, InsertTextFormat, Position, Range, TextEdit};
 
-use crate::vault::{MDFile, MDHeading, MDIndexedBlock, Reference, Referenceable, Vault};
+use crate::vault::{MDFile, MDHeading, Reference, Referenceable, Vault};
 
 use super::{matcher::{fuzzy_match_completions, Matchable, OrderedCompletion}, Completable, Completer, Context};
 
@@ -24,17 +24,49 @@ pub struct MarkdownLinkCompleter<'a> {
     pub partial_link: (String, LineRange),
     pub full_range: LineRange,
     pub line_nr: usize,
+    pub position: Position,
     pub file_path: std::path::PathBuf,
-    pub vault: &'a Vault
+    pub vault: &'a Vault,
 }
 
 pub trait LinkCompleter<'a> : Completer<'a> {
     fn completion_text_edit(&self, display: Option<&str>, refname: &str) -> CompletionTextEdit;
     fn entered_refname(&self) -> String;
     fn vault(&self) -> &'a Vault;
+    fn position(&self) -> Position;
+    fn link_completions(&self) -> Vec<LinkCompletion<'a>> {
+
+        let referenceables = self.vault().select_referenceable_nodes(None);
+
+        let position = self.position();
+
+        // Get and filter referenceables
+        let completions = referenceables
+            .into_par_iter()
+            .flat_map(|referenceable| { 
+                let is = referenceable.get_range()?.start.line <= position.line
+                    && referenceable.get_range()?.start.character <= position.character
+                    && referenceable.get_range()?.end.line >= position.line
+                    && referenceable.get_range()?.end.character >= position.character;
+
+                if is {
+                    None
+                } else {
+                    Some(referenceable)
+                }
+            })
+            .flat_map(|referenceable| LinkCompletion::new(referenceable.clone()))
+            .collect::<Vec<_>>();
+
+        completions
+    }
 }
 
 impl<'a> LinkCompleter<'a> for MarkdownLinkCompleter<'a> {
+
+    fn position(&self) -> Position {
+        self.position
+    }
 
     fn vault(&self) -> &'a Vault {
         self.vault
@@ -136,6 +168,10 @@ impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
             partial_link: (full.as_str().to_string(), full.range()),
             full_range,
             line_nr: line,
+            position: Position {
+                line: line as u32,
+                character: character as u32,
+            },
             file_path: path.to_path_buf(),
             vault
         });
@@ -154,18 +190,13 @@ impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
                 .unwrap_or("".to_string())
         );
 
+        let link_completions = self.link_completions();
 
-        let referenceables = self.vault.select_referenceable_nodes(None);
+        let matches = fuzzy_match_completions(&filter_text, link_completions);
 
-        // Get and filter referenceables
-        let completions = referenceables
-            .into_par_iter()
-            .flat_map(|referenceable| LinkCompletion::new(referenceable.clone()))
-            .collect::<Vec<_>>();
+        matches
 
-        let filtered = fuzzy_match_completions(&filter_text, completions);
 
-        filtered
     }
 
     /// The completions refname
@@ -214,7 +245,7 @@ impl PartialInfileRef {
 
 
 #[derive(Debug, Clone)]
-enum LinkCompletion<'a> {
+pub enum LinkCompletion<'a> {
     File {
         mdfile: &'a MDFile,
         match_string: String,
@@ -224,7 +255,6 @@ enum LinkCompletion<'a> {
         match_string: String,
     },
     Block {
-        indexed: &'a MDIndexedBlock,
         match_string: String,
     },
     Unresolved {
@@ -241,7 +271,7 @@ impl LinkCompletion<'_> {
         match referenceable {
             Referenceable::File(_, mdfile) => Some(File { mdfile, match_string: mdfile.path.file_stem()?.to_str()?.to_string() }),
             Referenceable::Heading(path, mdheading) => Some(Heading {heading: mdheading, match_string: format!("{}#{}", path.file_stem()?.to_str()?, mdheading.heading_text)}),
-            Referenceable::IndexedBlock(path, indexed) => Some(Block{ indexed, match_string: format!("{}#^{}", path.file_stem()?.to_str()?, indexed.index)}),
+            Referenceable::IndexedBlock(path, indexed) => Some(Block{ match_string: format!("{}#^{}", path.file_stem()?.to_str()?, indexed.index)}),
             Referenceable::UnresovledFile(_, file) => Some(Unresolved { match_string: file.clone(), infile_ref: None }),
             Referenceable::UnresolvedHeading(_, s1, s2) => Some(Unresolved { match_string: format!("{}#{}", s1, s2), infile_ref: Some(s2.clone()) }),
             Referenceable::UnresovledIndexedBlock(_, s1, s2) => Some(Unresolved { match_string: format!("{}#^{}", s1, s2), infile_ref: Some(format!("^{}", s2)) }),
@@ -255,7 +285,7 @@ impl LinkCompletion<'_> {
             label: refname.to_string(),
             kind: Some(match self {
                 Self::File { mdfile: _, match_string: _ } => CompletionItemKind::FILE,
-                Self::Heading { heading: _, match_string: _ } | Self::Block { indexed: _, match_string: _ } => CompletionItemKind::REFERENCE,
+                Self::Heading { heading: _, match_string: _ } | Self::Block { match_string: _ } => CompletionItemKind::REFERENCE,
                 Self::Unresolved { match_string: _, infile_ref: _ } => CompletionItemKind::KEYWORD
             }),
             label_details: match self {
@@ -278,11 +308,11 @@ impl<'a> Completable<'a, MarkdownLinkCompleter<'a>>  for LinkCompletion<'a> {
 
         let label = self.match_string();
 
-        let MarkdownLinkCompleter { display, path: _, infile_ref: _, partial_link: _, full_range: _, line_nr: _, file_path: _, vault: _ } = markdown_link_completer;
+        let display = &markdown_link_completer.display;
 
         let link_infile_ref = match self {
             File { mdfile: _, match_string: _ } 
-                | Self::Block { indexed: _, match_string: _ }
+                | Self::Block { match_string: _ }
                 => None,
             Self::Heading { heading, match_string: _ } => Some(heading.heading_text.to_string()),
             Self::Unresolved { match_string: _, infile_ref } => infile_ref.clone()
@@ -337,7 +367,7 @@ impl Matchable for LinkCompletion<'_> {
         match self {
             File{mdfile: _, match_string} 
                 | Heading { heading: _, match_string }
-                | Block { indexed: _, match_string }
+                | Block { match_string }
                 | Unresolved { match_string, infile_ref: _ }
                 => &match_string,
         }
@@ -355,6 +385,13 @@ pub struct WikiLinkCompleter<'a> {
 }
 
 impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
+
+    fn position(&self) -> Position {
+        Position {
+            line: self.line,
+            character: self.character
+        }
+    }
 
     fn vault(&self) -> &'a Vault {
         self.vault
@@ -463,17 +500,11 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
                 let filter_text = &self.cmp_text;
 
 
-                let referenceables = self.vault.select_referenceable_nodes(None);
+                let link_completions = self.link_completions();
 
-                // Get and filter referenceables
-                let completions = referenceables
-                    .into_par_iter()
-                    .flat_map(|referenceable| LinkCompletion::new(referenceable.clone()))
-                    .collect::<Vec<_>>();
+                let matches = fuzzy_match_completions(&String::from_iter(filter_text), link_completions);
 
-                let filtered = fuzzy_match_completions(&String::from_iter(filter_text), completions);
-
-                filtered
+                matches
             },
             _ => vec![]
         }
