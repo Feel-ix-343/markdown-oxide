@@ -5,7 +5,7 @@ Implementing Obsidian PKM features (and possibly more) in the form of a language
 ## Installation
 
 > [!IMPORTANT]
-> I'm working on getting this into package distributions. Installation/configuration should be easier soon.
+> I'm working on getting this into package distributions. Installation/configuration should be easier soon. Also this is very pre-release and things may be broken
 
 
 ### Arch Linux
