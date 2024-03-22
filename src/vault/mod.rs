@@ -18,6 +18,11 @@ use serde::{Deserialize, Serialize};
 use tower_lsp::lsp_types::Position;
 use walkdir::WalkDir;
 
+
+
+mod referenceable;
+
+
 impl Vault {
     pub fn construct_vault(root_dir: &Path) -> Result<Vault, std::io::Error> {
         let md_file_paths = WalkDir::new(root_dir)
@@ -404,18 +409,18 @@ impl Vault {
         }
     }
 
-    pub fn select_blocks(&self) -> Vec<Block> {
-        return self
+    pub fn select_blocks(&self) -> Vec<Block<'_>> {
+        self
             .ropes
             .par_iter()
             .map(|(path, rope)| {
                 rope.lines()
                     .enumerate()
-                    .filter_map(|(i, line)| {
+                    .flat_map(|(i, line)| {
                         let string = line.as_str()?;
 
                         Some(Block {
-                            text: String::from(string.trim()),
+                            text: string.trim(),
                             range: MyRange(tower_lsp::lsp_types::Range {
                                 start: Position {
                                     line: i as u32,
@@ -426,25 +431,25 @@ impl Vault {
                                     character: string.len() as u32,
                                 },
                             }),
-                            file: path.clone(),
+                            file: path,
                         })
                     })
-                    .collect_vec()
+                    .collect::<Vec<_>>()
             })
             .flatten()
             .filter(|block| !block.text.is_empty())
-            .collect();
+            .collect()
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub struct Block {
-    pub text: String,
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Copy)]
+pub struct Block<'a> {
+    pub text: &'a str,
     pub range: MyRange,
-    pub file: PathBuf,
+    pub file: &'a Path 
 }
 
-impl AsRef<str> for Block {
+impl AsRef<str> for Block<'_> {
     fn as_ref(&self) -> &str {
         &self.text
     }
@@ -993,8 +998,9 @@ impl MDHeading {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MDIndexedBlock {
-    index: String,
-    range: MyRange,
+    /// THe index of the block; does not include '^'
+    pub index: String,
+    pub range: MyRange,
 }
 
 impl Hash for MDIndexedBlock {
@@ -1026,9 +1032,9 @@ impl MDIndexedBlock {
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct MDFootnote {
-    index: String,
-    footnote_text: String,
-    range: MyRange,
+    pub index: String,
+    pub footnote_text: String,
+    pub range: MyRange,
 }
 
 impl Hash for MDFootnote {
@@ -1066,7 +1072,7 @@ impl MDFootnote {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MDTag {
     pub tag_ref: String,
-    range: MyRange,
+    pub range: MyRange,
 }
 
 impl Hash for MDTag {
@@ -1147,6 +1153,7 @@ pub enum Referenceable<'a> {
     Footnote(&'a PathBuf, &'a MDFootnote),
     UnresovledFile(PathBuf, &'a String),
     UnresolvedHeading(PathBuf, &'a String, &'a String),
+    /// full path, link path, index (without ^)
     UnresovledIndexedBlock(PathBuf, &'a String, &'a String),
     LinkRefDef(&'a PathBuf, &'a MDLinkReferenceDefinition),
 }
