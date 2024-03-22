@@ -133,7 +133,7 @@ impl<'a> UnindexedBlock<'a> {
                 _ => false
             }) {
 
-                Some(referenceable @ Referenceable::IndexedBlock(_, indexed_block)) => (
+                Some(ref referenceable @ Referenceable::IndexedBlock(_, indexed_block)) => (
                     preview_referenceable(completer.link_completer.vault(), &referenceable).map(Documentation::MarkupContent),
                     None,
                     CompletionItemKind::REFERENCE,
