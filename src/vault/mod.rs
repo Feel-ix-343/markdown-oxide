@@ -1072,7 +1072,7 @@ impl MDFootnote {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MDTag {
     pub tag_ref: String,
-    range: MyRange,
+    pub range: MyRange,
 }
 
 impl Hash for MDTag {
