@@ -1032,9 +1032,9 @@ impl MDIndexedBlock {
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct MDFootnote {
-    index: String,
-    footnote_text: String,
-    range: MyRange,
+    pub index: String,
+    pub footnote_text: String,
+    pub range: MyRange,
 }
 
 impl Hash for MDFootnote {

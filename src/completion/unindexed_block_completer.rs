@@ -66,10 +66,10 @@ impl<'a, C: LinkCompleter<'a>> UnindexedBlockCompleter<'a, C> {
 
 
 impl<'a> Completer<'a> for UnindexedBlockCompleter<'a, MarkdownLinkCompleter<'a>> {
-    fn construct(context: super::Context<'a>, path: &std::path::Path, line: usize, character: usize) -> Option<Self>
+    fn construct(context: super::Context<'a>, line: usize, character: usize) -> Option<Self>
 where Self: Sized {
 
-        let markdown_link_completer = MarkdownLinkCompleter::construct(context, path, line, character)?;
+        let markdown_link_completer = MarkdownLinkCompleter::construct(context, line, character)?;
 
         Self::from_link_completer(markdown_link_completer)
     }
@@ -92,10 +92,10 @@ where Self: Sized {
 } 
 
 impl<'a> Completer<'a> for UnindexedBlockCompleter<'a, WikiLinkCompleter<'a>> {
-    fn construct(context: super::Context<'a>, path: &std::path::Path, line: usize, character: usize) -> Option<Self>
+    fn construct(context: super::Context<'a>, line: usize, character: usize) -> Option<Self>
         where Self: Sized {
 
-        let wiki_link_completer = WikiLinkCompleter::construct(context, path, line, character)?;
+        let wiki_link_completer = WikiLinkCompleter::construct(context, line, character)?;
 
         UnindexedBlockCompleter::from_link_completer(wiki_link_completer)
     }

@@ -23,14 +23,14 @@ pub struct TagCompleter<'a> {
 }
 
 impl<'a> Completer<'a> for TagCompleter<'a> {
-    fn construct(context: super::Context<'a>, path: &std::path::Path, line: usize, character: usize) -> Option<Self>
+    fn construct(context: super::Context<'a>, line: usize, character: usize) -> Option<Self>
         where Self: Sized + Completer<'a> {
         
         static PARTIAL_TAG_REGEX: Lazy<Regex> = Lazy::new(|| {
             Regex::new(r"\#(?<text>[a-zA-Z0-9\/]*)").unwrap()
         }); 
 
-        let line_chars = context.vault.select_line(path, line as isize)?;
+        let line_chars = context.vault.select_line(context.path, line as isize)?;
         let line_string = String::from_iter(line_chars);
 
         let captures_iter = PARTIAL_TAG_REGEX.captures_iter(&line_string);

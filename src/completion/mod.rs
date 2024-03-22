@@ -22,23 +22,25 @@ use crate::{
     },
 };
 
-use self::{link_completer::MarkdownLinkCompleter, matcher::fuzzy_match, tag_completer::TagCompleter, unindexed_block_completer::UnindexedBlockCompleter};
+use self::{footnote_completer::FootnoteCompleter, link_completer::MarkdownLinkCompleter, matcher::fuzzy_match, tag_completer::TagCompleter, unindexed_block_completer::UnindexedBlockCompleter};
 use self::link_completer::WikiLinkCompleter;
 
 mod link_completer;
 mod matcher;
 mod unindexed_block_completer;
 mod tag_completer;
+mod footnote_completer;
 
 
 #[derive(Clone, Copy)]
 pub struct Context<'a>{
     vault: &'a Vault,
     opened_files: &'a [PathBuf],
+    path: &'a Path
 }
 
 pub trait Completer<'a> : Sized {
-    fn construct(context: Context<'a>, path: &Path, line: usize, character: usize) -> Option<Self>
+    fn construct(context: Context<'a>, line: usize, character: usize) -> Option<Self>
     where Self: Sized + Completer<'a>;
 
     fn completions(&self) -> Vec<impl Completable<'a, Self>> where Self: Sized;
@@ -63,27 +65,20 @@ pub fn get_completions(
     vault: &Vault,
     initial_completion_files: &[PathBuf],
     params: &CompletionParams,
-    _path: &Path,
+    path: &Path,
 ) -> Option<CompletionResponse> {
-    let Ok(path) = params
-        .text_document_position
-        .text_document
-        .uri
-        .to_file_path()
-    else {
-        return None;
-    };
-
     let completion_context = Context {
         vault,
-        opened_files: initial_completion_files
+        opened_files: initial_completion_files,
+        path: &path,
     };
 
-    run_completer::<UnindexedBlockCompleter<MarkdownLinkCompleter>>(completion_context, &path, params.text_document_position.position.line, params.text_document_position.position.character)
-        .or_else(|| run_completer::<UnindexedBlockCompleter<WikiLinkCompleter>>(completion_context, &path, params.text_document_position.position.line, params.text_document_position.position.character))
-        .or_else(|| run_completer::<MarkdownLinkCompleter>(completion_context, &path, params.text_document_position.position.line, params.text_document_position.position.character))
-        .or_else(|| run_completer::<WikiLinkCompleter>(completion_context, &path, params.text_document_position.position.line, params.text_document_position.position.character))
-        .or_else(|| run_completer::<TagCompleter>(completion_context, &path, params.text_document_position.position.line, params.text_document_position.position.character))
+    run_completer::<UnindexedBlockCompleter<MarkdownLinkCompleter>>(completion_context, params.text_document_position.position.line, params.text_document_position.position.character)
+        .or_else(|| run_completer::<UnindexedBlockCompleter<WikiLinkCompleter>>(completion_context, params.text_document_position.position.line, params.text_document_position.position.character))
+        .or_else(|| run_completer::<MarkdownLinkCompleter>(completion_context, params.text_document_position.position.line, params.text_document_position.position.character))
+        .or_else(|| run_completer::<WikiLinkCompleter>(completion_context, params.text_document_position.position.line, params.text_document_position.position.character))
+        .or_else(|| run_completer::<TagCompleter>(completion_context, params.text_document_position.position.line, params.text_document_position.position.character))
+        .or_else(|| run_completer::<FootnoteCompleter>(completion_context, params.text_document_position.position.line, params.text_document_position.position.character))
 
 }
 //     } else if character
@@ -384,9 +379,9 @@ pub fn get_completions(
 // }
 
 
-fn run_completer<'a, T: Completer<'a>>(context: Context<'a>, path: &Path, line: u32, character: u32) -> Option<CompletionResponse> {
+fn run_completer<'a, T: Completer<'a>>(context: Context<'a>, line: u32, character: u32) -> Option<CompletionResponse> {
 
-    let completer = T::construct(context, path, line as usize, character as usize)?;
+    let completer = T::construct(context, line as usize, character as usize)?;
     let completions = completer.completions();
 
     let completions = completions

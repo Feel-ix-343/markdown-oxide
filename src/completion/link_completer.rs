@@ -103,10 +103,10 @@ impl<'a> LinkCompleter<'a> for MarkdownLinkCompleter<'a> {
 
 impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
 
-    fn construct(context: Context<'a>, path: &std::path::Path, line: usize, character: usize) -> Option<Self>
+    fn construct(context: Context<'a>, line: usize, character: usize) -> Option<Self>
     where Self: Sized {
 
-        let Context { vault, opened_files: _ } = context;
+        let Context { vault, opened_files: _, path } = context;
 
         let line_chars = vault.select_line(path, line as isize)?;
         let line_to_cursor = line_chars.get(0..character)?;
@@ -424,10 +424,10 @@ impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
 impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
 
 
-    fn construct(context: Context<'a>, path: &std::path::Path, line: usize, character: usize) -> Option<Self>
+    fn construct(context: Context<'a>, line: usize, character: usize) -> Option<Self>
         where Self: Sized {
 
-        let Context { vault, opened_files } = context;
+        let Context { vault, opened_files, path } = context;
 
         let line_chars = vault.select_line(path, line as isize)?;
 
