@@ -73,6 +73,7 @@ pub fn get_completions(
         path: &path,
     };
 
+    // I would refactor this if I could figure out generic closures
     run_completer::<UnindexedBlockCompleter<MarkdownLinkCompleter>>(completion_context, params.text_document_position.position.line, params.text_document_position.position.character)
         .or_else(|| run_completer::<UnindexedBlockCompleter<WikiLinkCompleter>>(completion_context, params.text_document_position.position.line, params.text_document_position.position.character))
         .or_else(|| run_completer::<MarkdownLinkCompleter>(completion_context, params.text_document_position.position.line, params.text_document_position.position.character))
