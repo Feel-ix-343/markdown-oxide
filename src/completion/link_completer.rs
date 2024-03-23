@@ -1,4 +1,4 @@
-use std::{path::PathBuf, time::SystemTime};
+use std::{path::{Path, PathBuf}, time::SystemTime};
 
 use itertools::Itertools;
 use once_cell::sync::Lazy;
@@ -27,6 +27,7 @@ pub struct MarkdownLinkCompleter<'a> {
     pub position: Position,
     pub file_path: std::path::PathBuf,
     pub vault: &'a Vault,
+    pub context_path: &'a Path
 }
 
 pub trait LinkCompleter<'a> : Completer<'a> {
@@ -34,26 +35,34 @@ pub trait LinkCompleter<'a> : Completer<'a> {
     fn entered_refname(&self) -> String;
     fn vault(&self) -> &'a Vault;
     fn position(&self) -> Position;
+    fn path(&self) -> &'a Path;
     fn link_completions(&self) -> Vec<LinkCompletion<'a>> {
 
         let referenceables = self.vault().select_referenceable_nodes(None);
 
         let position = self.position();
 
+        let unresolved_under_cursor = self.vault().select_reference_at_position(self.path(), position)
+            .map(|reference| self.vault().select_referenceables_for_reference(reference, self.path()))
+            .into_iter()
+            .flatten()
+            .find(|referenceable| referenceable.is_unresolved());
+
+        let single_unresolved_under_cursor = unresolved_under_cursor.and_then(|referenceable| {
+            let ref_count = self.vault().select_references_for_referenceable(&referenceable)?.len();
+
+            if ref_count == 1 {
+                Some(referenceable)
+            } else {
+                None
+            }
+        });
+
         // Get and filter referenceables
         let completions = referenceables
             .into_par_iter()
-            .flat_map(|referenceable| { 
-                let is = referenceable.get_range()?.start.line <= position.line
-                    && referenceable.get_range()?.start.character <= position.character
-                    && referenceable.get_range()?.end.line >= position.line
-                    && referenceable.get_range()?.end.character >= position.character;
-
-                if is {
-                    None
-                } else {
-                    Some(referenceable)
-                }
+            .filter(|referenceable| { 
+                Some(referenceable) != single_unresolved_under_cursor.as_ref()
             })
             .flat_map(|referenceable| LinkCompletion::new(referenceable.clone()))
             .collect::<Vec<_>>();
@@ -64,6 +73,9 @@ pub trait LinkCompleter<'a> : Completer<'a> {
 
 impl<'a> LinkCompleter<'a> for MarkdownLinkCompleter<'a> {
 
+    fn path(&self) -> &'a Path {
+        self.context_path
+    }
     fn position(&self) -> Position {
         self.position
     }
@@ -173,7 +185,8 @@ impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
                 character: character as u32,
             },
             file_path: path.to_path_buf(),
-            vault
+            vault,
+            context_path: context.path
         });
 
         partial
@@ -381,10 +394,15 @@ pub struct WikiLinkCompleter<'a> {
     files: &'a [PathBuf],
     index: u32,
     character: u32,
-    line: u32
+    line: u32,
+    context_path: &'a Path
 }
 
 impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
+
+    fn path(&self) -> &'a Path {
+        self.context_path
+    }
 
     fn position(&self) -> Position {
         Position {
@@ -458,13 +476,14 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
                 files: opened_files,
                 index: index as u32,
                 character: character as u32,
-                line: line as u32
+                line: line as u32,
+                context_path: context.path
             })
         })
     }
 
     fn completions(&self) -> Vec<impl Completable<'a, Self>> where Self: Sized {
-        let WikiLinkCompleter { vault, cmp_text: _, files, index: _, character: _, line: _ } = self;
+        let WikiLinkCompleter { vault, cmp_text: _, files, index: _, character: _, line: _, context_path: _ } = self;
 
         match *self.cmp_text {
             // Give recent referenceables; TODO: improve this; 
