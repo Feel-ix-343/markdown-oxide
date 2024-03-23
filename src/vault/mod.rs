@@ -632,7 +632,7 @@ impl Reference {
         let wiki_links: Vec<Reference> = WIKI_LINK_RE
             .captures_iter(text)
             .flat_map(RegexTuple::new)
-            .map(|regextuple| {
+            .flat_map(|regextuple| {
                 generic_link_constructor::<WikiReferenceConstructor>(text, regextuple)
             })
             .collect_vec();
@@ -645,7 +645,7 @@ impl Reference {
         let md_links: Vec<Reference> = MD_LINK_RE
             .captures_iter(text)
             .flat_map(RegexTuple::new)
-            .map(|regextuple| generic_link_constructor::<MDReferenceConstructor>(text, regextuple))
+            .flat_map(|regextuple| generic_link_constructor::<MDReferenceConstructor>(text, regextuple))
             .collect_vec();
 
         let tags: Vec<Reference> = MDTag::new(text)
@@ -887,18 +887,23 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
         infile_ref,
         display_text,
     }: RegexTuple,
-) -> Reference {
+) -> Option<Reference> {
+
+    if file_path.as_str().starts_with("http://") || file_path.as_str().starts_with("https://") {
+        return None;
+    }
+
     match (range, file_path, infile_ref, display_text) {
         // Pure file reference as there is no infileref such as #... for headings or #^... for indexed blocks
         (full, filepath, None, display) => {
-            return T::new_file_link(ReferenceData {
+            Some(T::new_file_link(ReferenceData {
                 reference_text: filepath.as_str().into(),
                 range: range_to_position(&Rope::from_str(text), full.range()),
                 display_text: display.map(|d| d.as_str().into()),
-            })
+            }))
         }
         (full, filepath, Some(infile), display) if infile.as_str().get(0..1) == Some("^") => {
-            return T::new_indexed_block_link(
+            Some(T::new_indexed_block_link(
                 ReferenceData {
                     reference_text: format!("{}#{}", filepath.as_str(), infile.as_str()),
                     range: range_to_position(&Rope::from_str(text), full.range()),
@@ -906,10 +911,10 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
                 },
                 filepath.as_str(),
                 &infile.as_str()[1..], // drop the ^ for the index
-            );
+            ))
         }
         (full, filepath, Some(infile), display) => {
-            return T::new_heading(
+            Some(T::new_heading(
                 ReferenceData {
                     reference_text: format!("{}#{}", filepath.as_str(), infile.as_str()),
                     range: range_to_position(&Rope::from_str(text), full.range()),
@@ -917,7 +922,7 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
                 },
                 filepath.as_str(),
                 infile.as_str(),
-            )
+            ))
         }
     }
 }
