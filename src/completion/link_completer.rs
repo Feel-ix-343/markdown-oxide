@@ -4,9 +4,9 @@ use itertools::Itertools;
 use once_cell::sync::Lazy;
 use rayon::prelude::*;
 use regex::Regex;
-use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionTextEdit, InsertTextFormat, Position, Range, TextEdit};
+use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionTextEdit, Documentation, InsertTextFormat, Position, Range, TextEdit};
 
-use crate::vault::{MDFile, MDHeading, Reference, Referenceable, Vault};
+use crate::{ui::preview_referenceable, vault::{MDFile, MDHeading, Reference, Referenceable, Vault}};
 
 use super::{matcher::{fuzzy_match_completions, Matchable, OrderedCompletion}, Completable, Completer, Context};
 
@@ -262,18 +262,22 @@ pub enum LinkCompletion<'a> {
     File {
         mdfile: &'a MDFile,
         match_string: String,
+        referenceable: Referenceable<'a>
     },
     Heading {
         heading: &'a MDHeading,
         match_string: String,
+        referenceable: Referenceable<'a>
     },
     Block {
         match_string: String,
+        referenceable: Referenceable<'a>
     },
     Unresolved {
         match_string: String,
         /// Infile ref includes all after #, including ^
         infile_ref: Option<String>,
+        referenceable: Referenceable<'a>
     },
 }
 
@@ -282,27 +286,34 @@ use LinkCompletion::*;
 impl LinkCompletion<'_> {
     fn new<'a>(referenceable: Referenceable<'a>) -> Option<LinkCompletion<'a>> {
         match referenceable {
-            Referenceable::File(_, mdfile) => Some(File { mdfile, match_string: mdfile.path.file_stem()?.to_str()?.to_string() }),
-            Referenceable::Heading(path, mdheading) => Some(Heading {heading: mdheading, match_string: format!("{}#{}", path.file_stem()?.to_str()?, mdheading.heading_text)}),
-            Referenceable::IndexedBlock(path, indexed) => Some(Block{ match_string: format!("{}#^{}", path.file_stem()?.to_str()?, indexed.index)}),
-            Referenceable::UnresovledFile(_, file) => Some(Unresolved { match_string: file.clone(), infile_ref: None }),
-            Referenceable::UnresolvedHeading(_, s1, s2) => Some(Unresolved { match_string: format!("{}#{}", s1, s2), infile_ref: Some(s2.clone()) }),
-            Referenceable::UnresovledIndexedBlock(_, s1, s2) => Some(Unresolved { match_string: format!("{}#^{}", s1, s2), infile_ref: Some(format!("^{}", s2)) }),
+            Referenceable::File(_, mdfile) => Some(File { mdfile, match_string: mdfile.path.file_stem()?.to_str()?.to_string(), referenceable }),
+            Referenceable::Heading(path, mdheading) => Some(Heading {heading: mdheading, match_string: format!("{}#{}", path.file_stem()?.to_str()?, mdheading.heading_text), referenceable}),
+            Referenceable::IndexedBlock(path, indexed) => Some(Block{ match_string: format!("{}#^{}", path.file_stem()?.to_str()?, indexed.index), referenceable}),
+            Referenceable::UnresovledFile(_, file) => Some(Unresolved { match_string: file.clone(), infile_ref: None, referenceable }),
+            Referenceable::UnresolvedHeading(_, s1, s2) => Some(Unresolved { match_string: format!("{}#{}", s1, s2), infile_ref: Some(s2.clone()), referenceable }),
+            Referenceable::UnresovledIndexedBlock(_, s1, s2) => Some(Unresolved { match_string: format!("{}#^{}", s1, s2), infile_ref: Some(format!("^{}", s2)), referenceable }),
             _ => None
         }
     }
 
-    fn default_completion(&self, refname: &str, text_edit: CompletionTextEdit, filter_text: &str) -> CompletionItem {
+    fn default_completion(&self, refname: &str, text_edit: CompletionTextEdit, filter_text: &str, vault: &Vault) -> CompletionItem {
+
+        let referenceable = match self {
+            Self::File { referenceable,.. }
+            | Self::Heading { referenceable, .. }
+            | Self::Block { referenceable, .. }
+            | Self::Unresolved { referenceable, .. } => referenceable
+        };
 
         CompletionItem {
             label: refname.to_string(),
             kind: Some(match self {
-                Self::File { mdfile: _, match_string: _ } => CompletionItemKind::FILE,
-                Self::Heading { heading: _, match_string: _ } | Self::Block { match_string: _ } => CompletionItemKind::REFERENCE,
-                Self::Unresolved { match_string: _, infile_ref: _ } => CompletionItemKind::KEYWORD
+                Self::File { mdfile: _, match_string: _, .. } => CompletionItemKind::FILE,
+                Self::Heading { heading: _, match_string: _, .. } | Self::Block { match_string: _, .. } => CompletionItemKind::REFERENCE,
+                Self::Unresolved { match_string: _, infile_ref: _, .. } => CompletionItemKind::KEYWORD
             }),
             label_details: match self {
-                Self::Unresolved { match_string: _, infile_ref: _ } => Some(CompletionItemLabelDetails{
+                Self::Unresolved { match_string: _, infile_ref: _, .. } => Some(CompletionItemLabelDetails{
                     detail: Some("Unresolved".into()),
                     description: None
                 }),
@@ -310,6 +321,7 @@ impl LinkCompletion<'_> {
             },
             text_edit: Some(text_edit),
             filter_text: Some(filter_text.to_string()),
+            documentation: preview_referenceable(vault, referenceable).map(Documentation::MarkupContent),
             ..Default::default()
         }
     }
@@ -324,11 +336,11 @@ impl<'a> Completable<'a, MarkdownLinkCompleter<'a>>  for LinkCompletion<'a> {
         let display = &markdown_link_completer.display;
 
         let link_infile_ref = match self {
-            File { mdfile: _, match_string: _ } 
-                | Self::Block { match_string: _ }
+            File { mdfile: _, match_string: _, .. } 
+                | Self::Block { match_string: _, .. }
                 => None,
-            Self::Heading { heading, match_string: _ } => Some(heading.heading_text.to_string()),
-            Self::Unresolved { match_string: _, infile_ref } => infile_ref.clone()
+            Self::Heading { heading, match_string: _, .. } => Some(heading.heading_text.to_string()),
+            Self::Unresolved { match_string: _, infile_ref, .. } => infile_ref.clone()
         };
 
         let binding = (display.0.as_str(), link_infile_ref);
@@ -336,7 +348,7 @@ impl<'a> Completable<'a, MarkdownLinkCompleter<'a>>  for LinkCompletion<'a> {
             ("", Some(ref infile)) => &infile,
             // Get the first heading of the file, if possible. 
             ("", None) => match self {
-                Self::File { mdfile, match_string: _ } => mdfile.headings.get(0).map(|heading| heading.heading_text.as_str()).unwrap_or(""),
+                Self::File { mdfile, match_string: _, .. } => mdfile.headings.get(0).map(|heading| heading.heading_text.as_str()).unwrap_or(""),
                 _ => ""
             }
             (display, _) => display,
@@ -354,7 +366,7 @@ impl<'a> Completable<'a, MarkdownLinkCompleter<'a>>  for LinkCompletion<'a> {
 
         std::iter::once(CompletionItem {
             insert_text_format: Some(InsertTextFormat::SNIPPET),
-            ..self.default_completion(&label, text_edit, &filter_text)
+            ..self.default_completion(&label, text_edit, &filter_text, markdown_link_completer.vault())
         })
 
     }
@@ -370,7 +382,7 @@ impl<'a> Completable<'a, WikiLinkCompleter<'a>> for LinkCompletion<'a> {
 
         let filter_text = completer.completion_filter_text(refname);
 
-        std::iter::once(self.default_completion(&refname, text_edit, &filter_text))
+        std::iter::once(self.default_completion(&refname, text_edit, &filter_text, completer.vault()))
     }
 }
 
@@ -378,10 +390,10 @@ impl<'a> Completable<'a, WikiLinkCompleter<'a>> for LinkCompletion<'a> {
 impl Matchable for LinkCompletion<'_> {
     fn match_string(&self) -> &str {
         match self {
-            File{mdfile: _, match_string} 
-                | Heading { heading: _, match_string }
-                | Block { match_string }
-                | Unresolved { match_string, infile_ref: _ }
+            File{mdfile: _, match_string, ..} 
+                | Heading { heading: _, match_string, .. }
+                | Block { match_string, .. }
+                | Unresolved { match_string, infile_ref: _, .. }
                 => &match_string,
         }
     }
