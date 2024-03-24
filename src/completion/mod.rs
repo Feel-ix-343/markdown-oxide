@@ -16,10 +16,9 @@ use tower_lsp::lsp_types::{
 };
 
 use crate::{
-    ui::preview_referenceable,
-    vault::{
-        get_obsidian_ref_path, Block, MyRange, Preview, Reference, Referenceable, Refname, Vault, MDTag,
-    },
+    config::Settings, ui::preview_referenceable, vault::{
+        get_obsidian_ref_path, Block, MDTag, MyRange, Preview, Reference, Referenceable, Refname, Vault
+    }
 };
 
 use self::{footnote_completer::FootnoteCompleter, link_completer::MarkdownLinkCompleter, matcher::fuzzy_match, tag_completer::TagCompleter, unindexed_block_completer::UnindexedBlockCompleter};
@@ -36,7 +35,8 @@ mod footnote_completer;
 pub struct Context<'a>{
     vault: &'a Vault,
     opened_files: &'a [PathBuf],
-    path: &'a Path
+    path: &'a Path,
+    settings: &'a Settings
 }
 
 pub trait Completer<'a> : Sized {
@@ -66,11 +66,13 @@ pub fn get_completions(
     initial_completion_files: &[PathBuf],
     params: &CompletionParams,
     path: &Path,
+    config: &Settings
 ) -> Option<CompletionResponse> {
     let completion_context = Context {
         vault,
         opened_files: initial_completion_files,
         path: &path,
+        settings: config
     };
 
     // I would refactor this if I could figure out generic closures

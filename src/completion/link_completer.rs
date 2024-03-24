@@ -1,12 +1,13 @@
 use std::{path::{Path, PathBuf}, time::SystemTime};
 
+use chrono::{Duration, TimeDelta};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use rayon::prelude::*;
 use regex::Regex;
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionTextEdit, Documentation, InsertTextFormat, Position, Range, TextEdit};
 
-use crate::{ui::preview_referenceable, vault::{MDFile, MDHeading, Reference, Referenceable, Vault}};
+use crate::{config::Settings, ui::preview_referenceable, vault::{MDFile, MDHeading, Reference, Referenceable, Vault}};
 
 use super::{matcher::{fuzzy_match_completions, Matchable, OrderedCompletion}, Completable, Completer, Context};
 
@@ -27,16 +28,18 @@ pub struct MarkdownLinkCompleter<'a> {
     pub position: Position,
     pub file_path: std::path::PathBuf,
     pub vault: &'a Vault,
-    pub context_path: &'a Path
+    pub context_path: &'a Path,
+    pub settings: &'a Settings
 }
 
 pub trait LinkCompleter<'a> : Completer<'a> {
+    fn settings(&self) -> &'a Settings;
     fn completion_text_edit(&self, display: Option<&str>, refname: &str) -> CompletionTextEdit;
     fn entered_refname(&self) -> String;
     fn vault(&self) -> &'a Vault;
     fn position(&self) -> Position;
     fn path(&self) -> &'a Path;
-    fn link_completions(&self) -> Vec<LinkCompletion<'a>> {
+    fn link_completions(&self) -> Vec<LinkCompletion<'a>>  where Self : Sync {
 
         let referenceables = self.vault().select_referenceable_nodes(None);
 
@@ -64,7 +67,7 @@ pub trait LinkCompleter<'a> : Completer<'a> {
             .filter(|referenceable| { 
                 Some(referenceable) != single_unresolved_under_cursor.as_ref()
             })
-            .flat_map(|referenceable| LinkCompletion::new(referenceable.clone()))
+            .flat_map(|referenceable| LinkCompletion::new(referenceable.clone(), self))
             .collect::<Vec<_>>();
 
         completions
@@ -72,6 +75,10 @@ pub trait LinkCompleter<'a> : Completer<'a> {
 }
 
 impl<'a> LinkCompleter<'a> for MarkdownLinkCompleter<'a> {
+
+    fn settings(&self) -> &'a Settings {
+        self.settings
+    }
 
     fn path(&self) -> &'a Path {
         self.context_path
@@ -118,7 +125,7 @@ impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
     fn construct(context: Context<'a>, line: usize, character: usize) -> Option<Self>
     where Self: Sized {
 
-        let Context { vault, opened_files: _, path } = context;
+        let Context { vault, opened_files: _, path, .. } = context;
 
         let line_chars = vault.select_line(path, line as isize)?;
         let line_to_cursor = line_chars.get(0..character)?;
@@ -186,7 +193,8 @@ impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
             },
             file_path: path.to_path_buf(),
             vault,
-            context_path: context.path
+            context_path: context.path,
+            settings: context.settings
         });
 
         partial
@@ -253,153 +261,6 @@ impl PartialInfileRef {
     }
 }
 
-
-
-
-
-#[derive(Debug, Clone)]
-pub enum LinkCompletion<'a> {
-    File {
-        mdfile: &'a MDFile,
-        match_string: String,
-        referenceable: Referenceable<'a>
-    },
-    Heading {
-        heading: &'a MDHeading,
-        match_string: String,
-        referenceable: Referenceable<'a>
-    },
-    Block {
-        match_string: String,
-        referenceable: Referenceable<'a>
-    },
-    Unresolved {
-        match_string: String,
-        /// Infile ref includes all after #, including ^
-        infile_ref: Option<String>,
-        referenceable: Referenceable<'a>
-    },
-}
-
-use LinkCompletion::*;
-
-impl LinkCompletion<'_> {
-    fn new<'a>(referenceable: Referenceable<'a>) -> Option<LinkCompletion<'a>> {
-        match referenceable {
-            Referenceable::File(_, mdfile) => Some(File { mdfile, match_string: mdfile.path.file_stem()?.to_str()?.to_string(), referenceable }),
-            Referenceable::Heading(path, mdheading) => Some(Heading {heading: mdheading, match_string: format!("{}#{}", path.file_stem()?.to_str()?, mdheading.heading_text), referenceable}),
-            Referenceable::IndexedBlock(path, indexed) => Some(Block{ match_string: format!("{}#^{}", path.file_stem()?.to_str()?, indexed.index), referenceable}),
-            Referenceable::UnresovledFile(_, file) => Some(Unresolved { match_string: file.clone(), infile_ref: None, referenceable }),
-            Referenceable::UnresolvedHeading(_, s1, s2) => Some(Unresolved { match_string: format!("{}#{}", s1, s2), infile_ref: Some(s2.clone()), referenceable }),
-            Referenceable::UnresovledIndexedBlock(_, s1, s2) => Some(Unresolved { match_string: format!("{}#^{}", s1, s2), infile_ref: Some(format!("^{}", s2)), referenceable }),
-            _ => None
-        }
-    }
-
-    fn default_completion(&self, refname: &str, text_edit: CompletionTextEdit, filter_text: &str, vault: &Vault) -> CompletionItem {
-
-        let referenceable = match self {
-            Self::File { referenceable,.. }
-            | Self::Heading { referenceable, .. }
-            | Self::Block { referenceable, .. }
-            | Self::Unresolved { referenceable, .. } => referenceable
-        };
-
-        CompletionItem {
-            label: refname.to_string(),
-            kind: Some(match self {
-                Self::File { mdfile: _, match_string: _, .. } => CompletionItemKind::FILE,
-                Self::Heading { heading: _, match_string: _, .. } | Self::Block { match_string: _, .. } => CompletionItemKind::REFERENCE,
-                Self::Unresolved { match_string: _, infile_ref: _, .. } => CompletionItemKind::KEYWORD
-            }),
-            label_details: match self {
-                Self::Unresolved { match_string: _, infile_ref: _, .. } => Some(CompletionItemLabelDetails{
-                    detail: Some("Unresolved".into()),
-                    description: None
-                }),
-                _ => None
-            },
-            text_edit: Some(text_edit),
-            filter_text: Some(filter_text.to_string()),
-            documentation: preview_referenceable(vault, referenceable).map(Documentation::MarkupContent),
-            ..Default::default()
-        }
-    }
-}
-
-
-impl<'a> Completable<'a, MarkdownLinkCompleter<'a>>  for LinkCompletion<'a> {
-    fn completions(&self, markdown_link_completer: &MarkdownLinkCompleter<'a>) -> impl Iterator<Item = CompletionItem> {
-
-        let label = self.match_string();
-
-        let display = &markdown_link_completer.display;
-
-        let link_infile_ref = match self {
-            File { mdfile: _, match_string: _, .. } 
-                | Self::Block { match_string: _, .. }
-                => None,
-            Self::Heading { heading, match_string: _, .. } => Some(heading.heading_text.to_string()),
-            Self::Unresolved { match_string: _, infile_ref, .. } => infile_ref.clone()
-        };
-
-        let binding = (display.0.as_str(), link_infile_ref);
-        let link_display_text = match binding {
-            ("", Some(ref infile)) => &infile,
-            // Get the first heading of the file, if possible. 
-            ("", None) => match self {
-                Self::File { mdfile, match_string: _, .. } => mdfile.headings.get(0).map(|heading| heading.heading_text.as_str()).unwrap_or(""),
-                _ => ""
-            }
-            (display, _) => display,
-        };
-
-        let link_display_text = format!(
-            "${{1:{}}}",
-            link_display_text,
-        );
-
-        let text_edit = markdown_link_completer.completion_text_edit(Some(&link_display_text), &label);
-
-
-        let filter_text = markdown_link_completer.completion_filter_text(label);
-
-        std::iter::once(CompletionItem {
-            insert_text_format: Some(InsertTextFormat::SNIPPET),
-            ..self.default_completion(&label, text_edit, &filter_text, markdown_link_completer.vault())
-        })
-
-    }
-}
-
-
-impl<'a> Completable<'a, WikiLinkCompleter<'a>> for LinkCompletion<'a> {
-    fn completions(&self, completer: &WikiLinkCompleter<'a>) -> impl Iterator<Item = CompletionItem> {
-
-        let refname = self.match_string();
-
-        let text_edit = completer.completion_text_edit(None, refname);
-
-        let filter_text = completer.completion_filter_text(refname);
-
-        std::iter::once(self.default_completion(&refname, text_edit, &filter_text, completer.vault()))
-    }
-}
-
-
-impl Matchable for LinkCompletion<'_> {
-    fn match_string(&self) -> &str {
-        match self {
-            File{mdfile: _, match_string, ..} 
-                | Heading { heading: _, match_string, .. }
-                | Block { match_string, .. }
-                | Unresolved { match_string, infile_ref: _, .. }
-                => &match_string,
-        }
-    }
-}
-
-
 pub struct WikiLinkCompleter<'a> {
     vault: &'a Vault,
     cmp_text: Vec<char>,
@@ -407,10 +268,15 @@ pub struct WikiLinkCompleter<'a> {
     index: u32,
     character: u32,
     line: u32,
-    context_path: &'a Path
+    context_path: &'a Path,
+    settings: &'a Settings
 }
 
 impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
+
+    fn settings(&self) -> &'a Settings {
+        self.settings
+    }
 
     fn path(&self) -> &'a Path {
         self.context_path
@@ -457,7 +323,7 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
     fn construct(context: Context<'a>, line: usize, character: usize) -> Option<Self>
         where Self: Sized {
 
-        let Context { vault, opened_files, path } = context;
+        let Context { vault, opened_files, path, .. } = context;
 
         let line_chars = vault.select_line(path, line as isize)?;
 
@@ -489,13 +355,14 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
                 index: index as u32,
                 character: character as u32,
                 line: line as u32,
-                context_path: context.path
+                context_path: context.path,
+                settings: context.settings
             })
         })
     }
 
     fn completions(&self) -> Vec<impl Completable<'a, Self>> where Self: Sized {
-        let WikiLinkCompleter { vault, cmp_text: _, files, index: _, character: _, line: _, context_path: _ } = self;
+        let WikiLinkCompleter { vault, cmp_text: _, files, index: _, character: _, line: _, context_path: _, .. } = self;
 
         match *self.cmp_text {
             // Give recent referenceables; TODO: improve this; 
@@ -518,7 +385,7 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
                         Some(referenceables.into_iter()
                             .flat_map(move |referenceable| Some(
                                 OrderedCompletion::<WikiLinkCompleter, LinkCompletion>::new(
-                                    LinkCompletion::new(referenceable)?,
+                                    LinkCompletion::new(referenceable, self)?,
                                     modified_string.clone()
                                 ))
                             ))
@@ -548,4 +415,219 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
 }
 
 
+
+
+
+
+
+#[derive(Debug, Clone)]
+pub enum LinkCompletion<'a> {
+    File {
+        mdfile: &'a MDFile,
+        match_string: String,
+        referenceable: Referenceable<'a>
+    },
+    Heading {
+        heading: &'a MDHeading,
+        match_string: String,
+        referenceable: Referenceable<'a>
+    },
+    Block {
+        match_string: String,
+        referenceable: Referenceable<'a>
+    },
+    Unresolved {
+        match_string: String,
+        /// Infile ref includes all after #, including ^
+        infile_ref: Option<String>,
+        referenceable: Referenceable<'a>
+    },
+    DailyNote(MDDailyNote<'a>)
+}
+
+use LinkCompletion::*;
+
+impl LinkCompletion<'_> {
+    fn new<'a>(referenceable: Referenceable<'a>, completer: &impl LinkCompleter<'a>) -> Option<LinkCompletion<'a>> {
+        if let Some(daily) = MDDailyNote::new(referenceable.clone(), completer) {
+            Some(DailyNote(daily))
+        } else {
+
+
+            match referenceable {
+                Referenceable::File(_, mdfile) => Some(File { mdfile, match_string: mdfile.path.file_stem()?.to_str()?.to_string(), referenceable }),
+                Referenceable::Heading(path, mdheading) => Some(Heading {heading: mdheading, match_string: format!("{}#{}", path.file_stem()?.to_str()?, mdheading.heading_text), referenceable}),
+                Referenceable::IndexedBlock(path, indexed) => Some(Block{ match_string: format!("{}#^{}", path.file_stem()?.to_str()?, indexed.index), referenceable}),
+                Referenceable::UnresovledFile(_, file) => Some(Unresolved { match_string: file.clone(), infile_ref: None, referenceable }),
+                Referenceable::UnresolvedHeading(_, s1, s2) => Some(Unresolved { match_string: format!("{}#{}", s1, s2), infile_ref: Some(s2.clone()), referenceable }),
+                Referenceable::UnresovledIndexedBlock(_, s1, s2) => Some(Unresolved { match_string: format!("{}#^{}", s1, s2), infile_ref: Some(format!("^{}", s2)), referenceable }),
+                _ => None
+            }
+        }
+    }
+
+    fn default_completion(&self, refname: &str, text_edit: CompletionTextEdit, filter_text: &str, vault: &Vault) -> CompletionItem {
+
+        let referenceable = match self {
+            Self::File { referenceable,.. }
+            | Self::Heading { referenceable, .. }
+            | Self::Block { referenceable, .. }
+            | Self::Unresolved { referenceable, .. }
+            | Self::DailyNote(MDDailyNote { referenceable, .. })=> referenceable
+        };
+
+        CompletionItem {
+            label: refname.to_string(),
+            kind: Some(match self {
+                Self::File { mdfile: _, match_string: _, .. } => CompletionItemKind::FILE,
+                Self::Heading { heading: _, match_string: _, .. } | Self::Block { match_string: _, .. } => CompletionItemKind::REFERENCE,
+                Self::Unresolved { match_string: _, infile_ref: _, .. } => CompletionItemKind::KEYWORD,
+                Self::DailyNote {..} => CompletionItemKind::EVENT
+            }),
+            label_details: match self {
+                Self::Unresolved { match_string: _, infile_ref: _, .. } => Some(CompletionItemLabelDetails{
+                    detail: Some("Unresolved".into()),
+                    description: None
+                }),
+                _ => None
+            },
+            text_edit: Some(text_edit),
+            filter_text: Some(filter_text.to_string()),
+            documentation: preview_referenceable(vault, referenceable).map(Documentation::MarkupContent),
+            ..Default::default()
+        }
+    }
+
+    /// Refname to be inserted into the document
+    fn refname(&self) -> String {
+        match self {
+            Self::DailyNote(MDDailyNote { ref_name, .. }) => ref_name.to_string() ,
+            _ => self.match_string().to_string()
+        }
+    }
+
+}
+
+
+impl<'a> Completable<'a, MarkdownLinkCompleter<'a>>  for LinkCompletion<'a> {
+    fn completions(&self, markdown_link_completer: &MarkdownLinkCompleter<'a>) -> impl Iterator<Item = CompletionItem> {
+
+        let label = self.match_string();
+
+        let display = &markdown_link_completer.display;
+
+        let link_infile_ref = match self {
+            File { mdfile: _, match_string: _, .. } 
+            | Self::Block { match_string: _, .. }
+            | Self::DailyNote {..} 
+                => None,
+            Self::Heading { heading, match_string: _, .. } => Some(heading.heading_text.to_string()),
+            Self::Unresolved { match_string: _, infile_ref, .. } => infile_ref.clone()
+        };
+
+        let binding = (display.0.as_str(), link_infile_ref);
+        let link_display_text = match binding {
+            ("", Some(ref infile)) => &infile,
+            // Get the first heading of the file, if possible. 
+            ("", None) => match self {
+                Self::File { mdfile, match_string: _, .. } => mdfile.headings.get(0).map(|heading| heading.heading_text.as_str()).unwrap_or(""),
+                _ => ""
+            }
+            (display, _) => display,
+        };
+
+        let link_display_text = format!(
+            "${{1:{}}}",
+            link_display_text,
+        );
+
+        let text_edit = markdown_link_completer.completion_text_edit(Some(&link_display_text), &label);
+
+
+        let filter_text = markdown_link_completer.completion_filter_text(label);
+
+        std::iter::once(CompletionItem {
+            insert_text_format: Some(InsertTextFormat::SNIPPET),
+            ..self.default_completion(&label, text_edit, &filter_text, markdown_link_completer.vault())
+        })
+
+    }
+}
+
+
+impl<'a> Completable<'a, WikiLinkCompleter<'a>> for LinkCompletion<'a> {
+    fn completions(&self, completer: &WikiLinkCompleter<'a>) -> impl Iterator<Item = CompletionItem> {
+
+
+        let refname = self.refname();
+        let match_text = self.match_string();
+
+        let text_edit = completer.completion_text_edit(None, &refname);
+
+        let filter_text = completer.completion_filter_text(&match_text);
+
+        std::iter::once(self.default_completion(&match_text, text_edit, &filter_text, completer.vault()))
+    }
+}
+
+
+impl Matchable for LinkCompletion<'_> {
+    /// The string used for fuzzy matching
+    fn match_string(&self) -> &str {
+        match self {
+            File{mdfile: _, match_string, ..}
+            | Heading { heading: _, match_string, .. }
+            | Block { match_string, .. }
+            | Unresolved { match_string, .. }
+            | DailyNote(MDDailyNote { match_string, .. })  
+                => &match_string,
+        }
+    }
+}
+
+
+#[derive(Clone, Debug)]
+pub struct MDDailyNote<'a> {
+    match_string: String,
+    ref_name: String,
+    referenceable: Referenceable<'a>
+}
+
+impl MDDailyNote<'_> {
+    /// The refname used for fuzzy matching a completion - not the actual inserted text
+    fn new<'a>(referenceable: Referenceable<'a>, completer: &impl LinkCompleter<'a>) -> Option<MDDailyNote<'a>> {
+
+        let Some((filerefname, filter_refname)) = (match referenceable {
+            Referenceable::File(path, mdfile) => {
+                let filename = path.file_name();
+                let dailynote_format = &completer.settings().dailynote;
+                let date = filename.and_then(|filename| {
+
+                    let filename = filename.to_str()?;
+                    let filename = filename.replace(".md", "");
+                    chrono::NaiveDate::parse_from_str(&filename, dailynote_format).ok()
+
+                });
+                let today = chrono::Local::now().date_naive();
+                let file_refname = mdfile.path.file_stem()?.to_str()?.to_string();
+
+                date.and_then(|date| match (date - today).num_days() {
+                    0 => Some(format!("today: {}", file_refname)),
+                    1 if date > today => Some(format!("tomorrow: {}", file_refname)),
+                    1 if date < today => Some(format!("yesterday: {}", file_refname)),
+                    _ => None
+                }).map(|thing| (file_refname, thing))
+            },
+            _ => None
+        }) else {
+            return None;
+        };
+
+        Some(MDDailyNote{
+            match_string: filter_refname,
+            ref_name: filerefname,
+            referenceable
+        })
+    }
+}
 

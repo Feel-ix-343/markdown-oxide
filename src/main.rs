@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use completion::get_completions;
+use config::Settings;
 use diagnostics::diagnostics;
 use itertools::Itertools;
 use rayon::prelude::*;
@@ -32,6 +33,7 @@ mod symbol;
 mod tokens;
 mod ui;
 mod vault;
+mod config;
 
 
 #[derive(Debug)]
@@ -39,6 +41,7 @@ struct Backend {
     client: Client,
     vault: Arc<RwLock<Option<Vault>>>,
     opened_files: Arc<RwLock<HashSet<PathBuf>>>,
+    settings: Arc<RwLock<Option<Settings>>>
 }
 
 struct TextDocumentItem {
@@ -202,6 +205,16 @@ impl Backend {
         callback(vault)
     }
 
+
+    async fn bind_settings<T>(&self, callback: impl FnOnce(&Settings) -> Result<T>) -> Result<T> {
+        let guard = self.settings.read().await;
+        let Some(settings) = guard.deref() else {
+            return Err(Error::new(ErrorCode::ServerError(1)));
+        };
+
+        callback(settings)
+    }
+
     async fn bind_opened_files<T>(
         &self,
         callback: impl Fn(&HashSet<PathBuf>) -> Result<T>,
@@ -239,6 +252,16 @@ impl LanguageServer for Backend {
         };
         let mut value = self.vault.write().await;
         *value = Some(vault);
+
+        let read_settings = match  Settings::new(root_dir) {
+            Ok(settings) => settings,
+            Err(e) => {
+                self.client.log_message(MessageType::ERROR, format!("Failed to read settings {:?}", e)).await;
+                return Err(Error::new(ErrorCode::ServerError(1)));
+            }
+        };
+        let mut settings = self.settings.write().await;
+        *settings = Some(read_settings);
 
         let file_op_reg = FileOperationRegistrationOptions {
             filters: std::iter::once(FileOperationFilter {
@@ -445,8 +468,14 @@ impl LanguageServer for Backend {
             .bind_opened_files(|files| Ok(files.clone().into_iter().collect::<Box<[_]>>()))
             .await?;
 
+        let Ok(settings) = self.bind_settings(|settings| Ok(settings.to_owned())).await else {
+            return Err(Error::new(ErrorCode::ServerError(2)));
+        }; // TODO: this is bad
+
         let res = self
-            .bind_vault(|vault| Ok(get_completions(vault, &files, &params, &path)))
+            .bind_vault(|vault| {
+                Ok(get_completions(vault, &files, &params, &path, &settings))
+            })
             .await;
 
         self.client
@@ -544,6 +573,7 @@ async fn main() {
         client,
         vault: Arc::new(None.into()),
         opened_files: Arc::new(HashSet::new().into()),
+        settings: Arc::new(None.into())
     });
     Server::new(stdin, stdout, socket).serve(service).await;
 }

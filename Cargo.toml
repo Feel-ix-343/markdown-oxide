@@ -7,6 +7,9 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.80"
+chrono = "0.4.35"
+config = "0.14.0"
+indexmap = "2.2.6"
 itertools = "0.10.5"
 nanoid = "0.4.0"
 nucleo-matcher = "0.3.1"
