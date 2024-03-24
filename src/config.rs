@@ -119,14 +119,4 @@ mod test {
         let chrono_format = convert_momentjs_to_chrono_format(moment_format);
         assert_eq!(chrono_format, "%Y-%m-%d");
     }
-
-
-    #[test]
-    fn test_on_vault() {
-        let dailynote = obsidian_dailynote_converted(&PathBuf::from("/home/felix/Notes"));
-
-        println!("{dailynote:?}");
-
-        assert_eq!(dailynote, Some("%Y-%m-%d".to_string()));
-    }
 }
