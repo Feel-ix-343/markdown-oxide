@@ -15,6 +15,8 @@ impl Settings {
     pub fn new(root_dir: &Path) -> anyhow::Result<Settings> {
         let obsidian_daily_note = obsidian_dailynote_converted(root_dir);
 
+        let expanded = shellexpand::tilde("~/.config/moxide/settings");
+
         let settings = Config::builder()
             .add_source(
                 File::with_name(&format!(
@@ -25,7 +27,7 @@ impl Settings {
                 ))
                 .required(false),
             )
-            .add_source(File::with_name("~/.config/moxide/settings").required(false))
+            .add_source(File::with_name(&expanded).required(false))
             .set_default(
                 "dailynote",
                 obsidian_daily_note.unwrap_or("%Y-%m-%d".to_string()),

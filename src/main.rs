@@ -368,6 +368,9 @@ impl LanguageServer for Backend {
     }
 
     async fn initialized(&self, _: InitializedParams) {
+        let settings = self.bind_settings(|settings| Ok(settings.clone())).await.unwrap();
+        self.client.log_message(MessageType::WARNING, format!("Settings: {:?}", settings)).await;
+
         let Ok(root_path) = self.bind_vault(|vault| Ok(vault.root_dir().clone())).await else {
             return;
         };
