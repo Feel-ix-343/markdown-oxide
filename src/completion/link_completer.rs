@@ -1,6 +1,6 @@
 use std::{path::{Path, PathBuf}, time::SystemTime};
 
-use chrono::{Datelike, Duration, TimeDelta};
+use chrono::{Datelike, Duration, NaiveDate, TimeDelta};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use rayon::prelude::*;
@@ -512,20 +512,21 @@ impl LinkCompletion<'_> {
 impl<'a> Completable<'a, MarkdownLinkCompleter<'a>>  for LinkCompletion<'a> {
     fn completions(&self, markdown_link_completer: &MarkdownLinkCompleter<'a>) -> impl Iterator<Item = CompletionItem> {
 
-        let label = self.match_string();
+        let refname = self.refname();
+        let match_string = self.match_string();
 
         let display = &markdown_link_completer.display;
 
-        let link_infile_ref = match self {
+        let link_display_text = match self {
             File { mdfile: _, match_string: _, .. } 
             | Self::Block { match_string: _, .. }
-            | Self::DailyNote {..} 
                 => None,
+            Self::DailyNote(daily) => daily.relative_name(markdown_link_completer),
             Self::Heading { heading, match_string: _, .. } => Some(heading.heading_text.to_string()),
             Self::Unresolved { match_string: _, infile_ref, .. } => infile_ref.clone()
         };
 
-        let binding = (display.0.as_str(), link_infile_ref);
+        let binding = (display.0.as_str(), link_display_text);
         let link_display_text = match binding {
             ("", Some(ref infile)) => &infile,
             // Get the first heading of the file, if possible. 
@@ -541,14 +542,14 @@ impl<'a> Completable<'a, MarkdownLinkCompleter<'a>>  for LinkCompletion<'a> {
             link_display_text,
         );
 
-        let text_edit = markdown_link_completer.completion_text_edit(Some(&link_display_text), &label);
+        let text_edit = markdown_link_completer.completion_text_edit(Some(&link_display_text), &refname);
 
 
-        let filter_text = markdown_link_completer.completion_filter_text(label);
+        let filter_text = markdown_link_completer.completion_filter_text(&match_string);
 
         std::iter::once(CompletionItem {
             insert_text_format: Some(InsertTextFormat::SNIPPET),
-            ..self.default_completion(&label, text_edit, &filter_text, markdown_link_completer.vault())
+            ..self.default_completion(&match_string, text_edit, &filter_text, markdown_link_completer.vault())
         })
 
     }
@@ -590,14 +591,54 @@ impl Matchable for LinkCompletion<'_> {
 pub struct MDDailyNote<'a> {
     match_string: String,
     ref_name: String,
+    path: &'a Path,
     referenceable: Referenceable<'a>
 }
 
 impl MDDailyNote<'_> {
+
+    pub fn relative_name<'a>(&self, completer: &impl LinkCompleter<'a>) -> Option<String> {
+        let self_date = self.get_self_date(completer)?;
+
+        Self::relative_date_string(self_date)
+    }
+
+    pub fn get_self_date<'a>(&self, completer: &impl LinkCompleter<'a>) -> Option<NaiveDate> {
+
+        let filename = self.path.file_name();
+        let dailynote_format = &completer.settings().dailynote;
+        let date = filename.and_then(|filename| {
+
+            let filename = filename.to_str()?;
+            let filename = filename.replace(".md", "");
+            chrono::NaiveDate::parse_from_str(&filename, dailynote_format).ok()
+
+        });
+
+        date
+    }
+
+    fn relative_date_string(date: NaiveDate) -> Option<String> {
+
+        let today = chrono::Local::now().date_naive();
+
+        if today == date {
+            Some("today".to_string())
+        } else {
+            match (date - today).num_days() {
+                1 => Some("tomorrow".to_string()),
+                2..=7 => Some(format!("next {}", date.format("%A").to_string())),
+                -1 => Some("yesterday".to_string()),
+                -7..=-1 => Some(format!("last {}", date.format("%A").to_string())),
+                _ => None
+            }
+        }
+    }
+
     /// The refname used for fuzzy matching a completion - not the actual inserted text
     fn new<'a>(referenceable: Referenceable<'a>, completer: &impl LinkCompleter<'a>) -> Option<MDDailyNote<'a>> {
 
-        let Some((filerefname, filter_refname)) = (match referenceable {
+        let Some((filerefname, filter_refname, path)) = (match referenceable {
             Referenceable::File(path, mdfile) => {
                 let filename = path.file_name();
                 let dailynote_format = &completer.settings().dailynote;
@@ -608,17 +649,9 @@ impl MDDailyNote<'_> {
                     chrono::NaiveDate::parse_from_str(&filename, dailynote_format).ok()
 
                 });
-                let today = chrono::Local::now().date_naive();
                 let file_refname = mdfile.path.file_stem()?.to_str()?.to_string();
 
-                date.and_then(|date| match (date - today).num_days() {
-                    0 => Some(format!("today: {}", file_refname)),
-                    1 => Some(format!("tomorrow: {}", file_refname)),
-                    2..=7 => Some(format!("next {}: {}", date.weekday().to_string(), file_refname)),
-                    -1 => Some(format!("yesterday: {}", file_refname)),
-                    -7..=-1 => Some(format!("last {}: {}", date.weekday().to_string(), file_refname)),
-                    _ => None
-                }).map(|thing| (file_refname, thing))
+                date.and_then(|date| Self::relative_date_string(date)).map(|thing| (file_refname, thing, path))
             },
             _ => None
         }) else {
@@ -626,6 +659,7 @@ impl MDDailyNote<'_> {
         };
 
         Some(MDDailyNote{
+            path,
             match_string: filter_refname,
             ref_name: filerefname,
             referenceable
