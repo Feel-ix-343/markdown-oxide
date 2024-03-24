@@ -15,6 +15,7 @@ use serde::Deserialize;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Settings {
+    /// Format of daily notes
     pub dailynote: String
 }
 

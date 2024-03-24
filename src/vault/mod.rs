@@ -1156,6 +1156,7 @@ pub enum Referenceable<'a> {
     IndexedBlock(&'a PathBuf, &'a MDIndexedBlock),
     Tag(&'a PathBuf, &'a MDTag),
     Footnote(&'a PathBuf, &'a MDFootnote),
+    // TODO: Get rid of useless path here
     UnresovledFile(PathBuf, &'a String),
     UnresolvedHeading(PathBuf, &'a String, &'a String),
     /// full path, link path, index (without ^)
