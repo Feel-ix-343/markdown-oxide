@@ -9,7 +9,8 @@ use serde::Deserialize;
 pub struct Settings {
     /// Format of daily notes
     pub dailynote: String,
-    pub heading_completions: bool
+    pub heading_completions: bool,
+    pub title_headings: bool
 }
 
 impl Settings {
@@ -37,6 +38,7 @@ impl Settings {
                 "heading_completions",
                 true
             )?
+            .set_default("title_headings", true)?
             .build()
             .map_err(|err| anyhow!("Build err: {err}"))?;
 

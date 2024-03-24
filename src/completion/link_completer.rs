@@ -85,12 +85,14 @@ pub trait LinkCompleter<'a>: Completer<'a> {
             }
         });
 
+        let heading_completions = self.settings().heading_completions;
+
         // Get and filter referenceables
         let completions = referenceables
             .into_par_iter()
             .filter(|referenceable| Some(referenceable) != single_unresolved_under_cursor.as_ref())
             .filter(|referenceable| (
-                (self.settings().heading_completions || !matches!(referenceable, Referenceable::Heading(..) | Referenceable::UnresolvedHeading(..)))
+                (heading_completions || !matches!(referenceable, Referenceable::Heading(..) | Referenceable::UnresolvedHeading(..)))
             ))
             .flat_map(|referenceable| LinkCompletion::new(referenceable.clone(), self))
             .collect::<Vec<_>>();
@@ -648,7 +650,7 @@ impl<'a> Completable<'a, MarkdownLinkCompleter<'a>> for LinkCompletion<'a> {
         let link_display_text = match binding {
             ("", Some(ref infile)) => infile,
             // Get the first heading of the file, if possible.
-            ("", None) => match self {
+            ("", None) if markdown_link_completer.settings().title_headings => match self {
                 Self::File {
                     mdfile,
                     match_string: _,
