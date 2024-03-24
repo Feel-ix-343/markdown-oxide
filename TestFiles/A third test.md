@@ -1,5 +1,6 @@
 # *Related*
 
+[[a]]
 
 [disp](pp) This is line [display](Another Test#)
 
