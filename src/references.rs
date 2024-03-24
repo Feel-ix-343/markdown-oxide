@@ -3,7 +3,7 @@ use std::path::Path;
 use itertools::Itertools;
 use tower_lsp::lsp_types::{Location, Position, Url};
 
-use crate::vault::{Reference, Vault, Referenceable};
+use crate::vault::{Vault, Referenceable};
 
 pub fn references(vault: &Vault, cursor_position: Position, path: &Path) -> Option<Vec<Location>> {
 

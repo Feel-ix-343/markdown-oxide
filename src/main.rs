@@ -156,7 +156,7 @@ impl Backend {
                     .filter_map(|uri| {
                         let path = uri.to_file_path().ok()?;
 
-                        diagnostics(vault, (&path, &uri)).map(|diags| (uri.clone(), diags))
+                        diagnostics(vault, (&path, uri)).map(|diags| (uri.clone(), diags))
                     })
                     .collect::<Vec<_>>())
             })

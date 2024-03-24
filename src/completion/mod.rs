@@ -1,27 +1,19 @@
-use std::{iter::once, path::{Path, PathBuf}, time::SystemTime};
+use std::{path::{Path, PathBuf}};
 
-use itertools::Itertools;
-use nanoid::nanoid;
 
-use nucleo_matcher::{
-    pattern::{self, Normalization},
-    Matcher,
-};
-use once_cell::sync::Lazy;
 use rayon::prelude::*;
 
-use regex::Regex;
 use tower_lsp::lsp_types::{
-    Command, CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionList, CompletionParams, CompletionResponse, CompletionTextEdit, Documentation, InsertTextFormat, InsertTextMode, MarkupContent, MarkupKind, Position, Range, TextEdit, Url
+    CompletionItem, CompletionList, CompletionParams, CompletionResponse
 };
 
 use crate::{
-    config::Settings, ui::preview_referenceable, vault::{
-        get_obsidian_ref_path, Block, MDTag, MyRange, Preview, Reference, Referenceable, Refname, Vault
+    config::Settings, vault::{
+        Vault
     }
 };
 
-use self::{footnote_completer::FootnoteCompleter, link_completer::MarkdownLinkCompleter, matcher::fuzzy_match, tag_completer::TagCompleter, unindexed_block_completer::UnindexedBlockCompleter};
+use self::{footnote_completer::FootnoteCompleter, link_completer::MarkdownLinkCompleter, tag_completer::TagCompleter, unindexed_block_completer::UnindexedBlockCompleter};
 use self::link_completer::WikiLinkCompleter;
 
 mod link_completer;
@@ -71,7 +63,7 @@ pub fn get_completions(
     let completion_context = Context {
         vault,
         opened_files: initial_completion_files,
-        path: &path,
+        path,
         settings: config
     };
 
@@ -286,8 +278,7 @@ fn run_completer<'a, T: Completer<'a>>(context: Context<'a>, line: u32, characte
     let completions = completions
         .into_iter()
         .take(50)
-        .map(|completable| completable.completions(&completer).collect::<Vec<_>>().into_iter()) // Hate this
-        .flatten()
+        .flat_map(|completable| completable.completions(&completer).collect::<Vec<_>>().into_iter())
         .collect::<Vec<CompletionItem>>();
 
     Some(CompletionResponse::List(CompletionList { is_incomplete: true, items: completions }))

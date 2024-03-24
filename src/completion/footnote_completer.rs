@@ -34,7 +34,7 @@ impl<'a> Completer<'a> for FootnoteCompleter<'a> {
 
     fn completions(&self) -> Vec<impl super::Completable<'a, Self>> where Self: Sized {
         
-        let path_footnotes = self.vault.select_referenceable_nodes(Some(&self.path))
+        let path_footnotes = self.vault.select_referenceable_nodes(Some(self.path))
             .into_par_iter()
             .flat_map(|referenceable| FootnoteCompletion::from_referenceable(referenceable))
             .collect::<Vec<_>>();

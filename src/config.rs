@@ -1,7 +1,6 @@
-use std::{ops::Deref, path::Path};
+use std::{path::Path};
 
 use anyhow::anyhow;
-use chrono::{Date, NaiveDate, TimeZone};
 use config::{Config, File};
 use indexmap::IndexMap;
 use serde::Deserialize;
@@ -55,7 +54,7 @@ fn obsidian_dailynote_converted(root_dir: &Path) -> Option<String> {
     });
 
     let daily_note = config.as_ref().and_then(|config| {
-        config.get("format").map(|format| convert_momentjs_to_chrono_format(&format))
+        config.get("format").map(|format| convert_momentjs_to_chrono_format(format))
     });
 
     daily_note
@@ -64,7 +63,7 @@ fn obsidian_dailynote_converted(root_dir: &Path) -> Option<String> {
 
 
 
-use std::{collections::{BTreeMap, HashMap}};
+use std::{collections::{HashMap}};
 
 // GPT-4 code
 fn momentjs_to_chrono_format_map() -> IndexMap<&'static str, &'static str> {
@@ -109,9 +108,9 @@ fn convert_momentjs_to_chrono_format(moment_format: &str) -> String {
 
 #[cfg(test)]
 mod test {
-    use std::path::PathBuf;
+    
 
-    use crate::config::{convert_momentjs_to_chrono_format, obsidian_dailynote_converted, Config, Settings};
+    use crate::config::{convert_momentjs_to_chrono_format};
 
     #[test]
     fn test_format_conversion() {

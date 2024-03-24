@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::{Path};
 
 use tower_lsp::lsp_types::{Hover, HoverContents, HoverParams};
 

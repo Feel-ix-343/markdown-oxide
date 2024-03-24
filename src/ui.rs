@@ -1,4 +1,4 @@
-use std::{path::Path, time::SystemTime};
+use std::{path::Path};
 
 use itertools::Itertools;
 use tower_lsp::lsp_types::{MarkupContent, MarkupKind};
@@ -7,7 +7,7 @@ use crate::vault::{get_obsidian_ref_path, Preview, Reference, Referenceable, Vau
 
 fn referenceable_string(vault: &Vault, referenceables: &[Referenceable]) -> Option<String> {
 
-    let referenceable = referenceables.get(0)?;
+    let referenceable = referenceables.first()?;
 
     let preview = vault.select_referenceable_preview(referenceable);
 
@@ -25,11 +25,11 @@ fn referenceable_string(vault: &Vault, referenceables: &[Referenceable]) -> Opti
 
     let backlinks_preview = match referenceables
         .iter()
-        .flat_map(|i| Some(vault.select_references_for_referenceable(i)?))
+        .flat_map(|i| vault.select_references_for_referenceable(i))
         .flatten()
         .collect_vec()
         {
-        references if references.len() > 0 => references
+        references if !references.is_empty() => references
             .into_iter()
             .take(20)
             .flat_map(|(path, reference)| {
@@ -37,18 +37,18 @@ fn referenceable_string(vault: &Vault, referenceables: &[Referenceable]) -> Opti
                     vault.select_line(path, reference.data().range.start.line as isize)?,
                 );
 
-                let path = get_obsidian_ref_path(&vault.root_dir(), path)?;
+                let path = get_obsidian_ref_path(vault.root_dir(), path)?;
 
                 Some(format!("- `{}`: `{}`", path, line)) // and select indented list
             })
             .join("\n"),
-        _ => format!("No Backlinks"),
+        _ => "No Backlinks".to_string(),
     };
 
-    return Some(format!(
+    Some(format!(
         "{}\n\n`...`\n\n---\n\n# Backlinks\n\n{}",
         written_text_preview, backlinks_preview
-    ));
+    ))
 }
 
 pub fn preview_referenceable(

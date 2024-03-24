@@ -45,17 +45,17 @@ impl<'a, C: LinkCompleter<'a>> UnindexedBlockCompleter<'a, C> {
         let blocks = self.link_completer.vault().select_blocks();
         let position = self.link_completer.position();
 
-        let completables = blocks.into_par_iter()
+        
+
+        blocks.into_par_iter()
             .filter(|block| 
                 !(block.range.start.line <= position.line
                 && block.range.start.character <= position.character
                 && block.range.end.line >= position.line
                 && block.range.end.character >= position.character)
             )
-            .map(|block| UnindexedBlock(block))
-            .collect::<Vec<_>>();
-
-        completables
+            .map(UnindexedBlock)
+            .collect::<Vec<_>>()
     }
 
     fn grep_match_text(&self) -> String {
@@ -121,7 +121,7 @@ impl<'a> UnindexedBlock<'a> {
         let rand_id = &completer.new_id;
 
         let path_ref = get_obsidian_ref_path(completer.link_completer.vault().root_dir(), self.0.file)?;
-        let url = Url::from_file_path(&self.0.file).ok()?;
+        let url = Url::from_file_path(self.0.file).ok()?;
 
         let block = self.0;
 
@@ -134,7 +134,7 @@ impl<'a> UnindexedBlock<'a> {
             }) {
 
                 Some(ref referenceable @ Referenceable::IndexedBlock(_, indexed_block)) => (
-                    preview_referenceable(completer.link_completer.vault(), &referenceable).map(Documentation::MarkupContent),
+                    preview_referenceable(completer.link_completer.vault(), referenceable).map(Documentation::MarkupContent),
                     None,
                     CompletionItemKind::REFERENCE,
                     Some(CompletionItemLabelDetails {
@@ -148,7 +148,7 @@ impl<'a> UnindexedBlock<'a> {
                         kind: MarkupKind::Markdown,
                         value: (block.range.start.line as isize - 5
                             ..=block.range.start.line as isize + 5)
-                            .flat_map(|i| Some((completer.link_completer.vault().select_line(&block.file, i)?, i)))
+                            .flat_map(|i| Some((completer.link_completer.vault().select_line(block.file, i)?, i)))
                             .map(|(iter, ln)| {
                                 if ln == block.range.start.line as isize {
                                     format!("**{}**\n", String::from_iter(iter).trim())

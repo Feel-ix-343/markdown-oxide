@@ -1,6 +1,6 @@
-use std::{collections::HashSet, hash::Hash, path::{Path, PathBuf}, time::SystemTime};
+use std::{collections::HashSet, path::{Path, PathBuf}, time::SystemTime};
 
-use chrono::{Datelike, Duration, NaiveDate, TimeDelta};
+use chrono::{Duration, NaiveDate};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use rayon::prelude::*;
@@ -79,7 +79,7 @@ pub trait LinkCompleter<'a> : Completer<'a> {
             .flat_map(|i| Some(today + Duration::try_days(i)?))
             .flat_map(|date| MDDailyNote::from_date(date, self))
             .filter(|date| !refnames.contains(&date.ref_name))
-            .map(|dal| LinkCompletion::DailyNote(dal));
+            .map(LinkCompletion::DailyNote);
 
 
         completions
@@ -190,7 +190,7 @@ impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
 
             match chars.as_slice() {
                 ['^', rest @ ..] => (PartialInfileRef::BlockRef(String::from_iter(rest)), range),
-                [rest @ ..] => (PartialInfileRef::HeadingRef(String::from_iter(rest)), range),
+                rest => (PartialInfileRef::HeadingRef(String::from_iter(rest)), range),
             }
 
         });
@@ -314,21 +314,21 @@ impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
 
     fn completion_text_edit(&self, display: Option<&str>, refname: &str) -> CompletionTextEdit {
         
-        let text_edit = CompletionTextEdit::Edit(TextEdit {
+        
+
+        CompletionTextEdit::Edit(TextEdit {
             range: Range {
                 start: Position {
-                    line: self.line as u32,
-                    character: self.index + 1 as u32, // index is right at the '[' in [[link]]; we want one more than that
+                    line: self.line,
+                    character: self.index + 1_u32, // index is right at the '[' in [[link]]; we want one more than that
                 },
                 end: Position {
-                    line: self.line as u32,
-                    character: self.character as u32,
+                    line: self.line,
+                    character: self.character,
                 },
             },
             new_text: format!("{}{}", refname, display.map(|display| format!("|{}", display)).unwrap_or("".to_string()))
-        });
-
-        text_edit
+        })
     }
 }
 
@@ -353,7 +353,7 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
             .map(|(_, (i, _))| i); // only take the index; using map because find returns an option
 
         let index = index.and_then(|index| {
-            if line_chars.get(index..character)?.into_iter().contains(&']') {
+            if line_chars.get(index..character)?.iter().contains(&']') {
                 None
             } else {
                 Some(index)
@@ -393,7 +393,7 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
                     .sorted_by_key(|(_, modified)| *modified)
                     .flat_map(|(path, modified)| {
 
-                        let referenceables = vault.select_referenceable_nodes(Some(&path));
+                        let referenceables = vault.select_referenceable_nodes(Some(path));
 
                         let modified_string = modified.duration_since(SystemTime::UNIX_EPOCH).ok()?.as_secs().to_string();
 
@@ -543,10 +543,10 @@ impl<'a> Completable<'a, MarkdownLinkCompleter<'a>>  for LinkCompletion<'a> {
 
         let binding = (display.0.as_str(), link_display_text);
         let link_display_text = match binding {
-            ("", Some(ref infile)) => &infile,
+            ("", Some(ref infile)) => infile,
             // Get the first heading of the file, if possible. 
             ("", None) => match self {
-                Self::File { mdfile, match_string: _, .. } => mdfile.headings.get(0).map(|heading| heading.heading_text.as_str()).unwrap_or(""),
+                Self::File { mdfile, match_string: _, .. } => mdfile.headings.first().map(|heading| heading.heading_text.as_str()).unwrap_or(""),
                 _ => ""
             }
             (display, _) => display,
@@ -560,11 +560,11 @@ impl<'a> Completable<'a, MarkdownLinkCompleter<'a>>  for LinkCompletion<'a> {
         let text_edit = markdown_link_completer.completion_text_edit(Some(&link_display_text), &refname);
 
 
-        let filter_text = markdown_link_completer.completion_filter_text(&match_string);
+        let filter_text = markdown_link_completer.completion_filter_text(match_string);
 
         std::iter::once(CompletionItem {
             insert_text_format: Some(InsertTextFormat::SNIPPET),
-            ..self.default_completion(&match_string, text_edit, &filter_text, markdown_link_completer.vault(), markdown_link_completer)
+            ..self.default_completion(match_string, text_edit, &filter_text, markdown_link_completer.vault(), markdown_link_completer)
         })
 
     }
@@ -580,9 +580,9 @@ impl<'a> Completable<'a, WikiLinkCompleter<'a>> for LinkCompletion<'a> {
 
         let text_edit = completer.completion_text_edit(None, &refname);
 
-        let filter_text = completer.completion_filter_text(&match_text);
+        let filter_text = completer.completion_filter_text(match_text);
 
-        std::iter::once(self.default_completion(&match_text, text_edit, &filter_text, completer.vault(), completer))
+        std::iter::once(self.default_completion(match_text, text_edit, &filter_text, completer.vault(), completer))
     }
 }
 
@@ -596,7 +596,7 @@ impl Matchable for LinkCompletion<'_> {
             | Block { match_string, .. }
             | Unresolved { match_string, .. }
             | DailyNote(MDDailyNote { match_string, .. })  
-                => &match_string,
+                => match_string,
         }
     }
 }
@@ -620,9 +620,9 @@ impl MDDailyNote<'_> {
     pub fn get_self_date<'a>(&self, completer: &impl LinkCompleter<'a>) -> Option<NaiveDate> {
 
         let dailynote_format = &completer.settings().dailynote;
-        let date =  chrono::NaiveDate::parse_from_str(&self.ref_name, dailynote_format).ok() ;
+        
 
-        date
+        chrono::NaiveDate::parse_from_str(&self.ref_name, dailynote_format).ok()
     }
 
     fn relative_date_string(date: NaiveDate) -> Option<String> {
@@ -634,9 +634,9 @@ impl MDDailyNote<'_> {
         } else {
             match (date - today).num_days() {
                 1 => Some("tomorrow".to_string()),
-                2..=7 => Some(format!("next {}", date.format("%A").to_string())),
+                2..=7 => Some(format!("next {}", date.format("%A"))),
                 -1 => Some("yesterday".to_string()),
-                -7..=-1 => Some(format!("last {}", date.format("%A").to_string())),
+                -7..=-1 => Some(format!("last {}", date.format("%A"))),
                 _ => None
             }
         }
@@ -657,7 +657,7 @@ impl MDDailyNote<'_> {
 
                 })?;
 
-                date.and_then(|date| Self::relative_date_string(date)).map(|thing| (filename.clone(), format!("{}: {}", thing, filename)))
+                date.and_then(Self::relative_date_string).map(|thing| (filename.clone(), format!("{}: {}", thing, filename)))
             },
             _ => None
         }) else {

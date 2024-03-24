@@ -3,7 +3,6 @@ use std::ops::Deref;
 use nucleo_matcher::{pattern::{self, Normalization}, Matcher};
 use tower_lsp::lsp_types::CompletionItem;
 
-use crate::vault::Reference;
 
 use super::{Completable, Completer};
 
@@ -21,7 +20,7 @@ impl<T: Matchable> Deref for NucleoMatchable<T> {
 
 impl<T: Matchable> AsRef<str> for NucleoMatchable<T> {
     fn as_ref(&self) -> &str {
-        &self.match_string()
+        self.match_string()
     }
 }
 

@@ -451,7 +451,7 @@ pub struct Block<'a> {
 
 impl AsRef<str> for Block<'_> {
     fn as_ref(&self) -> &str {
-        &self.text
+        self.text
     }
 }
 
@@ -777,7 +777,7 @@ impl Reference {
                     ..
                 },
             )
-            | &Referenceable::UnresolvedHeading(.., _, infile_ref)
+            | &Referenceable::UnresolvedHeading(.., infile_ref)
             | &Referenceable::IndexedBlock(
                 ..,
                 MDIndexedBlock {
@@ -1130,14 +1130,14 @@ impl MDLinkReferenceDefinition {
             .flat_map(|(full, index, url)| {
                 Some(MDLinkReferenceDefinition {
                     link_ref_name: index.as_str().to_string(),
-                    range: range_to_position(&Rope::from_str(&text), full.range()),
+                    range: range_to_position(&Rope::from_str(text), full.range()),
                     url: url.as_str().trim().to_string(),
                     title: None,
                 })
             })
             .collect_vec();
 
-        return result;
+        result
     }
 }
 
@@ -1183,7 +1183,7 @@ impl Refname {
 
         let last = path.split('/').last()?;
 
-        return Some(last.to_string())
+        Some(last.to_string())
 
     }
 
@@ -1256,7 +1256,7 @@ impl Referenceable<'_> {
                     infile_ref: format!("^{}", index.index).into(),
                 }),
 
-            Referenceable::Tag(_, tag) => Some(Refname { full_refname: format!("#{}", tag.tag_ref).into(), path: Some(tag.tag_ref.clone()), infile_ref: None}),
+            Referenceable::Tag(_, tag) => Some(Refname { full_refname: format!("#{}", tag.tag_ref), path: Some(tag.tag_ref.clone()), infile_ref: None}),
 
             Referenceable::Footnote(_, footnote) => Some(footnote.index.clone().into()),
 
@@ -1278,7 +1278,7 @@ impl Referenceable<'_> {
                 Some(format!("{}#^{}", path, index)).map(|full_ref| Refname {
                     full_refname: full_ref,
                     path: path.to_string().into(),
-                    infile_ref: format!("^{}", index.to_string()).into(),
+                    infile_ref: format!("^{}", index).into(),
                 })
             }
             Referenceable::LinkRefDef(_, refdef) => Some(Refname {
@@ -1391,12 +1391,12 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
             let file_ref_text = file_ref_text.replace(r"%20", " ");
             let file_ref_text = file_ref_text.replace(r"\ ", " ");
 
-            let chars: Vec<char> = String::from(file_ref_text).chars().collect();
+            let chars: Vec<char> = file_ref_text.chars().collect();
             match chars.as_slice() {
                 &['.', '/', ref path @ ..] | &['/', ref path @ ..] => {
                     Some(String::from_iter(path) == refname_path)
                 }
-                path @ _ => Some(String::from_iter(path) == refname_path),
+                path => Some(String::from_iter(path) == refname_path),
             }
         } else {
 

@@ -33,9 +33,9 @@ pub fn code_lens(vault: &Vault, path: &Path, _params: &CodeLensParams) -> Option
         .filter(|(_, references)| !references.is_empty())
         .filter_map(|(referenceable, references)| {
             let title = match (&referenceable, references.len()) {
-                (Referenceable::File(..), num) if num == 1 => format!("1 reference to file"),
+                (Referenceable::File(..), num) if num == 1 => "1 reference to file".to_string(),
                 (Referenceable::File(..), num) => format!("{} references to file ", num),
-                (_, n) if n == 1 => format!("1 reference"),
+                (_, n) if n == 1 => "1 reference".to_string(),
                 (_, n) => format!("{} references", n),
             };
 
