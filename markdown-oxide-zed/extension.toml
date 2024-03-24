@@ -1,0 +1,12 @@
+id = "markdown-oxide"
+name = "Markdown Oxide"
+description = "Obsidian-Inspired PKM Language Server for Zed"
+version = "0.0.1"
+schema_version = 1
+authors = ["Felix Zeller <felixazeller@gmail.com>"]
+repository = "https://github.com/Feel-ix-343/markdown-oxide"
+
+
+[language_servers.markdown-oxide]
+name = "Markdown-Oxide LSP"
+language = "Markdown"

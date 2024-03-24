@@ -1,0 +1,10 @@
+[package]
+name = "markdown-oxide-zed"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+zed_extension_api = "0.0.4"
+
+[lib]
+crate-type = ["cdylib"]
