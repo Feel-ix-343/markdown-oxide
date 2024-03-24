@@ -16,20 +16,19 @@ pub fn workspace_symbol(
     let symbol_informations = referenceables
         .into_iter()
         .flat_map(|referenceable| {
-
             let range = match referenceable {
-                Referenceable::File(..) => tower_lsp::lsp_types::Range { 
-                    start: tower_lsp::lsp_types::Position{
-                line: 0,
-                character: 0
-                    }, end: tower_lsp::lsp_types::Position {
-                line: 0,
-                character: 1
-                    }
+                Referenceable::File(..) => tower_lsp::lsp_types::Range {
+                    start: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 0,
+                    },
+                    end: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 1,
+                    },
                 },
-                _ => *referenceable.get_range()?
+                _ => *referenceable.get_range()?,
             };
-
 
             Some(SymbolInformation {
                 name: referenceable.get_refname(vault.root_dir())?.to_string(),

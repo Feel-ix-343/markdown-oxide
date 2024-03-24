@@ -1,4 +1,4 @@
-use std::{path::Path};
+use std::path::Path;
 
 use itertools::Itertools;
 use tower_lsp::lsp_types::{MarkupContent, MarkupKind};
@@ -6,7 +6,6 @@ use tower_lsp::lsp_types::{MarkupContent, MarkupKind};
 use crate::vault::{get_obsidian_ref_path, Preview, Reference, Referenceable, Vault};
 
 fn referenceable_string(vault: &Vault, referenceables: &[Referenceable]) -> Option<String> {
-
     let referenceable = referenceables.first()?;
 
     let preview = vault.select_referenceable_preview(referenceable);
@@ -28,7 +27,7 @@ fn referenceable_string(vault: &Vault, referenceables: &[Referenceable]) -> Opti
         .flat_map(|i| vault.select_references_for_referenceable(i))
         .flatten()
         .collect_vec()
-        {
+    {
         references if !references.is_empty() => references
             .into_iter()
             .take(20)
@@ -79,8 +78,8 @@ pub fn preview_reference(
         | MDHeadingLink(..)
         | MDIndexedBlockLink(..)
         | LinkRef(..) => {
-
-            let referenceables_for_reference = vault.select_referenceables_for_reference(reference, reference_path);
+            let referenceables_for_reference =
+                vault.select_referenceables_for_reference(reference, reference_path);
 
             let display = referenceable_string(vault, &referenceables_for_reference)?;
 

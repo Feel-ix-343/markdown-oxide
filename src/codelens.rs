@@ -3,7 +3,7 @@ use std::path::Path;
 use itertools::Itertools;
 use tower_lsp::lsp_types::{CodeLens, CodeLensParams, Command, Location, Position, Url};
 
-use crate::vault::{Vault, Referenceable};
+use crate::vault::{Referenceable, Vault};
 
 use serde::Serialize;
 
@@ -50,17 +50,18 @@ pub fn code_lens(vault: &Vault, path: &Path, _params: &CodeLensParams) -> Option
                 .collect_vec();
 
             let range = match referenceable {
-                    Referenceable::File(..) => tower_lsp::lsp_types::Range { 
-                        start: Position{
-                            line: 0,
-                            character: 0
-                        }, end: Position {
-                            line: 0,
-                            character: 1
-                        }
+                Referenceable::File(..) => tower_lsp::lsp_types::Range {
+                    start: Position {
+                        line: 0,
+                        character: 0,
                     },
-                    _ => *referenceable.get_range()?
-                };
+                    end: Position {
+                        line: 0,
+                        character: 1,
+                    },
+                },
+                _ => *referenceable.get_range()?,
+            };
 
             Some(CodeLens {
                 range,

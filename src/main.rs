@@ -23,6 +23,7 @@ use vault::Vault;
 mod codeactions;
 mod codelens;
 mod completion;
+mod config;
 mod diagnostics;
 mod gotodef;
 mod hover;
@@ -33,15 +34,13 @@ mod symbol;
 mod tokens;
 mod ui;
 mod vault;
-mod config;
-
 
 #[derive(Debug)]
 struct Backend {
     client: Client,
     vault: Arc<RwLock<Option<Vault>>>,
     opened_files: Arc<RwLock<HashSet<PathBuf>>>,
-    settings: Arc<RwLock<Option<Settings>>>
+    settings: Arc<RwLock<Option<Settings>>>,
 }
 
 struct TextDocumentItem {
@@ -51,26 +50,31 @@ struct TextDocumentItem {
 
 impl Backend {
     async fn update_vault(&self, params: TextDocumentItem) {
-        self.client.log_message(MessageType::WARNING, "Update Vault Started").await;
+        self.client
+            .log_message(MessageType::WARNING, "Update Vault Started")
+            .await;
 
         let Ok(path) = params.uri.to_file_path() else {
             self.client
                 .log_message(MessageType::ERROR, "Failed to parse URI path")
-            .await;
+                .await;
             return;
         };
 
         {
-            let _ = self.bind_vault_mut(|vault| {
-                let text = &params.text;
-                Vault::update_vault(vault, (&path, text));
+            let _ = self
+                .bind_vault_mut(|vault| {
+                    let text = &params.text;
+                    Vault::update_vault(vault, (&path, text));
 
-                Ok(())
-            }).await;
-
+                    Ok(())
+                })
+                .await;
         } // close the lock
 
-        self.client.log_message(MessageType::WARNING, "Update Vault Done").await;
+        self.client
+            .log_message(MessageType::WARNING, "Update Vault Done")
+            .await;
 
         match self.publish_diagnostics().await {
             Ok(_) => (),
@@ -105,7 +109,7 @@ impl Backend {
 
                     Ok(())
                 })
-            .await;
+                .await;
         }
 
         let elapsed = timer.elapsed();
@@ -140,14 +144,18 @@ impl Backend {
     }
 
     async fn publish_diagnostics(&self) -> Result<()> {
-        self.client.log_message(MessageType::WARNING, "Diagnostics Started").await;
+        self.client
+            .log_message(MessageType::WARNING, "Diagnostics Started")
+            .await;
 
-        let uris = self.bind_opened_files(|files| {
-            Ok(files
-                        .into_par_iter()
-                        .filter_map(|url| Url::from_file_path(url).ok())
-                        .collect::<Vec<_>>())
-        }).await?;
+        let uris = self
+            .bind_opened_files(|files| {
+                Ok(files
+                    .into_par_iter()
+                    .filter_map(|url| Url::from_file_path(url).ok())
+                    .collect::<Vec<_>>())
+            })
+            .await?;
 
         let diagnostics = self
             .bind_vault(|vault| {
@@ -166,8 +174,9 @@ impl Backend {
             self.client.publish_diagnostics(uri, diags, None).await;
         }
 
-
-        self.client.log_message(MessageType::WARNING, "Diagnostics Done").await;
+        self.client
+            .log_message(MessageType::WARNING, "Diagnostics Done")
+            .await;
 
         Ok(())
     }
@@ -192,9 +201,16 @@ impl Backend {
 
     async fn bind_vault_mut<T>(&self, callback: impl Fn(&mut Vault) -> Result<T>) -> Result<T> {
         if let Err(e) = self.vault.try_write() {
-            self.client.log_message(MessageType::ERROR, format!("Failed to get VAULT lock for write {:?}", e)).await;
+            self.client
+                .log_message(
+                    MessageType::ERROR,
+                    format!("Failed to get VAULT lock for write {:?}", e),
+                )
+                .await;
         } else {
-            self.client.log_message(MessageType::ERROR, "VAULT Lock is good").await;
+            self.client
+                .log_message(MessageType::ERROR, "VAULT Lock is good")
+                .await;
         }
 
         let mut guard = self.vault.write().await;
@@ -204,7 +220,6 @@ impl Backend {
 
         callback(vault)
     }
-
 
     async fn bind_settings<T>(&self, callback: impl FnOnce(&Settings) -> Result<T>) -> Result<T> {
         let guard = self.settings.read().await;
@@ -227,12 +242,17 @@ impl Backend {
         &self,
         callback: impl Fn(&mut HashSet<PathBuf>) -> Result<T>,
     ) -> Result<T> {
-
-
         if let Err(e) = self.opened_files.try_write() {
-            self.client.log_message(MessageType::ERROR, format!("Failed to get FILES lock for write {:?}", e)).await;
+            self.client
+                .log_message(
+                    MessageType::ERROR,
+                    format!("Failed to get FILES lock for write {:?}", e),
+                )
+                .await;
         } else {
-            self.client.log_message(MessageType::ERROR, "FILES Lock is good").await;
+            self.client
+                .log_message(MessageType::ERROR, "FILES Lock is good")
+                .await;
         }
 
         let mut opened_files = self.opened_files.write().await;
@@ -253,10 +273,15 @@ impl LanguageServer for Backend {
         let mut value = self.vault.write().await;
         *value = Some(vault);
 
-        let read_settings = match  Settings::new(root_dir) {
+        let read_settings = match Settings::new(root_dir) {
             Ok(settings) => settings,
             Err(e) => {
-                self.client.log_message(MessageType::ERROR, format!("Failed to read settings {:?}", e)).await;
+                self.client
+                    .log_message(
+                        MessageType::ERROR,
+                        format!("Failed to read settings {:?}", e),
+                    )
+                    .await;
                 return Err(Error::new(ErrorCode::ServerError(1)));
             }
         };
@@ -382,9 +407,11 @@ impl LanguageServer for Backend {
 
                     Ok(files.clone())
                 })
-            .await;
+                .await;
 
-            self.client.log_message(MessageType::LOG, "Added file").await;
+            self.client
+                .log_message(MessageType::LOG, "Added file")
+                .await;
 
             self.update_vault(TextDocumentItem {
                 uri: params.text_document.uri,
@@ -412,12 +439,14 @@ impl LanguageServer for Backend {
                 let path = params_path!(params)?;
 
                 Ok(files.take(&path))
-            }).await;
+            })
+            .await;
 
         if let Ok(Some(file)) = removed_file {
-            self.client.log_message(MessageType::LOG, format!("Remove file {:?}", file)).await;
+            self.client
+                .log_message(MessageType::LOG, format!("Remove file {:?}", file))
+                .await;
         }
-            
     }
 
     async fn did_change(&self, mut params: DidChangeTextDocumentParams) {
@@ -459,7 +488,9 @@ impl LanguageServer for Backend {
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
-        self.client.log_message(MessageType::WARNING, "Completions Started").await;
+        self.client
+            .log_message(MessageType::WARNING, "Completions Started")
+            .await;
 
         let timer = std::time::Instant::now();
 
@@ -473,9 +504,7 @@ impl LanguageServer for Backend {
         }; // TODO: this is bad
 
         let res = self
-            .bind_vault(|vault| {
-                Ok(get_completions(vault, &files, &params, &path, &settings))
-            })
+            .bind_vault(|vault| Ok(get_completions(vault, &files, &params, &path, &settings)))
             .await;
 
         self.client
@@ -484,7 +513,12 @@ impl LanguageServer for Backend {
 
         let elapsed = timer.elapsed();
 
-        self.client.log_message(MessageType::WARNING, format!("Completions Done took {}ms", elapsed.as_millis())).await;
+        self.client
+            .log_message(
+                MessageType::WARNING,
+                format!("Completions Done took {}ms", elapsed.as_millis()),
+            )
+            .await;
 
         res
     }
@@ -573,7 +607,7 @@ async fn main() {
         client,
         vault: Arc::new(None.into()),
         opened_files: Arc::new(HashSet::new().into()),
-        settings: Arc::new(None.into())
+        settings: Arc::new(None.into()),
     });
     Server::new(stdin, stdout, socket).serve(service).await;
 }

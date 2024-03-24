@@ -18,10 +18,7 @@ use serde::{Deserialize, Serialize};
 use tower_lsp::lsp_types::Position;
 use walkdir::WalkDir;
 
-
-
 mod referenceable;
-
 
 impl Vault {
     pub fn construct_vault(root_dir: &Path) -> Result<Vault, std::io::Error> {
@@ -160,34 +157,35 @@ impl Vault {
                     .collect(),
             ),
         }
-    } 
+    }
 
     pub fn select_referenceable_at_position<'a>(
         &'a self,
         path: &'a Path,
         position: Position,
     ) -> Option<Referenceable<'a>> {
-
-        // If no other referenceables are under the cursor, the file should be returned. 
+        // If no other referenceables are under the cursor, the file should be returned.
 
         let referenceable_nodes = self.select_referenceable_nodes(Some(path));
 
-
-        let referenceable = referenceable_nodes.into_iter()
-            .flat_map(|referenceable| {
-                Some((referenceable.clone(), referenceable.get_range()?))
-            })
+        let referenceable = referenceable_nodes
+            .into_iter()
+            .flat_map(|referenceable| Some((referenceable.clone(), referenceable.get_range()?)))
             .find(|(_, range)| {
                 range.start.line <= position.line
-                && range.end.line >= position.line
-                && range.start.character <= position.character
-                && range.end.character >= position.character
+                    && range.end.line >= position.line
+                    && range.start.character <= position.character
+                    && range.end.character >= position.character
             })
             .map(|tupl| tupl.0);
 
         match referenceable {
-            None => self.md_files.iter().find(|(iterpath, _)| *iterpath == path).map(|(pathbuf, mdfile)| Referenceable::File(pathbuf, mdfile)),
-            _ => referenceable
+            None => self
+                .md_files
+                .iter()
+                .find(|(iterpath, _)| *iterpath == path)
+                .map(|(pathbuf, mdfile)| Referenceable::File(pathbuf, mdfile)),
+            _ => referenceable,
         }
     }
 
@@ -235,8 +233,20 @@ impl Vault {
                 let resolved_referenceables_refnames: HashSet<String> = resolved_referenceables
                     .iter()
                     .flat_map(|resolved| {
-                        resolved.get_refname(self.root_dir()).and_then(|refname| vec![refname.to_string(), format!("{}{}", refname.link_file_key()?, refname.infile_ref.map(|refe| format!("#{}", refe)).unwrap_or("".to_string()))].into())
-
+                        resolved.get_refname(self.root_dir()).and_then(|refname| {
+                            vec![
+                                refname.to_string(),
+                                format!(
+                                    "{}{}",
+                                    refname.link_file_key()?,
+                                    refname
+                                        .infile_ref
+                                        .map(|refe| format!("#{}", refe))
+                                        .unwrap_or("".to_string())
+                                ),
+                            ]
+                            .into()
+                        })
                     })
                     .flatten()
                     .collect();
@@ -410,8 +420,7 @@ impl Vault {
     }
 
     pub fn select_blocks(&self) -> Vec<Block<'_>> {
-        self
-            .ropes
+        self.ropes
             .par_iter()
             .map(|(path, rope)| {
                 rope.lines()
@@ -446,7 +455,7 @@ impl Vault {
 pub struct Block<'a> {
     pub text: &'a str,
     pub range: MyRange,
-    pub file: &'a Path 
+    pub file: &'a Path,
 }
 
 impl AsRef<str> for Block<'_> {
@@ -645,7 +654,9 @@ impl Reference {
         let md_links: Vec<Reference> = MD_LINK_RE
             .captures_iter(text)
             .flat_map(RegexTuple::new)
-            .flat_map(|regextuple| generic_link_constructor::<MDReferenceConstructor>(text, regextuple))
+            .flat_map(|regextuple| {
+                generic_link_constructor::<MDReferenceConstructor>(text, regextuple)
+            })
             .collect_vec();
 
         let tags: Vec<Reference> = MDTag::new(text)
@@ -727,7 +738,12 @@ impl Reference {
         match referenceable {
             &Referenceable::Tag(_, _) => {
                 match self {
-                    Tag(..) => referenceable.get_refname(root_dir).map(|thing| thing.to_string()) == Some(text.to_string()),
+                    Tag(..) => {
+                        referenceable
+                            .get_refname(root_dir)
+                            .map(|thing| thing.to_string())
+                            == Some(text.to_string())
+                    }
 
                     WikiFileLink(_) => false,
                     WikiHeadingLink(_, _, _) => false,
@@ -888,20 +904,17 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
         display_text,
     }: RegexTuple,
 ) -> Option<Reference> {
-
     if file_path.as_str().starts_with("http://") || file_path.as_str().starts_with("https://") {
         return None;
     }
 
     match (range, file_path, infile_ref, display_text) {
         // Pure file reference as there is no infileref such as #... for headings or #^... for indexed blocks
-        (full, filepath, None, display) => {
-            Some(T::new_file_link(ReferenceData {
-                reference_text: filepath.as_str().into(),
-                range: range_to_position(&Rope::from_str(text), full.range()),
-                display_text: display.map(|d| d.as_str().into()),
-            }))
-        }
+        (full, filepath, None, display) => Some(T::new_file_link(ReferenceData {
+            reference_text: filepath.as_str().into(),
+            range: range_to_position(&Rope::from_str(text), full.range()),
+            display_text: display.map(|d| d.as_str().into()),
+        })),
         (full, filepath, Some(infile), display) if infile.as_str().get(0..1) == Some("^") => {
             Some(T::new_indexed_block_link(
                 ReferenceData {
@@ -913,17 +926,15 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
                 &infile.as_str()[1..], // drop the ^ for the index
             ))
         }
-        (full, filepath, Some(infile), display) => {
-            Some(T::new_heading(
-                ReferenceData {
-                    reference_text: format!("{}#{}", filepath.as_str(), infile.as_str()),
-                    range: range_to_position(&Rope::from_str(text), full.range()),
-                    display_text: display.map(|d| d.as_str().into()),
-                },
-                filepath.as_str(),
-                infile.as_str(),
-            ))
-        }
+        (full, filepath, Some(infile), display) => Some(T::new_heading(
+            ReferenceData {
+                reference_text: format!("{}#{}", filepath.as_str(), infile.as_str()),
+                range: range_to_position(&Rope::from_str(text), full.range()),
+                display_text: display.map(|d| d.as_str().into()),
+            },
+            filepath.as_str(),
+            infile.as_str(),
+        )),
     }
 }
 
@@ -1178,13 +1189,11 @@ pub struct Refname {
 
 impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
-
         let path = &self.path.clone()?;
 
         let last = path.split('/').last()?;
 
         Some(last.to_string())
-
     }
 
     pub fn file_refname(&self) -> Option<String> {
@@ -1192,8 +1201,9 @@ impl Refname {
 
         match &self.infile_ref {
             Some(infile_ref) => format!("{}#{}", file_key, infile_ref),
-            None => file_key.clone()
-        }.into()
+            None => file_key.clone(),
+        }
+        .into()
     }
 }
 
@@ -1256,7 +1266,11 @@ impl Referenceable<'_> {
                     infile_ref: format!("^{}", index.index).into(),
                 }),
 
-            Referenceable::Tag(_, tag) => Some(Refname { full_refname: format!("#{}", tag.tag_ref), path: Some(tag.tag_ref.clone()), infile_ref: None}),
+            Referenceable::Tag(_, tag) => Some(Refname {
+                full_refname: format!("#{}", tag.tag_ref),
+                path: Some(tag.tag_ref.clone()),
+                infile_ref: None,
+            }),
 
             Referenceable::Footnote(_, footnote) => Some(footnote.index.clone().into()),
 
@@ -1399,7 +1413,6 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
                 path => Some(String::from_iter(path) == refname_path),
             }
         } else {
-
             let last_segment = refname.link_file_key()?;
 
             Some(file_ref_text == last_segment)
