@@ -9,6 +9,7 @@ use serde::Deserialize;
 pub struct Settings {
     /// Format of daily notes
     pub dailynote: String,
+    pub heading_completions: bool
 }
 
 impl Settings {
@@ -31,8 +32,11 @@ impl Settings {
             .set_default(
                 "dailynote",
                 obsidian_daily_note.unwrap_or("%Y-%m-%d".to_string()),
-            )
-            .map_err(|err| anyhow!("Failed to parse due to: {err}"))?
+            )?
+            .set_default(
+                "heading_completions",
+                true
+            )?
             .build()
             .map_err(|err| anyhow!("Build err: {err}"))?;
 

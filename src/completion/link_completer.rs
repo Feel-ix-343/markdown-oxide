@@ -89,6 +89,9 @@ pub trait LinkCompleter<'a>: Completer<'a> {
         let completions = referenceables
             .into_par_iter()
             .filter(|referenceable| Some(referenceable) != single_unresolved_under_cursor.as_ref())
+            .filter(|referenceable| (
+                (self.settings().heading_completions || !matches!(referenceable, Referenceable::Heading(..) | Referenceable::UnresolvedHeading(..)))
+            ))
             .flat_map(|referenceable| LinkCompletion::new(referenceable.clone(), self))
             .collect::<Vec<_>>();
 
@@ -426,7 +429,12 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
                 )
                 .sorted_by_key(|(_, modified)| *modified)
                 .flat_map(|(path, modified)| {
-                    let referenceables = vault.select_referenceable_nodes(Some(path));
+                    let referenceables = vault.select_referenceable_nodes(Some(path))
+                        .into_iter()
+                        .filter(|referenceable| (
+                            (self.settings().heading_completions || !matches!(referenceable, Referenceable::Heading(..) | Referenceable::UnresolvedHeading(..)))
+                        ))
+                        .collect::<Vec<_>>();
 
                     let modified_string = modified
                         .duration_since(SystemTime::UNIX_EPOCH)
