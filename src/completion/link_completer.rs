@@ -1,6 +1,6 @@
 use std::{path::{Path, PathBuf}, time::SystemTime};
 
-use chrono::{Duration, TimeDelta};
+use chrono::{Datelike, Duration, TimeDelta};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use rayon::prelude::*;
@@ -613,8 +613,10 @@ impl MDDailyNote<'_> {
 
                 date.and_then(|date| match (date - today).num_days() {
                     0 => Some(format!("today: {}", file_refname)),
-                    1 if date > today => Some(format!("tomorrow: {}", file_refname)),
-                    1 if date < today => Some(format!("yesterday: {}", file_refname)),
+                    1 => Some(format!("tomorrow: {}", file_refname)),
+                    2..=7 => Some(format!("next {}: {}", date.weekday().to_string(), file_refname)),
+                    -1 => Some(format!("yesterday: {}", file_refname)),
+                    -7..=-1 => Some(format!("last {}: {}", date.weekday().to_string(), file_refname)),
                     _ => None
                 }).map(|thing| (file_refname, thing))
             },
