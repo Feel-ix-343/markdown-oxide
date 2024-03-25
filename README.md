@@ -156,6 +156,33 @@ Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[arti
     - [ ] ... (leave some ideas in the issues!)
 - [ ] Integrate with Obsidian.nvim
 
+
+# Config
+
+`Markdown-Oxide` supports several configuration options. All can be specified in a `~/.config/moxide/settings.toml` or `.moxide.toml` file and moxide tries to import some settings (daily notes formatting) from Obsidian directly. Here are the options with the defaults
+
+```toml
+# Leave blank to try to import from Obsidian Daily Notes
+# Formatting from https://docs.rs/chrono/latest/chrono/format/strftime/index.html
+dailynote = "%Y-%m-%d" # this is akin to YYYY-MM-DD from Obsidian
+
+# Fuzzy match file headings in completions
+heading_completions = true
+
+# Set true if you title your notes by the first heading
+# Right now, if true this will cause completing a file link in the markdown style
+# to insert the name of the first heading in the display text area
+# [](file) -> [first heading of file.md](file)
+# If false, [](file) -> [](file) (for example)
+title_headings = true
+
+# Show diagnostics for unresolved links; note that even if this is turned off, 
+# special semantic tokens will be sent for the unresolved links, allowing you
+# to visually identify unresolved links
+unresolved_diagnostics = true
+```
+
+
 # Alternatives
 
 **I love open-source and all open-source authors!! I also believe healthy competition is good! Markdown-Oxide is competing with some alternatives, and I want to make it the best at its job!!**
