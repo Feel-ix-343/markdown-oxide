@@ -3,7 +3,7 @@ use std::{iter, path::Path};
 use itertools::Itertools;
 use tower_lsp::lsp_types::{SemanticToken, SemanticTokensParams, SemanticTokensResult};
 
-use crate::vault::Vault;
+use crate::vault::{Referenceable, Vault};
 
 pub fn semantic_tokens_full(
     vault: &Vault,
@@ -20,8 +20,12 @@ pub fn semantic_tokens_full(
                 reference.data().range.start.character,
             )
         })
-        .fold(vec![], |acc, (_, reference)| {
+        .fold(vec![], |acc, (path, reference)| {
             let range = reference.data().range;
+
+            let is_unresolved = vault.select_referenceables_for_reference(reference, path)
+                .into_iter()
+                .any(|referenceable| referenceable.is_unresolved());
 
             match acc[..] {
                 [] => vec![(
@@ -30,8 +34,8 @@ pub fn semantic_tokens_full(
                         delta_line: range.start.line,
                         delta_start: range.start.character,
                         length: range.end.character - range.start.character,
-                        token_type: 0,
-                        token_modifiers_bitset: 0,
+                        token_type: if is_unresolved { 1 } else { 0 },
+                        token_modifiers_bitset: 0
                     },
                 )],
                 [.., (prev_ref, _)] => acc
@@ -46,8 +50,8 @@ pub fn semantic_tokens_full(
                                 range.start.character
                             },
                             length: range.end.character - range.start.character,
-                            token_type: 0,
-                            token_modifiers_bitset: 0,
+                            token_type: if is_unresolved { 1 } else { 0 },
+                            token_modifiers_bitset: 0
                         },
                     )))
                     .collect_vec(),

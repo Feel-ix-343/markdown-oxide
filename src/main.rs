@@ -295,8 +295,8 @@ impl LanguageServer for Backend {
                             full: Some(SemanticTokensFullOptions::Bool(true)),
                             range: Some(false),
                             legend: SemanticTokensLegend {
-                                token_types: vec![SemanticTokenType::DECORATOR],
-                                token_modifiers: vec![SemanticTokenModifier::DECLARATION],
+                                token_types: vec![SemanticTokenType::DECORATOR, SemanticTokenType::COMMENT],
+                                token_modifiers: vec![SemanticTokenModifier::DECLARATION, SemanticTokenModifier::DEPRECATED],
                             },
                             ..Default::default()
                         },
