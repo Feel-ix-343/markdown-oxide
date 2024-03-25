@@ -306,6 +306,7 @@ pub struct WikiLinkCompleter<'a> {
     line: u32,
     context_path: &'a Path,
     settings: &'a Settings,
+    chars_in_line: u32,
 }
 
 impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
@@ -340,17 +341,11 @@ impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
                     character: self.index + 1_u32, // index is right at the '[' in [[link]]; we want one more than that
                 },
                 end: Position {
-                    line: self.line,
-                    character: self.character,
+                    line: self.line as u32,
+                    character: (self.chars_in_line - 1).min(self.character + 2 as u32),
                 },
             },
-            new_text: format!(
-                "{}{}",
-                refname,
-                display
-                    .map(|display| format!("|{}", display))
-                    .unwrap_or("".to_string())
-            ),
+            new_text: format!("{}{}]]", refname, display.map(|display| format!("|{}", display)).unwrap_or("".to_string()))
         })
     }
 }
@@ -400,6 +395,7 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
                 line: line as u32,
                 context_path: context.path,
                 settings: context.settings,
+                chars_in_line: line_chars.len() as u32
             })
         })
     }
@@ -410,18 +406,12 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
     {
         let WikiLinkCompleter {
             vault,
-            cmp_text: _,
-            files,
-            index: _,
-            character: _,
-            line: _,
-            context_path: _,
             ..
         } = self;
 
         match *self.cmp_text {
             // Give recent referenceables; TODO: improve this;
-            [] => files
+            [] => self.files
                 .iter()
                 .map(
                     |path| match std::fs::metadata(path).and_then(|meta| meta.modified()) {
