@@ -407,7 +407,8 @@ pub struct WikiLinkCompleter<'a> {
     index: u32,
     character: u32,
     line: u32,
-    context_path: &'a Path
+    context_path: &'a Path,
+    chars_in_line: u32,
 }
 
 impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
@@ -441,10 +442,10 @@ impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
                 },
                 end: Position {
                     line: self.line as u32,
-                    character: self.character as u32,
+                    character: (self.chars_in_line - 1).min(self.character + 2 as u32),
                 },
             },
-            new_text: format!("{}{}", refname, display.map(|display| format!("|{}", display)).unwrap_or("".to_string()))
+            new_text: format!("{}{}]]", refname, display.map(|display| format!("|{}", display)).unwrap_or("".to_string()))
         });
 
         text_edit
@@ -489,18 +490,19 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
                 index: index as u32,
                 character: character as u32,
                 line: line as u32,
-                context_path: context.path
+                context_path: context.path,
+                chars_in_line: line_chars.len() as u32
             })
         })
     }
 
     fn completions(&self) -> Vec<impl Completable<'a, Self>> where Self: Sized {
-        let WikiLinkCompleter { vault, cmp_text: _, files, index: _, character: _, line: _, context_path: _ } = self;
+        let WikiLinkCompleter { vault, ..} = self;
 
         match *self.cmp_text {
             // Give recent referenceables; TODO: improve this; 
             [] => {
-                files
+                self.files
                     .iter()
                     .map(|path| {
                         match std::fs::metadata(path).and_then(|meta| meta.modified()) {
