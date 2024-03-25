@@ -157,6 +157,8 @@ impl Backend {
             })
             .await?;
 
+        let settings = self.bind_settings(|settings| Ok(settings.clone())).await?;
+
         let diagnostics = self
             .bind_vault(|vault| {
                 Ok(uris
@@ -164,7 +166,7 @@ impl Backend {
                     .filter_map(|uri| {
                         let path = uri.to_file_path().ok()?;
 
-                        diagnostics(vault, (&path, uri)).map(|diags| (uri.clone(), diags))
+                        diagnostics(vault, &settings, (&path, uri)).map(|diags| (uri.clone(), diags))
                     })
                     .collect::<Vec<_>>())
             })
