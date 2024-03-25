@@ -96,6 +96,19 @@ Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[arti
 
 ## Features
 
+### Completions
+
+Wikilink completions
+
+![wikilinkcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/194d8c24-69ed-449a-bbec-586098d58e80)
+
+Markdown Link Completions
+
+![markdownlinkcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/f87d6c2d-96b6-46f6-beb2-55565847dd81)
+
+
+
+
 - Go to definition (or definitions) from ...
     - [X] File references [[file]]
     - [X] Heading references [[file#heading]]
