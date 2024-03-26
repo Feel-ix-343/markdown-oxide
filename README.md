@@ -98,13 +98,27 @@ Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[arti
 
 ### Completions
 
+- <details>
+  <summary>Wikilink Completions</summary>
+
+  ![wikilinkcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/29c4830f-30e5-4094-9f5b-7b39009437da)
+  
+</details>
+
+- <details>
+    <summary>Markdown Link Completions</summary>
+
+    ![markdownlinkcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/16c8565a-6a28-4df1-a312-e4b158fb9f03)
+
+    
+</details>
+
 Wikilink completions
 
-![wikilinkcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/194d8c24-69ed-449a-bbec-586098d58e80)
+
 
 Markdown Link Completions
 
-![markdownlinkcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/f87d6c2d-96b6-46f6-beb2-55565847dd81)
 
 
 
