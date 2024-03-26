@@ -138,6 +138,17 @@ Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[arti
     
 </details>
 
+- <details>
+    <summary>Unresolved File and Heading Completions</summary>
+    
+    For those who like to reference things before they are written, `markdown-oxide` has terrific support for unresolved references! It provides completions for unresolved references, provides lsp_references for them, and provides code actions to create files + append headings.  
+
+
+   ![unresolvedcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/96ed1a8e-eea3-4d3f-9557-e51b076fb3fb)
+
+    
+</details>
+
 - [ ] Subheading completions in the form [[file#heading#subheading]] from https://help.obsidian.md/Linking+notes+and+files/Internal+links#Link+to+a+heading+in+a+note (Note: right now you can link to subheadings through [[file#subheading]])
 - [ ] Callout/admonition completions
 - [ ] Metadata completions
@@ -183,8 +194,15 @@ Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[arti
 
     ![footnotereferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/25940052-ca6c-4b7c-b334-f0001260c490)
 
+</details>
 
-    
+- <details>
+    <summary>Unresolved file and heading references</summary>
+
+
+    ![unresolvedreferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/5e5c89c1-fda0-4e80-98b5-3ccce4bd3dbf)
+
+
 </details>
 
 > [!NOTE]
@@ -193,7 +211,21 @@ Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[arti
 
 ### Hover
 
-`markdown-oxide` provides a preview of the text for an item (if there is any) as well as a snapshot of the backlinks to the item (if applicable). 
+`markdown-oxide` provides a preview of the text for an item (if there is any) as well as a snapshot of the backlinks to the item (if applicable). You can hover over both references and referenceables -- hover over headings and links to headings; as well as files and links to files.
+
+In the hover, several backlines to the referenceable are listed, ordered by date modified.  
+
+> [!NOTE]
+> I write most of the content for a note not in the note itself, but in backlinks to the note; I also write in notes at times. Assuming content is both in backlinks and in written text, hover packages text and backlinks together to give a true preview of a referenceable. 
+
+</details>
+
+- <details>
+    <summary>Gif of Hover for both references and referenceables</summary>
+
+    ![hover](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/ed6d8d48-e700-42f2-8ab6-d0b8d2d038f9)
+
+</details>
 
 
 - Hover Preview
@@ -201,7 +233,7 @@ Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[arti
     - [X] Headings
     - [X] Indexed Blocks
     - [X] Footnotes
-    - [X] Show backlinks, sorted by the date modified, in the hover (I will write most of the content for a note not in the note itself, but in backlinks to the note; I also will write in notes at times. This feature is to combine the content related to the note including both backlinks in actual organized text)
+    - [X] Show backlinks, sorted by the date modified, in the hover ()
 - [ ] Code Actions
     - [x] Unresolved file link -> Create the file
     - [x] Unresolved heading link -> append heading to file and create the file if necessary
