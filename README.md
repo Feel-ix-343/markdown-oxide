@@ -113,14 +113,28 @@ Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[arti
     
 </details>
 
-Wikilink completions
+- <details>
+    <summary>Unindexed Block Completions: Make the linking syntax and press space; Fuzzy searches through the whole folder of files and allows you to link anywhere, following obsidian block linking syntax</summary>
+
+    ![blockcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/a48c28a7-55b0-438c-becc-1dfde350fa94)
+    
+</details>
 
 
+- <details>
+    <summary>Tag Completions</summary>
 
-Markdown Link Completions
+    ![tagcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/bf20d7ac-171a-4d95-b510-ba323073c0b8)
 
+    
+</details>
 
+- <details>
+    <summary>Footnote Completions</summary>
 
+    ![footnotecompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/92a6739d-8a7a-457e-84bd-fde6548aa25a)
+    
+</details>
 
 
 - Go to definition (or definitions) from ...
