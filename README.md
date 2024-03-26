@@ -96,66 +96,199 @@ Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[arti
 
 ## Features
 
-- Go to definition (or definitions) from ...
-    - [X] File references [[file]]
-    - [X] Heading references [[file#heading]]
-    - [X] Block references. [[file#^index]] (I call indexed blocks the blocks that you directly link to. The link will look like [[file#^index]]. When linking from the obsidian editor, an *index* ^index is appended to the paragraph/block you are referencing)
-    - [X] Tags #tag and #tag/subtag/\.\.
-    - [X] Footnotes: "paraphrased text[^footnoteindex]"
-    - [ ] Metadata tag
-- Get references
-    - [X] For File when the cursor is anywhere where there is not another referenceable. This will produce references not only to the file but also to headings and blocks in the file
-    - [X] For block when the cursor is on the block's index "...text *^index*"
-    - [X] For tag when the cursor is on the tags declaration. Unlike go-to-definition for tags, this will produce all references to the tag and to the tag with subtags
-    - [X] Footnotes when the cursor is on the declaration line of the footnote; *[^1]: description...*
+### Completions
+
+- <details>
+  <summary>Wikilink Completions</summary>
+
+  ![wikilinkcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/29c4830f-30e5-4094-9f5b-7b39009437da)
+  
+</details>
+
+- <details>
+    <summary>Markdown Link Completions</summary>
+
+    ![markdownlinkcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/16c8565a-6a28-4df1-a312-e4b158fb9f03)
+
+    
+</details>
+
+- <details open>
+    <summary>Unindexed Block Completions; Fuzzy search through the whole folder of files and link anywhere, following obsidian block linking syntax</summary>
+
+    to use this, type `[[`, and after you press space, completions for every block in the vault will appear; continue typing to fuzzy match the block that you want; finally, select the block; a link will be inserted to the text document and an index (ex ^1j239) will be appended to the block in its respective file. In Neovim, this text will not be written yet into the file (it will be edited in an unsaved buffer) so type `:wa`, and it should be resolved (as long as you have `dynamicRegistration = true` as described [here](https://github.com/Feel-ix-343/markdown-oxide?tab=readme-ov-file#neovim)!
+
+    ![blockcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/a48c28a7-55b0-438c-becc-1dfde350fa94)
+    
+</details>
+
+
+- <details>
+    <summary>Tag Completions</summary>
+
+    ![tagcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/bf20d7ac-171a-4d95-b510-ba323073c0b8)
+
+    
+</details>
+
+- <details>
+    <summary>Footnote Completions</summary>
+
+    ![footnotecompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/92a6739d-8a7a-457e-84bd-fde6548aa25a)
+    
+</details>
+
+- <details>
+    <summary>Unresolved File and Heading Completions</summary>
+    
+    For those who like to reference things before they are written, `markdown-oxide` has terrific support for unresolved references! It provides completions for unresolved references, provides lsp_references for them, and provides code actions to create files + append headings.  
+
+
+   ![unresolvedcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/96ed1a8e-eea3-4d3f-9557-e51b076fb3fb)
+
+    
+</details>
+
+- [ ] Subheading completions in the form [[file#heading#subheading]] from https://help.obsidian.md/Linking+notes+and+files/Internal+links#Link+to+a+heading+in+a+note (Note: right now you can link to subheadings through [[file#subheading]])
+- [ ] Callout/admonition completions
+- [ ] Metadata completions
+- [ ] Dataview completions
+- [ ] Metadata tag completions
+- [ ] \`\`\`query\`\`\` code block completions
+
+
+### References
+
+- <details>
+    <summary>File References: Gets references to the file and all headings and blocks in the file</summary>
+
+    ![filereferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/9fbd6051-ef57-42eb-b61b-1cc3ddfb2293)
+    
+</details>
+
+- <details>
+    <summary>Heading References</summary>
+
+    
+    ![headingreferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/50598628-ed27-4a9b-adba-861ca8f933ea)
+    
+</details>
+
+- <details>
+    <summary>Tag References: Gets all references to the tag and subtags</summary>
+
+    ![tagreferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/d73ac764-2c86-45c9-9403-17b50e6962e4)
+    
+</details>
+
+- <details>
+    <summary>Indexed Block References</summary>
+
+    ![indexedblockreferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/5d92257e-56b8-4209-b990-d25bbaa75a69)
+
+    
+</details>
+
+- <details>
+    <summary>Footnote References</summary>
+
+    ![footnotereferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/25940052-ca6c-4b7c-b334-f0001260c490)
+
+</details>
+
+- <details>
+    <summary>Unresolved file and heading references</summary>
+
+
+    ![unresolvedreferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/5e5c89c1-fda0-4e80-98b5-3ccce4bd3dbf)
+
+
+</details>
 
 > [!NOTE]
 > I strongly recommend using [Lspsaga](https://github.com/nvimdev/lspsaga.nvim) for references for two reasons. First because this LS sorts references by the date their files were modified and unlike `vim.lsp.buf.references()` and `Telescope lsp_references`, `Lspsaga finder` maintains this sorting order. Second it also allows you to edit the references in place, similar to Logseq
 
-- Completions (requires extra nvim-cmp config; follow the directions above)
-    - [X] File link completions
-    - [X] Heading link Completions
-    - [ ] Subheading completions in the form [[file#heading#subheading]] from https://help.obsidian.md/Linking+notes+and+files/Internal+links#Link+to+a+heading+in+a+note (Note: right now you can link to subheadings through [[file#subheading]])
-    - [X] Block link completions (searches the text of the indexed block) 
-    - [X] Footnote link completions
-    - [X] New Block link Completions through grep: to use this, type `[[`, and after you press space, completions for every block in the vault will appear; continue typing to fuzzy match the block that you want; finally, select the block; a link will be inserted to the text document and an index (ex ^1j239) will be appended to the block in its respective file. In Neovim, this text will not be written yet into the file (it will be edited in an unsaved buffer) so type `:wa`, and it should be resolved (as long as you have `dynamicRegistration = true` as described [here](https://github.com/Feel-ix-343/markdown-oxide?tab=readme-ov-file#neovim)!
-    - [ ] Callout/admonition completions
-    - [ ] Metadata completions
-    - [ ] Dataview completions
-    - [ ] Metadata tag completions
-    - [ ] \`\`\`query\`\`\` code block completions
-- Hover Preview
-    - [X] File
-    - [X] Headings
-    - [X] Indexed Blocks
-    - [X] Footnotes
-    - [X] Show backlinks, sorted by the date modified, in the hover (I will write most of the content for a note not in the note itself, but in backlinks to the note; I also will write in notes at times. This feature is to combine the content related to the note including both backlinks in actual organized text)
-- [ ] Code Actions
-    - [x] Unresolved file link -> Create the file
-    - [x] Unresolved heading link -> append heading to file and create the file if necessary
-    - [ ] Link suggestions (by text match or other)
-    - [ ] Refactoring: Move headers or selections to a new file
-    - [ ] Link an unlinked reference
-    - [ ] Link all unlinked references to a referenceable
-- [X] Diagnostics
-    - [X] Unresolved reference
-    - [ ] Unlinked reference
-- [X] Symbols
-    - [X] File symbols: Headings and subheadings
-    - [X] Workspace headings: everything linkable: files, headings, tags, ... Like a good search feature
-    - [ ] Lists and indented lists
-- [ ] Rename
-    - [X] File (cursor must be in the first character of the first line)
-    - [X] Headings
-    - [X] Tags
-    - [ ] Indexed Blocks
-- [ ] Dataview support
-- Config
-    * [ ] Daily notes format
-- A simple CLI
-    - [ ] Working with daily notes (key to efficient PKM systems!)
-    - [ ] ... (leave some ideas in the issues!)
-- [ ] Integrate with Obsidian.nvim
+
+### Hover
+
+`markdown-oxide` provides a preview of the text for an item (if there is any) as well as a snapshot of the backlinks to the item (if applicable). You can hover over both references and referenceables -- hover over headings and links to headings; as well as files and links to files.
+
+In the hover, several backlines to the referenceable are listed, ordered by date modified.  
+
+> [!NOTE]
+> I write most of the content for a note not in the note itself, but in backlinks to the note; I also write in notes at times. Assuming content is both in backlinks and in written text, hover packages text and backlinks together to give a true preview of a referenceable. 
+
+<details>
+    <summary>Gif of Hover for both references and referenceables</summary>
+
+    ![hover](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/ed6d8d48-e700-42f2-8ab6-d0b8d2d038f9)
+
+</details>
+
+### Code Actions
+
+- <details>
+    <summary>Create file for unresolved file link</summary>
+
+    ![codeactionsfile](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/707955e4-1e54-4f61-ac54-979d9f95b13c)
+
+
+</details>
+
+- <details>
+    <summary>Append heading to file and create the file if necessary</summary>
+
+    
+    ![codeactionsheading](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/02af43aa-5185-406c-adb3-4c2792902761)
+
+
+
+</details>
+
+- [ ] Link suggestions (by text match or other)
+- [ ] Refactoring: Move headers or selections to a new file
+- [ ] Link an unlinked reference
+- [ ] Link all unlinked references to a referenceable
+
+### Diagnostics
+
+- [X] Unresolved reference
+- [ ] Unlinked reference
+
+### Symbols
+
+- [X] File symbols: Headings and subheadings
+- [X] Workspace headings: everything linkable: files, headings, tags, ... Like a good search feature
+- [ ] Lists and indented lists
+
+
+### Rename
+
+
+- <details>
+    <summary>Rename File</summary>
+
+    ![renamefile](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/3ac404fb-cfcd-4943-81ba-8ab3645831b7)
+
+
+</details>
+
+
+- <details>
+    <summary>Rename Heading</summary>
+
+    ![renameheading](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/4227cd57-ca07-4d11-b6e8-afcaba554271)
+
+</details>
+
+- <details>
+    <summary>Rename Tag</summary>
+
+    ![renametag](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/48b8a825-2342-477c-8440-198ab9273a83)
+
+
+</details>
+
 
 
 # Config
