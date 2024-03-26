@@ -136,14 +136,32 @@ Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[arti
     
 </details>
 
+### References
 
-- Go to definition (or definitions) from ...
-    - [X] File references [[file]]
-    - [X] Heading references [[file#heading]]
-    - [X] Block references. [[file#^index]] (I call indexed blocks the blocks that you directly link to. The link will look like [[file#^index]]. When linking from the obsidian editor, an *index* ^index is appended to the paragraph/block you are referencing)
-    - [X] Tags #tag and #tag/subtag/\.\.
-    - [X] Footnotes: "paraphrased text[^footnoteindex]"
-    - [ ] Metadata tag
+- <details>
+    <summary>File References: Gets references to the file and all headings and blocks in the file</summary>
+
+    ![filereferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/9fbd6051-ef57-42eb-b61b-1cc3ddfb2293)
+    
+</details>
+
+- <details>
+    <summary>Heading References</summary>
+
+    
+    ![headingreferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/50598628-ed27-4a9b-adba-861ca8f933ea)
+    
+</details>
+
+- <details>
+    <summary>Tag References: Gets all references to the tag and subtags</summary>
+
+    ![tagreferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/d73ac764-2c86-45c9-9403-17b50e6962e4)
+    
+</details>
+
+
+
 - Get references
     - [X] For File when the cursor is anywhere where there is not another referenceable. This will produce references not only to the file but also to headings and blocks in the file
     - [X] For block when the cursor is on the block's index "...text *^index*"
