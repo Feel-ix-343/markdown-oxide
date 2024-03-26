@@ -221,7 +221,7 @@ In the hover, several backlines to the referenceable are listed, ordered by date
 <details>
     <summary>Gif of Hover for both references and referenceables</summary>
 
-    ![hover](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/ed6d8d48-e700-42f2-8ab6-d0b8d2d038f9)
+![hover](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/ed6d8d48-e700-42f2-8ab6-d0b8d2d038f9)
 
 </details>
 
