@@ -113,7 +113,7 @@ Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[arti
     
 </details>
 
-- <details>
+- <details open>
     <summary>Unindexed Block Completions; Fuzzy search through the whole folder of files and link anywhere, following obsidian block linking syntax</summary>
 
     to use this, type `[[`, and after you press space, completions for every block in the vault will appear; continue typing to fuzzy match the block that you want; finally, select the block; a link will be inserted to the text document and an index (ex ^1j239) will be appended to the block in its respective file. In Neovim, this text will not be written yet into the file (it will be edited in an unsaved buffer) so type `:wa`, and it should be resolved (as long as you have `dynamicRegistration = true` as described [here](https://github.com/Feel-ix-343/markdown-oxide?tab=readme-ov-file#neovim)!
@@ -218,48 +218,77 @@ In the hover, several backlines to the referenceable are listed, ordered by date
 > [!NOTE]
 > I write most of the content for a note not in the note itself, but in backlinks to the note; I also write in notes at times. Assuming content is both in backlinks and in written text, hover packages text and backlinks together to give a true preview of a referenceable. 
 
-</details>
-
-- <details>
+<details>
     <summary>Gif of Hover for both references and referenceables</summary>
 
     ![hover](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/ed6d8d48-e700-42f2-8ab6-d0b8d2d038f9)
 
 </details>
 
+### Code Actions
 
-- Hover Preview
-    - [X] File
-    - [X] Headings
-    - [X] Indexed Blocks
-    - [X] Footnotes
-    - [X] Show backlinks, sorted by the date modified, in the hover ()
-- [ ] Code Actions
-    - [x] Unresolved file link -> Create the file
-    - [x] Unresolved heading link -> append heading to file and create the file if necessary
-    - [ ] Link suggestions (by text match or other)
-    - [ ] Refactoring: Move headers or selections to a new file
-    - [ ] Link an unlinked reference
-    - [ ] Link all unlinked references to a referenceable
-- [X] Diagnostics
-    - [X] Unresolved reference
-    - [ ] Unlinked reference
-- [X] Symbols
-    - [X] File symbols: Headings and subheadings
-    - [X] Workspace headings: everything linkable: files, headings, tags, ... Like a good search feature
-    - [ ] Lists and indented lists
-- [ ] Rename
-    - [X] File (cursor must be in the first character of the first line)
-    - [X] Headings
-    - [X] Tags
-    - [ ] Indexed Blocks
-- [ ] Dataview support
-- Config
-    * [ ] Daily notes format
-- A simple CLI
-    - [ ] Working with daily notes (key to efficient PKM systems!)
-    - [ ] ... (leave some ideas in the issues!)
-- [ ] Integrate with Obsidian.nvim
+- <details>
+    <summary>Create file for unresolved file link</summary>
+
+    ![codeactionsfile](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/707955e4-1e54-4f61-ac54-979d9f95b13c)
+
+
+</details>
+
+- <details>
+    <summary>Append heading to file and create the file if necessary</summary>
+
+    
+    ![codeactionsheading](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/02af43aa-5185-406c-adb3-4c2792902761)
+
+
+
+</details>
+
+- [ ] Link suggestions (by text match or other)
+- [ ] Refactoring: Move headers or selections to a new file
+- [ ] Link an unlinked reference
+- [ ] Link all unlinked references to a referenceable
+
+### Diagnostics
+
+- [X] Unresolved reference
+- [ ] Unlinked reference
+
+### Symbols
+
+- [X] File symbols: Headings and subheadings
+- [X] Workspace headings: everything linkable: files, headings, tags, ... Like a good search feature
+- [ ] Lists and indented lists
+
+
+### Rename
+
+
+- <details>
+    <summary>Rename File</summary>
+
+    ![renamefile](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/3ac404fb-cfcd-4943-81ba-8ab3645831b7)
+
+
+</details>
+
+
+- <details>
+    <summary>Rename Heading</summary>
+
+    ![renameheading](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/4227cd57-ca07-4d11-b6e8-afcaba554271)
+
+</details>
+
+- <details>
+    <summary>Rename Tag</summary>
+
+    ![renametag](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/48b8a825-2342-477c-8440-198ab9273a83)
+
+
+</details>
+
 
 
 # Config
