@@ -114,7 +114,9 @@ Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[arti
 </details>
 
 - <details>
-    <summary>Unindexed Block Completions: Make the linking syntax and press space; Fuzzy searches through the whole folder of files and allows you to link anywhere, following obsidian block linking syntax</summary>
+    <summary>Unindexed Block Completions; Fuzzy search through the whole folder of files and link anywhere, following obsidian block linking syntax</summary>
+
+    to use this, type `[[`, and after you press space, completions for every block in the vault will appear; continue typing to fuzzy match the block that you want; finally, select the block; a link will be inserted to the text document and an index (ex ^1j239) will be appended to the block in its respective file. In Neovim, this text will not be written yet into the file (it will be edited in an unsaved buffer) so type `:wa`, and it should be resolved (as long as you have `dynamicRegistration = true` as described [here](https://github.com/Feel-ix-343/markdown-oxide?tab=readme-ov-file#neovim)!
 
     ![blockcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/a48c28a7-55b0-438c-becc-1dfde350fa94)
     
@@ -135,6 +137,14 @@ Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[arti
     ![footnotecompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/92a6739d-8a7a-457e-84bd-fde6548aa25a)
     
 </details>
+
+- [ ] Subheading completions in the form [[file#heading#subheading]] from https://help.obsidian.md/Linking+notes+and+files/Internal+links#Link+to+a+heading+in+a+note (Note: right now you can link to subheadings through [[file#subheading]])
+- [ ] Callout/admonition completions
+- [ ] Metadata completions
+- [ ] Dataview completions
+- [ ] Metadata tag completions
+- [ ] \`\`\`query\`\`\` code block completions
+
 
 ### References
 
@@ -160,29 +170,32 @@ Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[arti
     
 </details>
 
+- <details>
+    <summary>Indexed Block References</summary>
+
+    ![indexedblockreferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/5d92257e-56b8-4209-b990-d25bbaa75a69)
+
+    
+</details>
+
+- <details>
+    <summary>Footnote References</summary>
+
+    ![footnotereferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/25940052-ca6c-4b7c-b334-f0001260c490)
 
 
-- Get references
-    - [X] For File when the cursor is anywhere where there is not another referenceable. This will produce references not only to the file but also to headings and blocks in the file
-    - [X] For block when the cursor is on the block's index "...text *^index*"
-    - [X] For tag when the cursor is on the tags declaration. Unlike go-to-definition for tags, this will produce all references to the tag and to the tag with subtags
-    - [X] Footnotes when the cursor is on the declaration line of the footnote; *[^1]: description...*
+    
+</details>
 
 > [!NOTE]
 > I strongly recommend using [Lspsaga](https://github.com/nvimdev/lspsaga.nvim) for references for two reasons. First because this LS sorts references by the date their files were modified and unlike `vim.lsp.buf.references()` and `Telescope lsp_references`, `Lspsaga finder` maintains this sorting order. Second it also allows you to edit the references in place, similar to Logseq
 
-- Completions (requires extra nvim-cmp config; follow the directions above)
-    - [X] File link completions
-    - [X] Heading link Completions
-    - [ ] Subheading completions in the form [[file#heading#subheading]] from https://help.obsidian.md/Linking+notes+and+files/Internal+links#Link+to+a+heading+in+a+note (Note: right now you can link to subheadings through [[file#subheading]])
-    - [X] Block link completions (searches the text of the indexed block) 
-    - [X] Footnote link completions
-    - [X] New Block link Completions through grep: to use this, type `[[`, and after you press space, completions for every block in the vault will appear; continue typing to fuzzy match the block that you want; finally, select the block; a link will be inserted to the text document and an index (ex ^1j239) will be appended to the block in its respective file. In Neovim, this text will not be written yet into the file (it will be edited in an unsaved buffer) so type `:wa`, and it should be resolved (as long as you have `dynamicRegistration = true` as described [here](https://github.com/Feel-ix-343/markdown-oxide?tab=readme-ov-file#neovim)!
-    - [ ] Callout/admonition completions
-    - [ ] Metadata completions
-    - [ ] Dataview completions
-    - [ ] Metadata tag completions
-    - [ ] \`\`\`query\`\`\` code block completions
+
+### Hover
+
+`markdown-oxide` provides a preview of the text for an item (if there is any) as well as a snapshot of the backlinks to the item (if applicable). 
+
+
 - Hover Preview
     - [X] File
     - [X] Headings
