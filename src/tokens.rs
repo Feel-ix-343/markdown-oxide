@@ -3,13 +3,18 @@ use std::{iter, path::Path};
 use itertools::Itertools;
 use tower_lsp::lsp_types::{SemanticToken, SemanticTokensParams, SemanticTokensResult};
 
-use crate::vault::{Referenceable, Vault};
+use crate::{config::Settings, vault::{Referenceable, Vault}};
 
 pub fn semantic_tokens_full(
     vault: &Vault,
     path: &Path,
     _params: SemanticTokensParams,
+    settings: &Settings,
 ) -> Option<SemanticTokensResult> {
+    if !settings.semantic_tokens {
+        return None;
+    }
+
     let references_in_file = vault.select_references(Some(path))?;
 
     let tokens = references_in_file

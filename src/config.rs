@@ -11,7 +11,8 @@ pub struct Settings {
     pub dailynote: String,
     pub heading_completions: bool,
     pub title_headings: bool,
-    pub unresolved_diagnostics: bool
+    pub unresolved_diagnostics: bool,
+    pub semantic_tokens: bool
 }
 
 impl Settings {
@@ -41,6 +42,7 @@ impl Settings {
             )?
             .set_default("unresolved_diagnostics", true)?
             .set_default("title_headings", true)?
+            .set_default("semantic_tokens", true)?
             .build()
             .map_err(|err| anyhow!("Build err: {err}"))?;
 

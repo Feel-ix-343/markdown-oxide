@@ -599,9 +599,12 @@ impl LanguageServer for Backend {
         &self,
         params: SemanticTokensParams,
     ) -> Result<Option<SemanticTokensResult>> {
+
+        let settings = self.bind_settings(|settings| Ok(settings.clone())).await?;
+
         let path = params_path!(params)?;
         let res = self
-            .bind_vault(|vault| Ok(tokens::semantic_tokens_full(vault, &path, params)))
+            .bind_vault(|vault| Ok(tokens::semantic_tokens_full(vault, &path, params, &settings)))
             .await;
 
         return res;
