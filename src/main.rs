@@ -87,6 +87,9 @@ impl Backend {
                     .await
             }
         }
+
+
+        let _ = self.client.semantic_tokens_refresh().await;
     }
 
     async fn reconstruct_vault(&self) {
@@ -140,7 +143,9 @@ impl Backend {
                     )
                     .await
             }
-        }
+        };
+
+        let _ = self.client.semantic_tokens_refresh().await;
     }
 
     async fn publish_diagnostics(&self) -> Result<()> {
