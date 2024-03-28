@@ -289,9 +289,29 @@ In the hover, several backlines to the referenceable are listed, ordered by date
 
 </details>
 
+### Daily Notes
+
+Daily Note completions relative to the current date
+
+- <details>
+    <summary>...for wikilinks</summary>
+
+    ![dailynoteswiki](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/d2505535-ef5e-491a-bd88-ef12be2402ef)
 
 
-# Config
+</details>
+
+- <details>
+    <summary>...for markdown links</summary>
+
+    ![dailynotesmd](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/23cf2f7c-1956-40b6-bfa9-0349c640516c)
+
+
+</details>
+
+![dailynotes](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/b5979212-1ad3-41a3-8bcc-819f4e478e4f)
+
+## Config
 
 `Markdown-Oxide` supports several configuration options. All can be specified in a `~/.config/moxide/settings.toml` or `.moxide.toml` file and moxide tries to import some settings (daily notes formatting) from Obsidian directly. Here are the options with the defaults
 
@@ -317,7 +337,7 @@ unresolved_diagnostics = true
 ```
 
 
-# Alternatives
+## Alternatives
 
 **I love open-source and all open-source authors!! I also believe healthy competition is good! Markdown-Oxide is competing with some alternatives, and I want to make it the best at its job!!**
 
@@ -328,6 +348,6 @@ Here are the alternatives (open source authors are welcome to make PRs to add th
 - The og https://github.com/artempyanykh/marksman: I used this for a while, but it is not obsidian specific and didn't act well with my vault. Additionally, the block completions in markdown-oxide allow for a fuzzy/grep search of the entire vault to generate the completions; I don't think Markman has any features like this; (this is a feature that Logseq signified for PKM; the concept that *anything is linkable* is quite powerful) 
 
 
-# ---The--bottom--line--------------------------------------------------
+## ---The--bottom--line--------------------------------------------------
 
 Listen. I really like Vim motions. I also really love low-latency terminal editing. I very much so also like my Neovim LSP plugins, keymappings, and config. But Wow! I also like using Obsidian and Logseq. **Can't I just have it all???** Can't I be whisked away by the flow of Neovim while also experiencing the beauty of Obsidian???? Can't I detail my tasks on the CLI while viewing them in Logseq????? Well, I thought I could; for us all, there is markdown-oxide (which is still very pre-beta hah)
