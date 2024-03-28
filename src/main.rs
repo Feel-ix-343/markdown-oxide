@@ -1,3 +1,4 @@
+use std::collections::btree_set::Intersection;
 use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
@@ -149,6 +150,9 @@ impl Backend {
     }
 
     async fn publish_diagnostics(&self) -> Result<()> {
+
+        let timer = std::time::Instant::now();
+
         self.client
             .log_message(MessageType::WARNING, "Diagnostics Started")
             .await;
@@ -183,6 +187,16 @@ impl Backend {
 
         self.client
             .log_message(MessageType::WARNING, "Diagnostics Done")
+            .await;
+
+
+        let elapsed = timer.elapsed();
+
+        self.client
+            .log_message(
+                MessageType::WARNING,
+                format!("Diagnostics Done took {}ms", elapsed.as_millis()),
+            )
             .await;
 
         Ok(())
@@ -602,9 +616,20 @@ impl LanguageServer for Backend {
 
         let settings = self.bind_settings(|settings| Ok(settings.clone())).await?;
 
+        let timer = std::time::Instant::now();
+
         let path = params_path!(params)?;
         let res = self
             .bind_vault(|vault| Ok(tokens::semantic_tokens_full(vault, &path, params, &settings)))
+            .await;
+
+        let elapsed = timer.elapsed();
+
+        self.client
+            .log_message(
+                MessageType::WARNING,
+                format!("Semantic Tokens Done took {}ms", elapsed.as_millis()),
+            )
             .await;
 
         return res;

@@ -1,9 +1,10 @@
-use std::{iter, path::Path};
+use std::{collections::HashSet, iter, path::Path};
 
 use itertools::Itertools;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use tower_lsp::lsp_types::{SemanticToken, SemanticTokensParams, SemanticTokensResult};
 
-use crate::{config::Settings, vault::{Referenceable, Vault}};
+use crate::{config::Settings, diagnostics::path_unresolved_references, vault::{Referenceable, Vault}};
 
 pub fn semantic_tokens_full(
     vault: &Vault,
@@ -17,6 +18,8 @@ pub fn semantic_tokens_full(
 
     let references_in_file = vault.select_references(Some(path))?;
 
+    let path_unresolved: Option<HashSet<_>> = path_unresolved_references(vault, path).map(|thing| thing.into_par_iter().map(|(_, reference)| reference).collect());
+
     let tokens = references_in_file
         .into_iter()
         .sorted_by_key(|(_, reference)| {
@@ -28,9 +31,7 @@ pub fn semantic_tokens_full(
         .fold(vec![], |acc, (path, reference)| {
             let range = reference.data().range;
 
-            let is_unresolved = vault.select_referenceables_for_reference(reference, path)
-                .into_iter()
-                .any(|referenceable| referenceable.is_unresolved());
+            let is_unresolved = path_unresolved.as_ref().is_some_and(|unresolved| unresolved.contains(reference));
 
             match acc[..] {
                 [] => vec![(
@@ -62,9 +63,9 @@ pub fn semantic_tokens_full(
                     .collect_vec(),
             }
         })
-        .into_iter()
+        .into_par_iter()
         .map(|(_, token)| token)
-        .collect_vec(); // TODO: holy this is bad
+        .collect::<Vec<_>>(); // TODO: holy this is bad
 
     Some(SemanticTokensResult::Tokens(
         tower_lsp::lsp_types::SemanticTokens {
