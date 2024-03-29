@@ -1,6 +1,24 @@
+
+#tag
+
 # Heading 1
 
-[[This is not]]
+Get daily note completions -- even if the daily note is not yet created
+
+Configure your daily note formatting in the config file
+
+today is 2024-03-27
+
+[next Tuesday](2024-04-02)
+
+[tomorrow](2024-03-28)
+
+[yesterday](2024-03-26)
+
+[last Sunday](2024-03-24)
+
+
+
 
 - This is some text 1
 - This is more text 2
@@ -16,7 +34,6 @@
 
 ### Here is a nested third
 
-# [[This is a link in a heading]]
 
 ### Here is a nested third
 
@@ -27,26 +44,3 @@
 
 # Heading 1 2
 
-[[Another Test]]
-
-
-#rag
-
-
-[[Test#Heading 1]]
-[[Test#Heading 1]]
-
-[[Test#Heading 1]]
-
-
-[[Test]]
-[[Test]]
-[[Test]]
-[[Test]]
-[[Test]]
-
-
-[[]]
-
-
-#tag
