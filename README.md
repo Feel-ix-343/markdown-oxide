@@ -334,6 +334,8 @@ title_headings = true
 # special semantic tokens will be sent for the unresolved links, allowing you
 # to visually identify unresolved links
 unresolved_diagnostics = true
+
+semantic_tokens = true
 ```
 
 
