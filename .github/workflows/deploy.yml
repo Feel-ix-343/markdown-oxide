@@ -16,14 +16,17 @@ jobs:
           - build: linux
             os: ubuntu-latest
             target: x86_64-unknown-linux-musl
+            use-cross: true
 
           - build: macos
             os: macos-latest
             target: x86_64-apple-darwin
+            use-cross: true
 
           - build: windows-gnu
             os: windows-latest
             target: x86_64-pc-windows-gnu
+            use-cross: false
     steps:
       - name: Clone Repo
         uses: actions/checkout@v3
@@ -42,7 +45,7 @@ jobs:
       - name: Build
         uses: actions-rs/cargo@v1
         with:
-          use-cross: true
+          use-cross: ${{ matrix.use-cross }}
           command: build
           args: --verbose --release --target ${{ matrix.target }}
 
