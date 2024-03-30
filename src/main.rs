@@ -531,10 +531,6 @@ impl LanguageServer for Backend {
             .bind_vault(|vault| Ok(get_completions(vault, &files, &params, &path, &settings)))
             .await;
 
-        self.client
-            .log_message(MessageType::LOG, format!("Completions: {:?}", res))
-            .await;
-
         let elapsed = timer.elapsed();
 
         self.client
