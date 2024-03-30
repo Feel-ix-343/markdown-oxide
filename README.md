@@ -149,6 +149,23 @@ Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[arti
     
 </details>
 
+- <details>
+    <summary>Callout Completions</summary>
+
+    ![calloutcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/11cd44f1-cf2e-4f27-92b4-1ed4914356ca)
+
+
+    
+</details>
+
+- <details>
+    <summary>Nested Callout Completions</summary>
+
+    ![nestedcalloutcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/2ae86432-86fd-4327-b6e1-a94a5074db06)
+
+    
+</details>
+
 - [ ] Subheading completions in the form [[file#heading#subheading]] from https://help.obsidian.md/Linking+notes+and+files/Internal+links#Link+to+a+heading+in+a+note (Note: right now you can link to subheadings through [[file#subheading]])
 - [ ] Callout/admonition completions
 - [ ] Metadata completions
