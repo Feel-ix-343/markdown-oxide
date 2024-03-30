@@ -588,6 +588,10 @@ impl LinkCompletion<'_> {
                 _ => None,
             },
             text_edit: Some(text_edit),
+            preselect: Some(match self {
+                Self::DailyNote(daily) => daily.relative_name(completer) == Some(completer.entered_refname()),
+                link_completion @ _ => link_completion.refname() == completer.entered_refname(),
+            }),
             filter_text: Some(filter_text.to_string()),
             documentation: preview_referenceable(vault, &referenceable)
                 .map(Documentation::MarkupContent),
