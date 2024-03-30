@@ -6,6 +6,7 @@ use tower_lsp::lsp_types::{CompletionItem, CompletionList, CompletionParams, Com
 
 use crate::{config::Settings, vault::Vault};
 
+use self::callout_completer::CalloutCompleter;
 use self::link_completer::WikiLinkCompleter;
 use self::{
     footnote_completer::FootnoteCompleter, link_completer::MarkdownLinkCompleter,
@@ -17,6 +18,7 @@ mod link_completer;
 mod matcher;
 mod tag_completer;
 mod unindexed_block_completer;
+mod callout_completer;
 
 #[derive(Clone, Copy)]
 pub struct Context<'a> {
@@ -99,6 +101,13 @@ pub fn get_completions(
     })
     .or_else(|| {
         run_completer::<FootnoteCompleter>(
+            completion_context,
+            params.text_document_position.position.line,
+            params.text_document_position.position.character,
+        )
+    })
+    .or_else(|| {
+        run_completer::<CalloutCompleter>(
             completion_context,
             params.text_document_position.position.line,
             params.text_document_position.position.character,
