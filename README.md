@@ -323,10 +323,8 @@ Daily Note completions relative to the current date
 
     ![dailynotesmd](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/23cf2f7c-1956-40b6-bfa9-0349c640516c)
 
-
 </details>
 
-![dailynotes](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/b5979212-1ad3-41a3-8bcc-819f4e478e4f)
 
 ## Config
 
