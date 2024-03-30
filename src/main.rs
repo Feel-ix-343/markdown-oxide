@@ -90,7 +90,11 @@ impl Backend {
         }
 
 
-        let _ = self.client.semantic_tokens_refresh().await;
+        if let Ok(settings) = self.bind_settings(|settings| Ok(settings.clone())).await {
+            if settings.semantic_tokens {
+                let _ = self.client.semantic_tokens_refresh().await;
+            }
+        }
     }
 
     async fn reconstruct_vault(&self) {
@@ -294,7 +298,7 @@ impl LanguageServer for Backend {
         let mut value = self.vault.write().await;
         *value = Some(vault);
 
-        let read_settings = match Settings::new(root_dir) {
+        let read_settings = match Settings::new(root_dir, &i.capabilities) {
             Ok(settings) => settings,
             Err(e) => {
                 self.client

@@ -4,6 +4,7 @@ use anyhow::anyhow;
 use config::{Config, File};
 use indexmap::IndexMap;
 use serde::Deserialize;
+use tower_lsp::lsp_types::ClientCapabilities;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Settings {
@@ -16,7 +17,7 @@ pub struct Settings {
 }
 
 impl Settings {
-    pub fn new(root_dir: &Path) -> anyhow::Result<Settings> {
+    pub fn new(root_dir: &Path, capabilities: &ClientCapabilities) -> anyhow::Result<Settings> {
         let obsidian_daily_note = obsidian_dailynote_converted(root_dir);
 
         let expanded = shellexpand::tilde("~/.config/moxide/settings");
@@ -43,6 +44,10 @@ impl Settings {
             .set_default("unresolved_diagnostics", true)?
             .set_default("title_headings", true)?
             .set_default("semantic_tokens", true)?
+            .set_override_option("semantic_tokens", capabilities.text_document.as_ref().and_then(|it| match it.semantic_tokens.is_none() {
+                true => Some(false),
+                false => None
+            }))?
             .build()
             .map_err(|err| anyhow!("Build err: {err}"))?;
 
