@@ -251,8 +251,7 @@ impl<'a> Completable<'a, UnindexedBlockCompleter<'a, MarkdownLinkCompleter<'a>>>
     fn completions(
         &self,
         completer: &UnindexedBlockCompleter<'a, MarkdownLinkCompleter<'a>>,
-    ) -> impl Iterator<Item = CompletionItem> {
-        (|| {
+    ) -> Option<CompletionItem> {
             let (refname, partial_completion) = self.partial_completion(completer)?;
 
             let binding = completer.link_completer.entered_refname();
@@ -270,8 +269,6 @@ impl<'a> Completable<'a, UnindexedBlockCompleter<'a, MarkdownLinkCompleter<'a>>>
                 insert_text_format: Some(InsertTextFormat::SNIPPET),
                 ..partial_completion
             })
-        })()
-        .into_iter()
     }
 }
 
@@ -281,8 +278,7 @@ impl<'a> Completable<'a, UnindexedBlockCompleter<'a, WikiLinkCompleter<'a>>>
     fn completions(
         &self,
         completer: &UnindexedBlockCompleter<'a, WikiLinkCompleter<'a>>,
-    ) -> impl Iterator<Item = CompletionItem> {
-        (|| {
+    ) -> Option<CompletionItem> {
             let (refname, partial_completion) = self.partial_completion(completer)?;
 
             let binding = completer.link_completer.entered_refname();
@@ -300,8 +296,6 @@ impl<'a> Completable<'a, UnindexedBlockCompleter<'a, WikiLinkCompleter<'a>>>
                 insert_text_format: Some(InsertTextFormat::SNIPPET),
                 ..partial_completion
             })
-        })()
-        .into_iter()
     }
 }
 

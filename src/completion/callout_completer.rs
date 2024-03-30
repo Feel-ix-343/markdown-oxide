@@ -118,7 +118,7 @@ enum CalloutCompletion {
 }
 
 impl Completable<'_, CalloutCompleter> for  CalloutCompletion {
-    fn completions(&self, completer: &CalloutCompleter) -> impl Iterator<Item = tower_lsp::lsp_types::CompletionItem> {
+    fn completions(&self, completer: &CalloutCompleter) -> Option<CompletionItem> {
 
         let name = match self {
             Self::Note => "note",
@@ -188,7 +188,6 @@ impl Completable<'_, CalloutCompleter> for  CalloutCompletion {
             ..Default::default()
         };
 
-        return iter::once(completion_item)
-
+        return Some(completion_item)
     }
 }

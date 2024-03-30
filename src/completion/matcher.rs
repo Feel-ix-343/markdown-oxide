@@ -54,10 +54,10 @@ impl<'a, C: Completer<'a>, T: Completable<'a, C>> Completable<'a, C>
     fn completions(
         &self,
         completer: &C,
-    ) -> impl Iterator<Item = tower_lsp::lsp_types::CompletionItem> {
-        let completions = self.completable.completions(completer);
+    ) -> Option<CompletionItem> {
+        let completion = self.completable.completions(completer);
 
-        completions.map(|completion| CompletionItem {
+        completion.map(|completion| CompletionItem {
             sort_text: Some(self.rank.to_string()),
             ..completion
         })

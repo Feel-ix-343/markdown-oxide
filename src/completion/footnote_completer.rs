@@ -87,7 +87,7 @@ impl<'a> Completable<'a, FootnoteCompleter<'a>> for FootnoteCompletion<'a> {
     fn completions(
         &self,
         completer: &FootnoteCompleter<'a>,
-    ) -> impl Iterator<Item = tower_lsp::lsp_types::CompletionItem> {
+    ) -> Option<CompletionItem> {
         let refname = &self.footnote.1.index;
 
         let path = self.footnote.0;
@@ -102,6 +102,5 @@ impl<'a> Completable<'a, FootnoteCompleter<'a>> for FootnoteCompletion<'a> {
             filter_text: Some(completer.completion_filter_text((refname, self_referenceable))),
             ..Default::default()
         })
-        .into_iter()
     }
 }

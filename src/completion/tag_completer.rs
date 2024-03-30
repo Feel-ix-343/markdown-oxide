@@ -126,7 +126,7 @@ impl<'a> Completable<'a, TagCompleter<'a>> for TagCompletable<'a> {
     fn completions(
         &self,
         completer: &TagCompleter<'a>,
-    ) -> impl Iterator<Item = tower_lsp::lsp_types::CompletionItem> {
+    ) -> Option<CompletionItem> {
         let text_edit = CompletionTextEdit::Edit(TextEdit {
             new_text: format!("#{}", self.tag.1.tag_ref),
             range: Range {
@@ -167,6 +167,5 @@ impl<'a> Completable<'a, TagCompleter<'a>> for TagCompletable<'a> {
             text_edit: Some(text_edit),
             ..Default::default()
         })
-        .into_iter()
     }
 }

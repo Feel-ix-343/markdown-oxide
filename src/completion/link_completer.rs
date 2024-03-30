@@ -612,7 +612,7 @@ impl<'a> Completable<'a, MarkdownLinkCompleter<'a>> for LinkCompletion<'a> {
     fn completions(
         &self,
         markdown_link_completer: &MarkdownLinkCompleter<'a>,
-    ) -> impl Iterator<Item = CompletionItem> {
+    ) -> Option<CompletionItem> {
         let refname = self.refname();
         let match_string = self.match_string();
 
@@ -666,7 +666,7 @@ impl<'a> Completable<'a, MarkdownLinkCompleter<'a>> for LinkCompletion<'a> {
 
         let filter_text = markdown_link_completer.completion_filter_text(match_string);
 
-        std::iter::once(CompletionItem {
+        Some(CompletionItem {
             insert_text_format: Some(InsertTextFormat::SNIPPET),
             ..self.default_completion(
                 match_string,
@@ -683,7 +683,7 @@ impl<'a> Completable<'a, WikiLinkCompleter<'a>> for LinkCompletion<'a> {
     fn completions(
         &self,
         completer: &WikiLinkCompleter<'a>,
-    ) -> impl Iterator<Item = CompletionItem> {
+    ) -> Option<CompletionItem> {
         let refname = self.refname();
         let match_text = self.match_string();
 
@@ -691,13 +691,13 @@ impl<'a> Completable<'a, WikiLinkCompleter<'a>> for LinkCompletion<'a> {
 
         let filter_text = completer.completion_filter_text(match_text);
 
-        std::iter::once(self.default_completion(
-            match_text,
-            text_edit,
-            &filter_text,
-            completer.vault(),
-            completer,
-        ))
+        Some(self.default_completion(
+                    match_text,
+                    text_edit,
+                    &filter_text,
+                    completer.vault(),
+                    completer,
+                ))
     }
 }
 

@@ -45,7 +45,7 @@ pub trait Completer<'a>: Sized {
 }
 
 pub trait Completable<'a, T: Completer<'a>>: Sized {
-    fn completions(&self, completer: &T) -> impl Iterator<Item = CompletionItem>;
+    fn completions(&self, completer: &T) -> Option<CompletionItem>;
 }
 
 /// Range indexes for one line of the file; NOT THE WHOLE FILE
@@ -321,6 +321,7 @@ fn run_completer<'a, T: Completer<'a>>(
         .flat_map(|completable| {
             completable
                 .completions(&completer)
+                .into_iter()
                 .collect::<Vec<_>>()
                 .into_iter()
         })
