@@ -85,7 +85,7 @@ pub fn fuzzy_match<'a, T: Matchable>(
     let mut matcher = Matcher::new(nucleo_matcher::Config::DEFAULT);
     let matches = pattern::Pattern::parse(
         filter_text,
-        pattern::CaseMatching::Ignore,
+        pattern::CaseMatching::Smart,
         Normalization::Smart,
     )
     .match_list(items, &mut matcher);

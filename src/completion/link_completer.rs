@@ -99,7 +99,7 @@ pub trait LinkCompleter<'a>: Completer<'a> {
 
         // TODO: This could be slow
         let refnames = completions
-            .iter()
+            .par_iter()
             .map(|completion| completion.refname())
             .collect::<HashSet<_>>();
 

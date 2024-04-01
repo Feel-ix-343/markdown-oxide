@@ -317,7 +317,7 @@ fn run_completer<'a, T: Completer<'a>>(
 
     let completions = completions
         .into_iter()
-        .take(50)
+        .take(10)
         .flat_map(|completable| {
             completable
                 .completions(&completer)

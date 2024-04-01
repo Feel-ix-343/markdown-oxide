@@ -227,11 +227,13 @@ impl Vault {
                 let resolved_referenceables = self
                     .md_files
                     .values()
+                    .par_bridge()
+                    .into_par_iter()
                     .flat_map(|file| file.get_referenceables())
-                    .collect_vec();
+                    .collect::<Vec<_>>();
 
                 let resolved_referenceables_refnames: HashSet<String> = resolved_referenceables
-                    .iter()
+                    .par_iter()
                     .flat_map(|resolved| {
                         resolved.get_refname(self.root_dir()).and_then(|refname| {
                             vec![
@@ -255,6 +257,8 @@ impl Vault {
                     references
                         .iter()
                         .unique_by(|(_, reference)| &reference.data().reference_text)
+                        .par_bridge()
+                        .into_par_iter()
                         .filter(|(_, reference)| {
                             !resolved_referenceables_refnames
                                 .contains(&reference.data().reference_text)
@@ -284,7 +288,7 @@ impl Vault {
                             | Reference::Footnote(..)
                             | Reference::LinkRef(..) => None,
                         })
-                        .collect_vec()
+                        .collect::<Vec<_>>()
                 });
 
                 resolved_referenceables
