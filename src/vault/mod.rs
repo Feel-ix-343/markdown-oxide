@@ -326,7 +326,7 @@ impl Vault {
 
         Some(
             references
-                .into_iter()
+                .into_par_iter()
                 .filter(|(ref_path, reference)| {
                     referenceable.matches_reference(&self.root_dir, reference, ref_path)
                 })
@@ -336,6 +336,8 @@ impl Vault {
                         Err(_) => (path, reference, SystemTime::UNIX_EPOCH),
                     }
                 })
+                .collect::<Vec<_>>()
+                .into_iter()
                 .sorted_by_key(|(_, _, modified)| *modified)
                 .rev()
                 .map(|(one, two, _)| (one, two))
