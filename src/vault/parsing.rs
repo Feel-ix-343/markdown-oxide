@@ -204,4 +204,40 @@ fj aklfjd
         assert_eq!(parsed, expected)
 
     }
+
+    #[test]
+    fn test_short_code_block_parsing_multiple() {
+
+
+        let test = r" fjdlf jdlk  `test code block` jfkl `dlk` j";
+
+        let parsed = MDCodeBlock::new(test).collect_vec();
+
+        let expected = vec![MDCodeBlock{
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 13
+                },
+                end: Position {
+                    line: 0,
+                    character: 30
+                }
+            }.into()
+        }, MDCodeBlock{
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 36
+                },
+                end: Position {
+                    line: 0,
+                    character: 41
+                }
+            }.into()
+        }];
+
+        assert_eq!(parsed, expected)
+
+    }
 }
