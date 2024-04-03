@@ -18,8 +18,6 @@ use serde::{Deserialize, Serialize};
 use tower_lsp::lsp_types::Position;
 use walkdir::WalkDir;
 
-mod referenceable;
-
 impl Vault {
     pub fn construct_vault(root_dir: &Path) -> Result<Vault, std::io::Error> {
         let md_file_paths = WalkDir::new(root_dir)
