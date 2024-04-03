@@ -623,8 +623,8 @@ impl LinkCompletion<'_> {
                     detail: Some("Unresolved".into()),
                     description: None,
                 }),
-                Alias { .. } => Some(CompletionItemLabelDetails{
-                    detail: Some("Alias".into()),
+                Alias { filename, .. } => Some(CompletionItemLabelDetails{
+                    detail: Some(format!("Alias: {}.md", filename)),
                     description: None,
                 }),
                 File { .. } => None,
