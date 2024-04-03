@@ -1,4 +1,5 @@
 mod metadata;
+mod parsing;
 
 use std::{
     char,
@@ -470,6 +471,54 @@ impl AsRef<str> for Block<'_> {
     }
 }
 
+trait Rangeable {
+    fn range(&self) -> &MyRange;
+    fn includes(&self, other: &impl Rangeable) -> bool {
+        let self_range = self.range();
+        let other_range = other.range();
+
+        (self_range.start.line < other_range.start.line || (self_range.start.line == other_range.start.line && self_range.start.character <= other_range.start.character))
+        && (self_range.end.line > other_range.end.line || (self_range.end.line == other_range.end.line && self_range.end.character >= other_range.end.character) )
+    }
+}
+
+impl Rangeable for MDHeading {
+    fn range(&self) -> &MyRange {
+        &self.range
+    }
+}
+
+impl Rangeable for MDFootnote {
+    fn range(&self) -> &MyRange {
+        &self.range
+    }
+}
+
+impl Rangeable for MDIndexedBlock {
+    fn range(&self) -> &MyRange {
+        &self.range
+    }
+}
+
+impl Rangeable for MDTag {
+    fn range(&self) -> &MyRange {
+        &self.range
+    }
+}
+
+impl Rangeable for MDLinkReferenceDefinition {
+    fn range(&self) -> &MyRange {
+        &self.range
+    }
+}
+
+impl Rangeable for Reference {
+    fn range(&self) -> &MyRange {
+        &self.range
+    }
+}
+
+
 #[derive(Debug, PartialEq, Eq, Default, Hash, Clone)]
 pub struct MDFile {
     pub references: Vec<Reference>,
@@ -485,21 +534,36 @@ pub struct MDFile {
 impl MDFile {
     fn new(text: &str, path: PathBuf) -> MDFile {
         let links = Reference::new(text);
-        let headings = MDHeading::new(text);
-        let indexed_blocks = MDIndexedBlock::new(text);
+
+
+        let code_blocks = MDCodeBlock::new(text).collect_vec();
+        let headings = MDHeading::new(text)
+            .filter(|it| {
+                !code_blocks.iter().any(|codeblock| codeblock.includes(it))
+            });
+        let footnotes = MDFootnote::new(text)
+            .filter(|it| {
+                !code_blocks.iter().any(|codeblock| codeblock.includes(it))
+            });
+        let link_refs = MDLinkReferenceDefinition::new(text)
+            .filter(|it| {
+                !code_blocks.iter().any(|codeblock| codeblock.includes(it))
+            });
+        let indexed_blocks = MDIndexedBlock::new(text)
+            .filter(|it| {
+                !code_blocks.iter().any(|codeblock| codeblock.includes(it))
+            });
         let tags = MDTag::new(text);
-        let footnotes = MDFootnote::new(text);
-        let link_refs = MDLinkReferenceDefinition::new(text);
         let metadata = MDMetadata::new(text);
 
         MDFile {
             references: links,
-            headings,
-            indexed_blocks,
-            tags,
-            footnotes,
+            headings: headings.collect(),
+            indexed_blocks: indexed_blocks.collect(),
+            tags: tags.collect(),
+            footnotes: footnotes.collect(),
             path,
-            link_reference_definitions: link_refs,
+            link_reference_definitions: link_refs.collect(),
             metadata,
         }
     }
@@ -593,7 +657,7 @@ impl Default for Reference {
 
 use Reference::*;
 
-use self::metadata::MDMetadata;
+use self::{metadata::MDMetadata, parsing::MDCodeBlock};
 
 impl Reference {
     pub fn data(&self) -> &ReferenceData {
@@ -652,7 +716,6 @@ impl Reference {
             .collect_vec();
 
         let tags: Vec<Reference> = MDTag::new(text)
-            .iter()
             .map(|tag| {
                 Tag(ReferenceData {
                     display_text: None,
@@ -682,7 +745,7 @@ impl Reference {
             .collect_vec();
 
         let link_ref_references: Vec<Reference> =
-            if MDLinkReferenceDefinition::new(text).is_empty().not() {
+            if MDLinkReferenceDefinition::new(text).collect_vec().is_empty().not() {
                 static LINK_REF_RE: Lazy<Regex> = Lazy::new(|| {
                     Regex::new(r"([^\[]|^)(?<full>\[(?<index>[^\^][^\[\] ]+)\])([^\]\(\:]|$)")
                         .unwrap()
@@ -1004,11 +1067,11 @@ impl From<tower_lsp::lsp_types::Range> for MyRange {
 }
 
 impl MDHeading {
-    fn new(text: &str) -> Vec<MDHeading> {
+    fn new(text: &str) -> impl Iterator<Item = MDHeading> + '_ {
         static HEADING_RE: Lazy<Regex> =
             Lazy::new(|| Regex::new(r"(?<starter>#+) (?<heading_text>.+)").unwrap());
 
-        let headings: Vec<MDHeading> = HEADING_RE
+        let headings = HEADING_RE
             .captures_iter(text)
             .flat_map(
                 |c| match (c.get(0), c.name("heading_text"), c.name("starter")) {
@@ -1022,8 +1085,7 @@ impl MDHeading {
                     range: MyRange::from_range(&Rope::from_str(text), full_heading.range()),
                     level: HeadingLevel(starter.as_str().len()),
                 };
-            })
-            .collect_vec();
+            });
 
         headings
     }
@@ -1043,11 +1105,11 @@ impl Hash for MDIndexedBlock {
 }
 
 impl MDIndexedBlock {
-    fn new(text: &str) -> Vec<MDIndexedBlock> {
+    fn new(text: &str) -> impl Iterator<Item = MDIndexedBlock> + '_ {
         static INDEXED_BLOCK_RE: Lazy<Regex> =
             Lazy::new(|| Regex::new(r".+ (\^(?<index>\w+))").unwrap());
 
-        let indexed_blocks: Vec<MDIndexedBlock> = INDEXED_BLOCK_RE
+        let indexed_blocks = INDEXED_BLOCK_RE
             .captures_iter(text)
             .flat_map(|c| match (c.get(1), c.name("index")) {
                 (Some(full), Some(index)) => Some((full, index)),
@@ -1056,8 +1118,7 @@ impl MDIndexedBlock {
             .map(|(full, index)| MDIndexedBlock {
                 index: index.as_str().into(),
                 range: MyRange::from_range(&Rope::from_str(text), full.range()),
-            })
-            .collect_vec();
+            });
 
         indexed_blocks
     } // Make this better identify the full blocks
@@ -1078,12 +1139,12 @@ impl Hash for MDFootnote {
 }
 
 impl MDFootnote {
-    fn new(text: &str) -> Vec<MDFootnote> {
+    fn new(text: &str) -> impl Iterator<Item = MDFootnote> + '_ {
         // static FOOTNOTE_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r".+ (\^(?<index>\w+))").unwrap());
         static FOOTNOTE_RE: Lazy<Regex> =
             Lazy::new(|| Regex::new(r"\[(?<index>\^[^ \[\]]+)\]\:(?<text>.+)").unwrap());
 
-        let footnotes: Vec<MDFootnote> = FOOTNOTE_RE
+        let footnotes = FOOTNOTE_RE
             .captures_iter(text)
             .flat_map(|c| match (c.get(0), c.name("index"), c.name("text")) {
                 (Some(full), Some(index), Some(footnote_text)) => {
@@ -1095,8 +1156,7 @@ impl MDFootnote {
                 footnote_text: footnote_text.as_str().trim_start().into(),
                 index: index.as_str().into(),
                 range: MyRange::from_range(&Rope::from_str(text), full.range()),
-            })
-            .collect_vec();
+            });
 
         footnotes
     }
@@ -1115,7 +1175,7 @@ impl Hash for MDTag {
 }
 
 impl MDTag {
-    fn new(text: &str) -> Vec<MDTag> {
+    fn new(text: &str) -> impl Iterator<Item = MDTag> + '_ {
         static TAG_RE: Lazy<Regex> =
             Lazy::new(|| Regex::new(r"(\n|\A| )(?<full>#(?<tag>[.[^ \n\#]]+))(\n|\z| )").unwrap());
 
@@ -1129,8 +1189,7 @@ impl MDTag {
             .map(|(full, index)| MDTag {
                 tag_ref: index.as_str().into(),
                 range: MyRange::from_range(&Rope::from_str(text), full.range()),
-            })
-            .collect_vec();
+            });
 
         tagged_blocks
     }
@@ -1145,7 +1204,7 @@ pub struct MDLinkReferenceDefinition {
 }
 
 impl MDLinkReferenceDefinition {
-    fn new(text: &str) -> Vec<MDLinkReferenceDefinition> {
+    fn new(text: &str) -> impl Iterator<Item = MDLinkReferenceDefinition> + '_ {
         static REGEX: Lazy<Regex> =
             Lazy::new(|| Regex::new(r"\[(?<index>[^\^][^ \[\]]+)\]\:(?<text>.+)").unwrap());
 
@@ -1162,8 +1221,7 @@ impl MDLinkReferenceDefinition {
                     url: url.as_str().trim().to_string(),
                     title: None,
                 })
-            })
-            .collect_vec();
+            });
 
         result
     }
@@ -1443,6 +1501,7 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
 mod vault_tests {
     use std::path::{Path, PathBuf};
 
+    use itertools::Itertools;
     use tower_lsp::lsp_types::{Position, Range};
 
     use crate::vault::{HeadingLevel, ReferenceData};
@@ -1898,7 +1957,7 @@ more text
 
 ## This shoudl be a heading!";
 
-        let parsed = MDHeading::new(text);
+        let parsed: Vec<_> = MDHeading::new(text).collect();
 
         let expected = vec![
             MDHeading {
@@ -1951,7 +2010,7 @@ more text
         some mroe text
         more text";
 
-        let parsed = MDIndexedBlock::new(text);
+        let parsed = MDIndexedBlock::new(text).collect_vec();
 
         assert_eq!(parsed[0].index, "12345")
     }
@@ -2148,7 +2207,7 @@ and a third tag#notatag [[link#not a tag]]
             },
         ];
 
-        let parsed = MDTag::new(text);
+        let parsed = MDTag::new(text).collect_vec();
 
         assert_eq!(parsed, expected)
     }
@@ -2156,7 +2215,7 @@ and a third tag#notatag [[link#not a tag]]
     #[test]
     fn test_obsidian_footnote() {
         let text = "[^1]: This is a footnote";
-        let parsed = MDFootnote::new(text);
+        let parsed = MDFootnote::new(text).collect_vec();
         let expected = vec![MDFootnote {
             index: "^1".into(),
             footnote_text: "This is a footnote".into(),
@@ -2186,7 +2245,7 @@ Continued
 [^2]: Another footnote
 [^a]:Third footnot3
 ";
-        let parsed = MDFootnote::new(text);
+        let parsed = MDFootnote::new(text).collect_vec();
         let expected = vec![
             MDFootnote {
                 index: "^1".into(),
@@ -2242,7 +2301,7 @@ Continued
     fn parse_link_ref_def() {
         let text = "[ab]: ohreally";
 
-        let parsed = MDLinkReferenceDefinition::new(text);
+        let parsed = MDLinkReferenceDefinition::new(text).collect_vec();
 
         let expected = vec![MDLinkReferenceDefinition {
             link_ref_name: "ab".into(),
