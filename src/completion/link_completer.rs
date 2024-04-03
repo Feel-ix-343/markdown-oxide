@@ -738,11 +738,29 @@ impl<'a> Completable<'a, WikiLinkCompleter<'a>> for LinkCompletion<'a> {
         let refname = self.refname();
         let match_text = self.match_string();
 
-        let text_edit = completer.completion_text_edit(None, &refname);
+        let wikilink_display_text = match self {
+            File { .. } => None,
+            Alias { match_string, .. } => Some(format!("${{1:{}}}", match_string)),
+            Heading { .. } => None,
+            Block { .. } => None,
+            Unresolved { .. } => None,
+            DailyNote(_) => None,
+        };
+
+        let text_edit = completer.completion_text_edit(wikilink_display_text.as_deref(), &refname);
 
         let filter_text = completer.completion_filter_text(match_text);
 
-        Some(self.default_completion(text_edit, &filter_text, completer))
+        match wikilink_display_text {
+            None => Some(self.default_completion(text_edit, &filter_text, completer)),
+            _ => Some(
+                CompletionItem{
+                    insert_text_format: Some(InsertTextFormat::SNIPPET),
+                    ..self.default_completion(text_edit, &filter_text, completer)
+                })
+        }
+
+        
     }
 }
 
