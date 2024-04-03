@@ -363,6 +363,11 @@ title_headings = true
 unresolved_diagnostics = true
 
 semantic_tokens = true
+
+# Resolve tags in code blocks
+tags_in_codeblocks = true
+# Resolve references in code blocks
+references_in_codeblocks = true
 ```
 
 

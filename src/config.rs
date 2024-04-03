@@ -14,6 +14,8 @@ pub struct Settings {
     pub title_headings: bool,
     pub unresolved_diagnostics: bool,
     pub semantic_tokens: bool,
+    pub tags_in_codeblocks: bool,
+    pub references_in_codeblocks: bool,
 }
 
 impl Settings {
@@ -41,6 +43,8 @@ impl Settings {
             .set_default("unresolved_diagnostics", true)?
             .set_default("title_headings", true)?
             .set_default("semantic_tokens", true)?
+            .set_default("tags_in_codeblocks", true)?
+            .set_default("references_in_codeblocks", true)?
             .set_override_option(
                 "semantic_tokens",
                 capabilities.text_document.as_ref().and_then(|it| {

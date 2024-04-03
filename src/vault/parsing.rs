@@ -4,7 +4,7 @@ use ropey::Rope;
 
 use super::{MyRange, Rangeable};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MDCodeBlock {
     range: MyRange,
 }

@@ -19,6 +19,7 @@ mod link_completer;
 mod matcher;
 mod tag_completer;
 mod unindexed_block_completer;
+mod util;
 
 #[derive(Clone, Copy)]
 pub struct Context<'a> {

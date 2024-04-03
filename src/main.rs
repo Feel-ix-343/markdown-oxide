@@ -61,16 +61,19 @@ impl Backend {
             return;
         };
 
-        {
-            let _ = self
-                .bind_vault_mut(|vault| {
-                    let text = &params.text;
-                    Vault::update_vault(vault, (&path, text));
+        let Ok(settings) = self.bind_settings(|settings| Ok(settings.clone())).await else {
+            return;
+        };
 
-                    Ok(())
-                })
-                .await;
-        } // close the lock
+        let guard = self
+            .bind_vault_mut(|vault| {
+                let text = &params.text;
+                Vault::update_vault(&settings, vault, (&path, text));
+
+                Ok(())
+            })
+            .await;
+        drop(guard);
 
         self.client
             .log_message(MessageType::WARNING, "Update Vault Done")
@@ -88,10 +91,8 @@ impl Backend {
             }
         }
 
-        if let Ok(settings) = self.bind_settings(|settings| Ok(settings.clone())).await {
-            if settings.semantic_tokens {
-                let _ = self.client.semantic_tokens_refresh().await;
-            }
+        if settings.semantic_tokens {
+            let _ = self.client.semantic_tokens_refresh().await;
         }
     }
 
@@ -104,10 +105,14 @@ impl Backend {
 
         let timer = std::time::Instant::now();
 
+        let Ok(settings) = self.bind_settings(|settings| Ok(settings.clone())).await else {
+            return;
+        };
+
         {
-            let r = self
+            let _ = self
                 .bind_vault_mut(|vault| {
-                    let Ok(new_vault) = Vault::construct_vault(vault.root_dir()) else {
+                    let Ok(new_vault) = Vault::construct_vault(&settings, vault.root_dir()) else {
                         return Err(Error::new(ErrorCode::ServerError(0)));
                     };
 
@@ -289,12 +294,6 @@ impl LanguageServer for Backend {
             return Err(Error::new(ErrorCode::InvalidParams));
         };
         let root_dir = Path::new(root_uri.path());
-        let Ok(vault) = Vault::construct_vault(root_dir) else {
-            return Err(Error::new(ErrorCode::ServerError(0)));
-        };
-        let mut value = self.vault.write().await;
-        *value = Some(vault);
-
         let read_settings = match Settings::new(root_dir, &i.capabilities) {
             Ok(settings) => settings,
             Err(e) => {
@@ -307,6 +306,13 @@ impl LanguageServer for Backend {
                 return Err(Error::new(ErrorCode::ServerError(1)));
             }
         };
+
+        let Ok(vault) = Vault::construct_vault(&read_settings, root_dir) else {
+            return Err(Error::new(ErrorCode::ServerError(0)));
+        };
+        let mut value = self.vault.write().await;
+        *value = Some(vault);
+
         let mut settings = self.settings.write().await;
         *settings = Some(read_settings);
 

@@ -16,9 +16,7 @@ use tower_lsp::lsp_types::{
 };
 
 use crate::{
-    config::Settings,
-    ui::preview_referenceable,
-    vault::{MDFile, MDHeading, Reference, Referenceable, Vault},
+    completion::util::check_in_code_block, config::Settings, ui::preview_referenceable, vault::{MDFile, MDHeading, Rangeable, Reference, Referenceable, Vault}
 };
 
 use super::{
@@ -175,11 +173,17 @@ impl<'a> LinkCompleter<'a> for MarkdownLinkCompleter<'a> {
     }
 }
 
+
+
 impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
     fn construct(context: Context<'a>, line: usize, character: usize) -> Option<Self>
     where
         Self: Sized,
     {
+        if context.settings.references_in_codeblocks == false && check_in_code_block(&context, line, character) {
+            return None
+        }
+
         let Context {
             vault,
             opened_files: _,
@@ -371,6 +375,11 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
     where
         Self: Sized,
     {
+
+        if context.settings.references_in_codeblocks == false && check_in_code_block(&context, line, character) {
+            return None
+        }
+
         let Context {
             vault,
             opened_files,
