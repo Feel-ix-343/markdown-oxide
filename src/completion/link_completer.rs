@@ -539,12 +539,11 @@ impl LinkCompletion<'_> {
 
     fn default_completion<'a>(
         &self,
-        refname: &str,
         text_edit: CompletionTextEdit,
         filter_text: &str,
-        vault: &Vault,
         completer: &impl LinkCompleter<'a>,
     ) -> CompletionItem {
+        let vault = completer.vault();
         let referenceable = match self {
             Self::File { referenceable, .. }
             | Self::Heading { referenceable, .. }
@@ -553,8 +552,10 @@ impl LinkCompletion<'_> {
             Self::DailyNote(daily) => daily.referenceable(completer),
         };
 
+        let label = self.match_string();
+
         CompletionItem {
-            label: refname.to_string(),
+            label: label.to_string(),
             kind: Some(match self {
                 Self::File {
                     mdfile: _,
@@ -664,15 +665,13 @@ impl<'a> Completable<'a, MarkdownLinkCompleter<'a>> for LinkCompletion<'a> {
         let text_edit =
             markdown_link_completer.completion_text_edit(Some(&link_display_text), &refname);
 
-        let filter_text = markdown_link_completer.completion_filter_text(match_string);
+        let filter_text = markdown_link_completer.completion_filter_text(match_string); // TODO: abstract into default_completion
 
         Some(CompletionItem {
             insert_text_format: Some(InsertTextFormat::SNIPPET),
             ..self.default_completion(
-                match_string,
                 text_edit,
                 &filter_text,
-                markdown_link_completer.vault(),
                 markdown_link_completer,
             )
         })
@@ -692,10 +691,8 @@ impl<'a> Completable<'a, WikiLinkCompleter<'a>> for LinkCompletion<'a> {
         let filter_text = completer.completion_filter_text(match_text);
 
         Some(self.default_completion(
-                    match_text,
                     text_edit,
                     &filter_text,
-                    completer.vault(),
                     completer,
                 ))
     }
