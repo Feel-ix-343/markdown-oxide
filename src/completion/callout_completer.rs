@@ -1,4 +1,3 @@
-
 use once_cell::sync::Lazy;
 use regex::Regex;
 use tower_lsp::lsp_types::{

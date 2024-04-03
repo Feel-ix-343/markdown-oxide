@@ -457,9 +457,7 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
                     Some(
                         referenceables
                             .into_iter()
-                            .flat_map(move |referenceable| {
-                                LinkCompletion::new(referenceable, self)
-                            })
+                            .flat_map(move |referenceable| LinkCompletion::new(referenceable, self))
                             .flatten()
                             .flat_map(move |completion| {
                                 Some(OrderedCompletion::<WikiLinkCompleter, LinkCompletion>::new(
@@ -532,27 +530,25 @@ impl LinkCompletion<'_> {
             Some(vec![DailyNote(daily)])
         } else {
             match referenceable {
-                Referenceable::File(_, mdfile) => Some(
-                    once(File {
-                        mdfile,
-                        match_string: mdfile.file_name()?.to_string(),
-                        referenceable: referenceable.clone(),
-                    })
-                    .chain(
-                        mdfile
-                            .metadata
-                            .iter()
-                            .flat_map(|it| it.aliases())
-                            .flat_map(|alias| {
+                Referenceable::File(_, mdfile) => {
+                    Some(
+                        once(File {
+                            mdfile,
+                            match_string: mdfile.file_name()?.to_string(),
+                            referenceable: referenceable.clone(),
+                        })
+                        .chain(mdfile.metadata.iter().flat_map(|it| it.aliases()).flat_map(
+                            |alias| {
                                 Some(Alias {
                                     filename: mdfile.file_name()?,
                                     match_string: alias,
                                     referenceable: referenceable.clone(),
                                 })
-                            }),
+                            },
+                        ))
+                        .collect(),
                     )
-                    .collect(),
-                ),
+                }
                 Referenceable::Heading(path, mdheading) => Some(
                     once(Heading {
                         heading: mdheading,

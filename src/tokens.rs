@@ -4,11 +4,7 @@ use itertools::Itertools;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use tower_lsp::lsp_types::{SemanticToken, SemanticTokensParams, SemanticTokensResult};
 
-use crate::{
-    config::Settings,
-    diagnostics::path_unresolved_references,
-    vault::{Vault},
-};
+use crate::{config::Settings, diagnostics::path_unresolved_references, vault::Vault};
 
 pub fn semantic_tokens_full(
     vault: &Vault,

@@ -1,6 +1,6 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
-use serde::{Deserialize};
+use serde::Deserialize;
 
 #[derive(Deserialize, Debug, Clone, Hash, PartialEq, Eq)]
 pub struct MDMetadata {

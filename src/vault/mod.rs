@@ -477,8 +477,12 @@ trait Rangeable {
         let self_range = self.range();
         let other_range = other.range();
 
-        (self_range.start.line < other_range.start.line || (self_range.start.line == other_range.start.line && self_range.start.character <= other_range.start.character))
-        && (self_range.end.line > other_range.end.line || (self_range.end.line == other_range.end.line && self_range.end.character >= other_range.end.character) )
+        (self_range.start.line < other_range.start.line
+            || (self_range.start.line == other_range.start.line
+                && self_range.start.character <= other_range.start.character))
+            && (self_range.end.line > other_range.end.line
+                || (self_range.end.line == other_range.end.line
+                    && self_range.end.character >= other_range.end.character))
     }
 }
 
@@ -518,7 +522,6 @@ impl Rangeable for Reference {
     }
 }
 
-
 #[derive(Debug, PartialEq, Eq, Default, Hash, Clone)]
 pub struct MDFile {
     pub references: Vec<Reference>,
@@ -535,24 +538,15 @@ impl MDFile {
     fn new(text: &str, path: PathBuf) -> MDFile {
         let links = Reference::new(text);
 
-
         let code_blocks = MDCodeBlock::new(text).collect_vec();
         let headings = MDHeading::new(text)
-            .filter(|it| {
-                !code_blocks.iter().any(|codeblock| codeblock.includes(it))
-            });
+            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
         let footnotes = MDFootnote::new(text)
-            .filter(|it| {
-                !code_blocks.iter().any(|codeblock| codeblock.includes(it))
-            });
+            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
         let link_refs = MDLinkReferenceDefinition::new(text)
-            .filter(|it| {
-                !code_blocks.iter().any(|codeblock| codeblock.includes(it))
-            });
+            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
         let indexed_blocks = MDIndexedBlock::new(text)
-            .filter(|it| {
-                !code_blocks.iter().any(|codeblock| codeblock.includes(it))
-            });
+            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
         let tags = MDTag::new(text);
         let metadata = MDMetadata::new(text);
 
@@ -744,35 +738,37 @@ impl Reference {
             })
             .collect_vec();
 
-        let link_ref_references: Vec<Reference> =
-            if MDLinkReferenceDefinition::new(text).collect_vec().is_empty().not() {
-                static LINK_REF_RE: Lazy<Regex> = Lazy::new(|| {
-                    Regex::new(r"([^\[]|^)(?<full>\[(?<index>[^\^][^\[\] ]+)\])([^\]\(\:]|$)")
-                        .unwrap()
-                });
+        let link_ref_references: Vec<Reference> = if MDLinkReferenceDefinition::new(text)
+            .collect_vec()
+            .is_empty()
+            .not()
+        {
+            static LINK_REF_RE: Lazy<Regex> = Lazy::new(|| {
+                Regex::new(r"([^\[]|^)(?<full>\[(?<index>[^\^][^\[\] ]+)\])([^\]\(\:]|$)").unwrap()
+            });
 
-                let link_ref_references: Vec<Reference> = LINK_REF_RE
-                    .captures_iter(text)
-                    .par_bridge()
-                    .flat_map(
-                        |capture| match (capture.name("full"), capture.name("index")) {
-                            (Some(full), Some(index)) => Some((full, index)),
-                            _ => None,
-                        },
-                    )
-                    .map(|(outer, index)| {
-                        LinkRef(ReferenceData {
-                            reference_text: index.as_str().into(),
-                            range: MyRange::from_range(&Rope::from_str(text), outer.range()),
-                            display_text: None,
-                        })
+            let link_ref_references: Vec<Reference> = LINK_REF_RE
+                .captures_iter(text)
+                .par_bridge()
+                .flat_map(
+                    |capture| match (capture.name("full"), capture.name("index")) {
+                        (Some(full), Some(index)) => Some((full, index)),
+                        _ => None,
+                    },
+                )
+                .map(|(outer, index)| {
+                    LinkRef(ReferenceData {
+                        reference_text: index.as_str().into(),
+                        range: MyRange::from_range(&Rope::from_str(text), outer.range()),
+                        display_text: None,
                     })
-                    .collect::<Vec<_>>();
+                })
+                .collect::<Vec<_>>();
 
-                link_ref_references
-            } else {
-                vec![]
-            };
+            link_ref_references
+        } else {
+            vec![]
+        };
 
         wiki_links
             .into_iter()
@@ -1040,7 +1036,8 @@ impl MyRange {
                 line: end_line as u32,
                 character: end_offset as u32,
             },
-        }.into()
+        }
+        .into()
     }
 }
 
