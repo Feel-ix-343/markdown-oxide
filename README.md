@@ -1,6 +1,10 @@
 # Markdown Oxide
 
-Implementing Obsidian PKM features (and possibly more) in the form of a language server allows us to use these features in our favorite text editors and reuse other LSP-related plugins (like Telescope, outline, refactoring tools, ...). This language server primarily attempts to be a replacement and extension to the Obsidian markdown editor for Obsidian vault PKM-ing in your favorite text editing system -- creating the best PKM system for any text editor. 
+Markdown Oxide is attempting to be the best PKM system for software enthusiasts - people like me who are addicted to creating the best text editing experience. 
+
+Markdown Oxide's PKM features are strongly inspired by Obsidian - in fact Markdown Oxide is fully compatible with your Obsidian vault. Markdown Oxide does not aim to fully replace Obsidian; it serves to provide a feature rich and advanced note taking experience. Obsidian remains a terrific front-end for your linked markdown notes. Generally, Markdown Oxide and Obsidian are quite alligned.
+
+Markdown Oxide's features are implemented in the form of a language server aiming to be fully compatible with your favorite text editor and its ecosystem. Read on to learn what Markdown Oxide provides and how to install and configure it. 
 
 ## Installation
 
