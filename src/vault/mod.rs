@@ -1,3 +1,5 @@
+mod metadata;
+
 use std::{
     char,
     collections::{HashMap, HashSet},
@@ -501,6 +503,7 @@ pub struct MDFile {
     pub footnotes: Vec<MDFootnote>,
     pub path: PathBuf,
     pub link_reference_definitions: Vec<MDLinkReferenceDefinition>,
+    pub metadata: Option<MDMetadata>,
 }
 
 impl MDFile {
@@ -511,6 +514,7 @@ impl MDFile {
         let tags = MDTag::new(text);
         let footnotes = MDFootnote::new(text);
         let link_refs = MDLinkReferenceDefinition::new(text);
+        let metadata = MDMetadata::new(text);
 
         MDFile {
             references: links,
@@ -520,7 +524,12 @@ impl MDFile {
             footnotes,
             path,
             link_reference_definitions: link_refs,
+            metadata,
         }
+    }
+
+    pub fn file_name(&self) -> Option<&str> {
+        Some(self.path.file_stem()?.to_str()?)
     }
 }
 
@@ -534,6 +543,7 @@ impl MDFile {
             footnotes,
             path: _,
             link_reference_definitions,
+            metadata: _,
         } = self;
 
         iter::once(Referenceable::File(&self.path, self))
@@ -606,6 +616,8 @@ impl Default for Reference {
 }
 
 use Reference::*;
+
+use self::metadata::MDMetadata;
 
 impl Reference {
     pub fn data(&self) -> &ReferenceData {
