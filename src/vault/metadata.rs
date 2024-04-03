@@ -1,6 +1,6 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize};
 
 #[derive(Deserialize, Debug, Clone, Hash, PartialEq, Eq)]
 pub struct MDMetadata {
@@ -24,7 +24,7 @@ impl MDMetadata {
 
         println!("md_metadata: {:?}", md_metadata);
 
-        return md_metadata.ok();
+        md_metadata.ok()
     }
 
     pub fn aliases(&self) -> &[String] {

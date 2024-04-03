@@ -529,7 +529,7 @@ impl MDFile {
     }
 
     pub fn file_name(&self) -> Option<&str> {
-        Some(self.path.file_stem()?.to_str()?)
+        self.path.file_stem()?.to_str()
     }
 }
 

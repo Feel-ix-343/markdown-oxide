@@ -7,7 +7,7 @@ use tower_lsp::lsp_types::{SemanticToken, SemanticTokensParams, SemanticTokensRe
 use crate::{
     config::Settings,
     diagnostics::path_unresolved_references,
-    vault::{Referenceable, Vault},
+    vault::{Vault},
 };
 
 pub fn semantic_tokens_full(

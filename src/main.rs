@@ -1,4 +1,3 @@
-use std::collections::btree_set::Intersection;
 use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};

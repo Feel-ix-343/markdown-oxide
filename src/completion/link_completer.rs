@@ -93,11 +93,11 @@ pub trait LinkCompleter<'a>: Completer<'a> {
             .into_par_iter()
             .filter(|referenceable| Some(referenceable) != single_unresolved_under_cursor.as_ref())
             .filter(|referenceable| {
-                (heading_completions
+                heading_completions
                     || !matches!(
                         referenceable,
                         Referenceable::Heading(..) | Referenceable::UnresolvedHeading(..)
-                    ))
+                    )
             })
             .flat_map(|referenceable| {
                 LinkCompletion::new(referenceable.clone(), self)
@@ -351,8 +351,8 @@ impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
                     character: self.index + 1_u32, // index is right at the '[' in [[link]]; we want one more than that
                 },
                 end: Position {
-                    line: self.line as u32,
-                    character: (self.chars_in_line - 1).min(self.character + 2 as u32),
+                    line: self.line,
+                    character: (self.chars_in_line - 1).min(self.character + 2_u32),
                 },
             },
             new_text: format!(
@@ -439,12 +439,12 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
                         .select_referenceable_nodes(Some(path))
                         .into_iter()
                         .filter(|referenceable| {
-                            (self.settings().heading_completions
+                            self.settings().heading_completions
                                 || !matches!(
                                     referenceable,
                                     Referenceable::Heading(..)
                                         | Referenceable::UnresolvedHeading(..)
-                                ))
+                                )
                         })
                         .collect::<Vec<_>>();
 
@@ -458,7 +458,7 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
                         referenceables
                             .into_iter()
                             .flat_map(move |referenceable| {
-                                Some(LinkCompletion::new(referenceable, self)?)
+                                LinkCompletion::new(referenceable, self)
                             })
                             .flatten()
                             .flat_map(move |completion| {
@@ -542,8 +542,7 @@ impl LinkCompletion<'_> {
                         mdfile
                             .metadata
                             .iter()
-                            .map(|it| it.aliases())
-                            .flatten()
+                            .flat_map(|it| it.aliases())
                             .flat_map(|alias| {
                                 Some(Alias {
                                     filename: mdfile.file_name()?,
@@ -656,7 +655,7 @@ impl LinkCompletion<'_> {
                 Self::DailyNote(daily) => {
                     daily.relative_name(completer) == Some(completer.entered_refname())
                 }
-                link_completion @ _ => link_completion.refname() == completer.entered_refname(),
+                link_completion => link_completion.refname() == completer.entered_refname(),
             }),
             filter_text: Some(filter_text.to_string()),
             documentation: preview_referenceable(vault, &referenceable)

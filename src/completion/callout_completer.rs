@@ -1,4 +1,3 @@
-use std::iter;
 
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -31,7 +30,7 @@ impl<'a> Completer<'a> for CalloutCompleter {
 
         let (full, preceding) = (captures.get(0)?, captures.name("preceding")?);
 
-        let nested_level = preceding.as_str().matches(">").into_iter().count();
+        let nested_level = preceding.as_str().matches('>').count();
 
         return Some(Self {
             nested_level,
@@ -45,7 +44,7 @@ impl<'a> Completer<'a> for CalloutCompleter {
     where
         Self: Sized,
     {
-        return vec![
+        vec![
             CalloutCompletion::Note,
             CalloutCompletion::Abstract,
             CalloutCompletion::Summary,
@@ -73,7 +72,7 @@ impl<'a> Completer<'a> for CalloutCompleter {
             CalloutCompletion::Example,
             CalloutCompletion::Quote,
             CalloutCompletion::Cite,
-        ];
+        ]
     }
 
     // TODO: get rid of this in the API
@@ -189,6 +188,6 @@ impl Completable<'_, CalloutCompleter> for CalloutCompletion {
             ..Default::default()
         };
 
-        return Some(completion_item);
+        Some(completion_item)
     }
 }
