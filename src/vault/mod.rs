@@ -470,30 +470,6 @@ impl AsRef<str> for Block<'_> {
     }
 }
 
-fn range_to_position(rope: &Rope, range: Range<usize>) -> MyRange {
-    // convert from byte offset to char offset
-    let char_start = rope.byte_to_char(range.start);
-    let char_end = rope.byte_to_char(range.end);
-
-    let start_line = rope.char_to_line(char_start);
-    let start_offset = char_start - rope.line_to_char(start_line);
-
-    let end_line = rope.char_to_line(char_end);
-    let end_offset = char_end - rope.line_to_char(end_line);
-
-    tower_lsp::lsp_types::Range {
-        start: Position {
-            line: start_line as u32,
-            character: start_offset as u32,
-        },
-        end: Position {
-            line: end_line as u32,
-            character: end_offset as u32,
-        },
-    }
-    .into()
-}
-
 #[derive(Debug, PartialEq, Eq, Default, Hash, Clone)]
 pub struct MDFile {
     pub references: Vec<Reference>,
@@ -699,7 +675,7 @@ impl Reference {
             .map(|(outer, index)| {
                 Footnote(ReferenceData {
                     reference_text: index.as_str().into(),
-                    range: range_to_position(&Rope::from_str(text), outer.range()),
+                    range: MyRange::from_range(&Rope::from_str(text), outer.range()),
                     display_text: None,
                 })
             })
@@ -724,7 +700,7 @@ impl Reference {
                     .map(|(outer, index)| {
                         LinkRef(ReferenceData {
                             reference_text: index.as_str().into(),
-                            range: range_to_position(&Rope::from_str(text), outer.range()),
+                            range: MyRange::from_range(&Rope::from_str(text), outer.range()),
                             display_text: None,
                         })
                     })
@@ -928,14 +904,14 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
         // Pure file reference as there is no infileref such as #... for headings or #^... for indexed blocks
         (full, filepath, None, display) => Some(T::new_file_link(ReferenceData {
             reference_text: filepath.as_str().into(),
-            range: range_to_position(&Rope::from_str(text), full.range()),
+            range: MyRange::from_range(&Rope::from_str(text), full.range()),
             display_text: display.map(|d| d.as_str().into()),
         })),
         (full, filepath, Some(infile), display) if infile.as_str().get(0..1) == Some("^") => {
             Some(T::new_indexed_block_link(
                 ReferenceData {
                     reference_text: format!("{}#{}", filepath.as_str(), infile.as_str()),
-                    range: range_to_position(&Rope::from_str(text), full.range()),
+                    range: MyRange::from_range(&Rope::from_str(text), full.range()),
                     display_text: display.map(|d| d.as_str().into()),
                 },
                 filepath.as_str(),
@@ -945,7 +921,7 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
         (full, filepath, Some(infile), display) => Some(T::new_heading(
             ReferenceData {
                 reference_text: format!("{}#{}", filepath.as_str(), infile.as_str()),
-                range: range_to_position(&Rope::from_str(text), full.range()),
+                range: MyRange::from_range(&Rope::from_str(text), full.range()),
                 display_text: display.map(|d| d.as_str().into()),
             },
             filepath.as_str(),
@@ -979,6 +955,31 @@ impl Hash for MDHeading {
 
 #[derive(Debug, Default, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub struct MyRange(pub tower_lsp::lsp_types::Range);
+
+impl MyRange {
+    pub fn from_range(rope: &Rope, range: Range<usize>) -> MyRange {
+        // convert from byte offset to char offset
+        let char_start = rope.byte_to_char(range.start);
+        let char_end = rope.byte_to_char(range.end);
+
+        let start_line = rope.char_to_line(char_start);
+        let start_offset = char_start - rope.line_to_char(start_line);
+
+        let end_line = rope.char_to_line(char_end);
+        let end_offset = char_end - rope.line_to_char(end_line);
+
+        tower_lsp::lsp_types::Range {
+            start: Position {
+                line: start_line as u32,
+                character: start_offset as u32,
+            },
+            end: Position {
+                line: end_line as u32,
+                character: end_offset as u32,
+            },
+        }.into()
+    }
+}
 
 impl Hash for MyRange {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -1018,7 +1019,7 @@ impl MDHeading {
             .map(|(full_heading, heading_match, starter)| {
                 return MDHeading {
                     heading_text: heading_match.as_str().trim_end().into(),
-                    range: range_to_position(&Rope::from_str(text), full_heading.range()),
+                    range: MyRange::from_range(&Rope::from_str(text), full_heading.range()),
                     level: HeadingLevel(starter.as_str().len()),
                 };
             })
@@ -1054,7 +1055,7 @@ impl MDIndexedBlock {
             })
             .map(|(full, index)| MDIndexedBlock {
                 index: index.as_str().into(),
-                range: range_to_position(&Rope::from_str(text), full.range()),
+                range: MyRange::from_range(&Rope::from_str(text), full.range()),
             })
             .collect_vec();
 
@@ -1093,7 +1094,7 @@ impl MDFootnote {
             .map(|(full, index, footnote_text)| MDFootnote {
                 footnote_text: footnote_text.as_str().trim_start().into(),
                 index: index.as_str().into(),
-                range: range_to_position(&Rope::from_str(text), full.range()),
+                range: MyRange::from_range(&Rope::from_str(text), full.range()),
             })
             .collect_vec();
 
@@ -1127,7 +1128,7 @@ impl MDTag {
             .filter(|(_, index)| index.as_str().chars().any(|c| c.is_alphabetic()))
             .map(|(full, index)| MDTag {
                 tag_ref: index.as_str().into(),
-                range: range_to_position(&Rope::from_str(text), full.range()),
+                range: MyRange::from_range(&Rope::from_str(text), full.range()),
             })
             .collect_vec();
 
@@ -1157,7 +1158,7 @@ impl MDLinkReferenceDefinition {
             .flat_map(|(full, index, url)| {
                 Some(MDLinkReferenceDefinition {
                     link_ref_name: index.as_str().to_string(),
-                    range: range_to_position(&Rope::from_str(text), full.range()),
+                    range: MyRange::from_range(&Rope::from_str(text), full.range()),
                     url: url.as_str().trim().to_string(),
                     title: None,
                 })
