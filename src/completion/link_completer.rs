@@ -530,15 +530,7 @@ impl LinkCompletion<'_> {
                     Some(
                         once(File {
                             mdfile,
-                            match_string: match (
-                                mdfile.file_name()?,
-                                mdfile.metadata.as_ref().map(|it| it.aliases()),
-                            ) {
-                                (file, None) => file.to_string(),
-                                (file, Some(aliases)) => {
-                                    format!("{file} aliases: {}", aliases.join(", "))
-                                }
-                            },
+                            match_string: mdfile.file_name()?.to_string(),
                             referenceable: referenceable.clone(),
                         })
                             .chain(mdfile.metadata.iter().map(|it| it.aliases()).flatten().flat_map(
