@@ -89,7 +89,6 @@ impl Backend {
             }
         }
 
-
         if let Ok(settings) = self.bind_settings(|settings| Ok(settings.clone())).await {
             if settings.semantic_tokens {
                 let _ = self.client.semantic_tokens_refresh().await;
@@ -154,7 +153,6 @@ impl Backend {
     }
 
     async fn publish_diagnostics(&self) -> Result<()> {
-
         let timer = std::time::Instant::now();
 
         self.client
@@ -179,7 +177,8 @@ impl Backend {
                     .filter_map(|uri| {
                         let path = uri.to_file_path().ok()?;
 
-                        diagnostics(vault, &settings, (&path, uri)).map(|diags| (uri.clone(), diags))
+                        diagnostics(vault, &settings, (&path, uri))
+                            .map(|diags| (uri.clone(), diags))
                     })
                     .collect::<Vec<_>>())
             })
@@ -192,7 +191,6 @@ impl Backend {
         self.client
             .log_message(MessageType::WARNING, "Diagnostics Done")
             .await;
-
 
         let elapsed = timer.elapsed();
 
@@ -333,7 +331,13 @@ impl LanguageServer for Backend {
                 )),
                 completion_provider: Some(CompletionOptions {
                     resolve_provider: Some(false),
-                    trigger_characters: Some(vec!["[".into(), " ".into(), "(".into(), "#".into(), ">".into()]),
+                    trigger_characters: Some(vec![
+                        "[".into(),
+                        " ".into(),
+                        "(".into(),
+                        "#".into(),
+                        ">".into(),
+                    ]),
                     work_done_progress_options: Default::default(),
                     all_commit_characters: None,
                     completion_item: None,
@@ -368,8 +372,14 @@ impl LanguageServer for Backend {
                             full: Some(SemanticTokensFullOptions::Bool(true)),
                             range: Some(false),
                             legend: SemanticTokensLegend {
-                                token_types: vec![SemanticTokenType::DECORATOR, SemanticTokenType::COMMENT],
-                                token_modifiers: vec![SemanticTokenModifier::DECLARATION, SemanticTokenModifier::DEPRECATED],
+                                token_types: vec![
+                                    SemanticTokenType::DECORATOR,
+                                    SemanticTokenType::COMMENT,
+                                ],
+                                token_modifiers: vec![
+                                    SemanticTokenModifier::DECLARATION,
+                                    SemanticTokenModifier::DEPRECATED,
+                                ],
                             },
                             ..Default::default()
                         },
@@ -393,8 +403,13 @@ impl LanguageServer for Backend {
     }
 
     async fn initialized(&self, _: InitializedParams) {
-        let settings = self.bind_settings(|settings| Ok(settings.clone())).await.unwrap();
-        self.client.log_message(MessageType::WARNING, format!("Settings: {:?}", settings)).await;
+        let settings = self
+            .bind_settings(|settings| Ok(settings.clone()))
+            .await
+            .unwrap();
+        self.client
+            .log_message(MessageType::WARNING, format!("Settings: {:?}", settings))
+            .await;
 
         let Ok(root_path) = self.bind_vault(|vault| Ok(vault.root_dir().clone())).await else {
             return;
@@ -613,14 +628,17 @@ impl LanguageServer for Backend {
         &self,
         params: SemanticTokensParams,
     ) -> Result<Option<SemanticTokensResult>> {
-
         let settings = self.bind_settings(|settings| Ok(settings.clone())).await?;
 
         let timer = std::time::Instant::now();
 
         let path = params_path!(params)?;
         let res = self
-            .bind_vault(|vault| Ok(tokens::semantic_tokens_full(vault, &path, params, &settings)))
+            .bind_vault(|vault| {
+                Ok(tokens::semantic_tokens_full(
+                    vault, &path, params, &settings,
+                ))
+            })
             .await;
 
         let elapsed = timer.elapsed();

@@ -51,10 +51,7 @@ impl<'a, C: Completer<'a>, T: Completable<'a, C>> OrderedCompletion<'a, C, T> {
 impl<'a, C: Completer<'a>, T: Completable<'a, C>> Completable<'a, C>
     for OrderedCompletion<'a, C, T>
 {
-    fn completions(
-        &self,
-        completer: &C,
-    ) -> Option<CompletionItem> {
+    fn completions(&self, completer: &C) -> Option<CompletionItem> {
         let completion = self.completable.completions(completer);
 
         completion.map(|completion| CompletionItem {

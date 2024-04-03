@@ -13,7 +13,7 @@ pub struct Settings {
     pub heading_completions: bool,
     pub title_headings: bool,
     pub unresolved_diagnostics: bool,
-    pub semantic_tokens: bool
+    pub semantic_tokens: bool,
 }
 
 impl Settings {
@@ -37,17 +37,19 @@ impl Settings {
                 "dailynote",
                 obsidian_daily_note.unwrap_or("%Y-%m-%d".to_string()),
             )?
-            .set_default(
-                "heading_completions",
-                true
-            )?
+            .set_default("heading_completions", true)?
             .set_default("unresolved_diagnostics", true)?
             .set_default("title_headings", true)?
             .set_default("semantic_tokens", true)?
-            .set_override_option("semantic_tokens", capabilities.text_document.as_ref().and_then(|it| match it.semantic_tokens.is_none() {
-                true => Some(false),
-                false => None
-            }))?
+            .set_override_option(
+                "semantic_tokens",
+                capabilities.text_document.as_ref().and_then(|it| {
+                    match it.semantic_tokens.is_none() {
+                        true => Some(false),
+                        false => None,
+                    }
+                }),
+            )?
             .build()
             .map_err(|err| anyhow!("Build err: {err}"))?;
 

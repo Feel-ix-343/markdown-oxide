@@ -4,7 +4,11 @@ use itertools::Itertools;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use tower_lsp::lsp_types::{SemanticToken, SemanticTokensParams, SemanticTokensResult};
 
-use crate::{config::Settings, diagnostics::path_unresolved_references, vault::{Referenceable, Vault}};
+use crate::{
+    config::Settings,
+    diagnostics::path_unresolved_references,
+    vault::{Referenceable, Vault},
+};
 
 pub fn semantic_tokens_full(
     vault: &Vault,
@@ -18,7 +22,13 @@ pub fn semantic_tokens_full(
 
     let references_in_file = vault.select_references(Some(path))?;
 
-    let path_unresolved: Option<HashSet<_>> = path_unresolved_references(vault, path).map(|thing| thing.into_par_iter().map(|(_, reference)| reference).collect());
+    let path_unresolved: Option<HashSet<_>> =
+        path_unresolved_references(vault, path).map(|thing| {
+            thing
+                .into_par_iter()
+                .map(|(_, reference)| reference)
+                .collect()
+        });
 
     let tokens = references_in_file
         .into_iter()
@@ -31,7 +41,9 @@ pub fn semantic_tokens_full(
         .fold(vec![], |acc, (path, reference)| {
             let range = reference.data().range;
 
-            let is_unresolved = path_unresolved.as_ref().is_some_and(|unresolved| unresolved.contains(reference));
+            let is_unresolved = path_unresolved
+                .as_ref()
+                .is_some_and(|unresolved| unresolved.contains(reference));
 
             match acc[..] {
                 [] => vec![(
@@ -41,7 +53,7 @@ pub fn semantic_tokens_full(
                         delta_start: range.start.character,
                         length: range.end.character - range.start.character,
                         token_type: if is_unresolved { 1 } else { 0 },
-                        token_modifiers_bitset: 0
+                        token_modifiers_bitset: 0,
                     },
                 )],
                 [.., (prev_ref, _)] => acc
@@ -57,7 +69,7 @@ pub fn semantic_tokens_full(
                             },
                             length: range.end.character - range.start.character,
                             token_type: if is_unresolved { 1 } else { 0 },
-                            token_modifiers_bitset: 0
+                            token_modifiers_bitset: 0,
                         },
                     )))
                     .collect_vec(),

@@ -252,23 +252,23 @@ impl<'a> Completable<'a, UnindexedBlockCompleter<'a, MarkdownLinkCompleter<'a>>>
         &self,
         completer: &UnindexedBlockCompleter<'a, MarkdownLinkCompleter<'a>>,
     ) -> Option<CompletionItem> {
-            let (refname, partial_completion) = self.partial_completion(completer)?;
+        let (refname, partial_completion) = self.partial_completion(completer)?;
 
-            let binding = completer.link_completer.entered_refname();
-            let display = &binding.trim();
+        let binding = completer.link_completer.entered_refname();
+        let display = &binding.trim();
 
-            Some(CompletionItem {
-                text_edit: Some(
-                    completer
-                        .link_completer
-                        .completion_text_edit(Some(&format!("${{1:{}}}", display)), &refname),
-                ),
-                filter_text: Some(
-                    completer.completion_filter_text(&completer.link_completer.entered_refname()),
-                ),
-                insert_text_format: Some(InsertTextFormat::SNIPPET),
-                ..partial_completion
-            })
+        Some(CompletionItem {
+            text_edit: Some(
+                completer
+                    .link_completer
+                    .completion_text_edit(Some(&format!("${{1:{}}}", display)), &refname),
+            ),
+            filter_text: Some(
+                completer.completion_filter_text(&completer.link_completer.entered_refname()),
+            ),
+            insert_text_format: Some(InsertTextFormat::SNIPPET),
+            ..partial_completion
+        })
     }
 }
 
@@ -279,23 +279,23 @@ impl<'a> Completable<'a, UnindexedBlockCompleter<'a, WikiLinkCompleter<'a>>>
         &self,
         completer: &UnindexedBlockCompleter<'a, WikiLinkCompleter<'a>>,
     ) -> Option<CompletionItem> {
-            let (refname, partial_completion) = self.partial_completion(completer)?;
+        let (refname, partial_completion) = self.partial_completion(completer)?;
 
-            let binding = completer.link_completer.entered_refname();
-            let display = &binding.trim();
+        let binding = completer.link_completer.entered_refname();
+        let display = &binding.trim();
 
-            Some(CompletionItem {
-                text_edit: Some(
-                    completer
-                        .link_completer
-                        .completion_text_edit(Some(&format!("${{1:{}}}", display)), &refname),
-                ),
-                filter_text: Some(
-                    completer.completion_filter_text(&completer.link_completer.entered_refname()),
-                ),
-                insert_text_format: Some(InsertTextFormat::SNIPPET),
-                ..partial_completion
-            })
+        Some(CompletionItem {
+            text_edit: Some(
+                completer
+                    .link_completer
+                    .completion_text_edit(Some(&format!("${{1:{}}}", display)), &refname),
+            ),
+            filter_text: Some(
+                completer.completion_filter_text(&completer.link_completer.entered_refname()),
+            ),
+            insert_text_format: Some(InsertTextFormat::SNIPPET),
+            ..partial_completion
+        })
     }
 }
 

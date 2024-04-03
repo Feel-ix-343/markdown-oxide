@@ -2,7 +2,10 @@ use std::iter;
 
 use once_cell::sync::Lazy;
 use regex::Regex;
-use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionTextEdit, InsertTextFormat, Position, Range, TextEdit};
+use tower_lsp::lsp_types::{
+    CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionTextEdit,
+    InsertTextFormat, Position, Range, TextEdit,
+};
 
 use super::{Completable, Completer};
 
@@ -10,28 +13,23 @@ pub struct CalloutCompleter {
     nested_level: usize,
     line: u32,
     character: u32,
-    preceding_text: String
+    preceding_text: String,
 }
 
 impl<'a> Completer<'a> for CalloutCompleter {
     fn construct(context: super::Context<'a>, line: usize, character: usize) -> Option<Self>
-        where
-            Self: Sized + Completer<'a> {
-        
+    where
+        Self: Sized + Completer<'a>,
+    {
         let line_chars = context.vault.select_line(context.path, line as isize)?;
 
-    
-        static PARTIAL_CALLOUT: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r"^(?<preceding>(> *)+)").unwrap()
-        }); // [display](relativePath)
+        static PARTIAL_CALLOUT: Lazy<Regex> =
+            Lazy::new(|| Regex::new(r"^(?<preceding>(> *)+)").unwrap()); // [display](relativePath)
 
         let binding = String::from_iter(line_chars);
         let captures = PARTIAL_CALLOUT.captures(&binding)?;
 
-        let (full, preceding) = (
-            captures.get(0)?,
-            captures.name("preceding")?,
-        );
+        let (full, preceding) = (captures.get(0)?, captures.name("preceding")?);
 
         let nested_level = preceding.as_str().matches(">").into_iter().count();
 
@@ -39,14 +37,14 @@ impl<'a> Completer<'a> for CalloutCompleter {
             nested_level,
             preceding_text: preceding.as_str().to_string(),
             line: line as u32,
-            character: character as u32
+            character: character as u32,
         });
     }
 
     fn completions(&self) -> Vec<impl super::Completable<'a, Self>>
-        where
-            Self: Sized {
-        
+    where
+        Self: Sized,
+    {
         return vec![
             CalloutCompletion::Note,
             CalloutCompletion::Abstract,
@@ -74,10 +72,8 @@ impl<'a> Completer<'a> for CalloutCompleter {
             CalloutCompletion::Bug,
             CalloutCompletion::Example,
             CalloutCompletion::Quote,
-            CalloutCompletion::Cite
+            CalloutCompletion::Cite,
         ];
-
-
     }
 
     // TODO: get rid of this in the API
@@ -114,12 +110,11 @@ enum CalloutCompletion {
     Bug,
     Example,
     Quote,
-    Cite
+    Cite,
 }
 
-impl Completable<'_, CalloutCompleter> for  CalloutCompletion {
+impl Completable<'_, CalloutCompleter> for CalloutCompletion {
     fn completions(&self, completer: &CalloutCompleter) -> Option<CompletionItem> {
-
         let name = match self {
             Self::Note => "note",
             Self::Abstract => "abstract",
@@ -147,7 +142,7 @@ impl Completable<'_, CalloutCompleter> for  CalloutCompletion {
             Self::Bug => "bug",
             Self::Example => "example",
             Self::Quote => "quote",
-            Self::Cite => "cite"
+            Self::Cite => "cite",
         };
 
         let label_detail = match self {
@@ -159,35 +154,41 @@ impl Completable<'_, CalloutCompleter> for  CalloutCompletion {
             Self::Fail | Self::Missing => Some("alias of Failure"),
             Self::Error => Some("alias of Danger"),
             Self::Cite => Some("alias of Quote"),
-            _ => None
+            _ => None,
         };
 
-        let snippet = format!("{prefix}[!{name}] ${{1:Title}}\n{prefix}${{2:Description}}", prefix="> ".repeat(completer.nested_level));
+        let snippet = format!(
+            "{prefix}[!{name}] ${{1:Title}}\n{prefix}${{2:Description}}",
+            prefix = "> ".repeat(completer.nested_level)
+        );
 
         let filter_text = completer.completion_filter_text(name);
 
         let completion_item = CompletionItem {
             label: name.to_string(),
-            label_details: label_detail.map(|detail| CompletionItemLabelDetails{
+            label_details: label_detail.map(|detail| CompletionItemLabelDetails {
                 detail: Some(detail.to_string()),
-                description: None
+                description: None,
             }),
             insert_text_format: Some(InsertTextFormat::SNIPPET),
             kind: Some(CompletionItemKind::SNIPPET),
             text_edit: Some(CompletionTextEdit::Edit(TextEdit {
-             range: Range {
-                  start: Position {
-                     line: completer.line,
-                        character: 0
+                range: Range {
+                    start: Position {
+                        line: completer.line,
+                        character: 0,
                     },
-                    end: Position { line: completer.line, character: completer.character }
+                    end: Position {
+                        line: completer.line,
+                        character: completer.character,
+                    },
                 },
-                new_text: snippet
+                new_text: snippet,
             })),
             filter_text: Some(filter_text),
             ..Default::default()
         };
 
-        return Some(completion_item)
+        return Some(completion_item);
     }
 }

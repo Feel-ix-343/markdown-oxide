@@ -13,12 +13,12 @@ use self::{
     tag_completer::TagCompleter, unindexed_block_completer::UnindexedBlockCompleter,
 };
 
+mod callout_completer;
 mod footnote_completer;
 mod link_completer;
 mod matcher;
 mod tag_completer;
 mod unindexed_block_completer;
-mod callout_completer;
 
 #[derive(Clone, Copy)]
 pub struct Context<'a> {

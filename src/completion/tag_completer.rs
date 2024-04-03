@@ -123,10 +123,7 @@ impl Matchable for TagCompletable<'_> {
 }
 
 impl<'a> Completable<'a, TagCompleter<'a>> for TagCompletable<'a> {
-    fn completions(
-        &self,
-        completer: &TagCompleter<'a>,
-    ) -> Option<CompletionItem> {
+    fn completions(&self, completer: &TagCompleter<'a>) -> Option<CompletionItem> {
         let text_edit = CompletionTextEdit::Edit(TextEdit {
             new_text: format!("#{}", self.tag.1.tag_ref),
             range: Range {

@@ -3,7 +3,10 @@ use std::path::{Path, PathBuf};
 use rayon::prelude::*;
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Url};
 
-use crate::{config::Settings, vault::{self, Reference, Referenceable, Vault}};
+use crate::{
+    config::Settings,
+    vault::{self, Reference, Referenceable, Vault},
+};
 
 pub fn path_unresolved_references<'a>(
     vault: &'a Vault,
@@ -33,9 +36,13 @@ pub fn path_unresolved_references<'a>(
     Some(unresolved)
 }
 
-pub fn diagnostics(vault: &Vault, settings: &Settings, (path, _uri): (&PathBuf, &Url)) -> Option<Vec<Diagnostic>> {
+pub fn diagnostics(
+    vault: &Vault,
+    settings: &Settings,
+    (path, _uri): (&PathBuf, &Url),
+) -> Option<Vec<Diagnostic>> {
     if !settings.unresolved_diagnostics {
-        return None
+        return None;
     }
 
     let unresolved = path_unresolved_references(vault, path)?;

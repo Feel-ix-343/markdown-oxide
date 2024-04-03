@@ -99,7 +99,11 @@ pub trait LinkCompleter<'a>: Completer<'a> {
                         Referenceable::Heading(..) | Referenceable::UnresolvedHeading(..)
                     ))
             })
-            .flat_map(|referenceable| LinkCompletion::new(referenceable.clone(), self).into_iter().par_bridge())
+            .flat_map(|referenceable| {
+                LinkCompletion::new(referenceable.clone(), self)
+                    .into_iter()
+                    .par_bridge()
+            })
             .flatten()
             .collect::<Vec<_>>();
 
@@ -450,18 +454,20 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
                         .as_secs()
                         .to_string();
 
-                    Some(referenceables
-                        .into_iter()
-                        .flat_map(move |referenceable| {
-                            Some(LinkCompletion::new(referenceable, self)?)
-                        })
-                        .flatten()
-                        .flat_map(move |completion| {
-                        Some(OrderedCompletion::<WikiLinkCompleter, LinkCompletion>::new(
-                            completion,
-                            modified_string.clone(),
-                        ))
-                    }))
+                    Some(
+                        referenceables
+                            .into_iter()
+                            .flat_map(move |referenceable| {
+                                Some(LinkCompletion::new(referenceable, self)?)
+                            })
+                            .flatten()
+                            .flat_map(move |completion| {
+                                Some(OrderedCompletion::<WikiLinkCompleter, LinkCompletion>::new(
+                                    completion,
+                                    modified_string.clone(),
+                                ))
+                            }),
+                    )
                 })
                 .flatten()
                 .collect_vec(),
@@ -526,51 +532,71 @@ impl LinkCompletion<'_> {
             Some(vec![DailyNote(daily)])
         } else {
             match referenceable {
-                Referenceable::File(_, mdfile) => {
-                    Some(
-                        once(File {
-                            mdfile,
-                            match_string: mdfile.file_name()?.to_string(),
-                            referenceable: referenceable.clone(),
-                        })
-                            .chain(mdfile.metadata.iter().map(|it| it.aliases()).flatten().flat_map(
-                                |alias| Some(Alias {
+                Referenceable::File(_, mdfile) => Some(
+                    once(File {
+                        mdfile,
+                        match_string: mdfile.file_name()?.to_string(),
+                        referenceable: referenceable.clone(),
+                    })
+                    .chain(
+                        mdfile
+                            .metadata
+                            .iter()
+                            .map(|it| it.aliases())
+                            .flatten()
+                            .flat_map(|alias| {
+                                Some(Alias {
                                     filename: mdfile.file_name()?,
                                     match_string: alias,
                                     referenceable: referenceable.clone(),
-                                }),
-                            ))
-                            .collect(),
+                                })
+                            }),
                     )
-                }
-                Referenceable::Heading(path, mdheading) => Some(once(Heading {
-                    heading: mdheading,
-                    match_string: format!(
-                        "{}#{}",
-                        path.file_stem()?.to_str()?,
-                        mdheading.heading_text
-                    ),
-                    referenceable,
-                }).collect()),
-                Referenceable::IndexedBlock(path, indexed) => Some(once(Block {
-                    match_string: format!("{}#^{}", path.file_stem()?.to_str()?, indexed.index),
-                    referenceable,
-                }).collect()),
-                Referenceable::UnresovledFile(_, file) => Some(once(Unresolved {
-                    match_string: file.clone(),
-                    infile_ref: None,
-                    referenceable,
-                }).collect()),
-                Referenceable::UnresolvedHeading(_, s1, s2) => Some(once(Unresolved {
-                    match_string: format!("{}#{}", s1, s2),
-                    infile_ref: Some(s2.clone()),
-                    referenceable,
-                }).collect()),
-                Referenceable::UnresovledIndexedBlock(_, s1, s2) => Some(once(Unresolved {
-                    match_string: format!("{}#^{}", s1, s2),
-                    infile_ref: Some(format!("^{}", s2)),
-                    referenceable,
-                }).collect()),
+                    .collect(),
+                ),
+                Referenceable::Heading(path, mdheading) => Some(
+                    once(Heading {
+                        heading: mdheading,
+                        match_string: format!(
+                            "{}#{}",
+                            path.file_stem()?.to_str()?,
+                            mdheading.heading_text
+                        ),
+                        referenceable,
+                    })
+                    .collect(),
+                ),
+                Referenceable::IndexedBlock(path, indexed) => Some(
+                    once(Block {
+                        match_string: format!("{}#^{}", path.file_stem()?.to_str()?, indexed.index),
+                        referenceable,
+                    })
+                    .collect(),
+                ),
+                Referenceable::UnresovledFile(_, file) => Some(
+                    once(Unresolved {
+                        match_string: file.clone(),
+                        infile_ref: None,
+                        referenceable,
+                    })
+                    .collect(),
+                ),
+                Referenceable::UnresolvedHeading(_, s1, s2) => Some(
+                    once(Unresolved {
+                        match_string: format!("{}#{}", s1, s2),
+                        infile_ref: Some(s2.clone()),
+                        referenceable,
+                    })
+                    .collect(),
+                ),
+                Referenceable::UnresovledIndexedBlock(_, s1, s2) => Some(
+                    once(Unresolved {
+                        match_string: format!("{}#^{}", s1, s2),
+                        infile_ref: Some(format!("^{}", s2)),
+                        referenceable,
+                    })
+                    .collect(),
+                ),
                 _ => None,
             }
         }
@@ -588,7 +614,7 @@ impl LinkCompletion<'_> {
             | Self::Heading { referenceable, .. }
             | Self::Block { referenceable, .. }
             | Self::Unresolved { referenceable, .. }
-            | Self::Alias { referenceable, .. }  => referenceable.to_owned(),
+            | Self::Alias { referenceable, .. } => referenceable.to_owned(),
             Self::DailyNote(daily) => daily.referenceable(completer),
         };
 
@@ -597,21 +623,14 @@ impl LinkCompletion<'_> {
         CompletionItem {
             label: label.to_string(),
             kind: Some(match self {
-                Self::File {
-                    ..
-                } => CompletionItemKind::FILE,
-                Self::Heading {
-                    ..
-                }
-                | Self::Block {
-                    ..
-                } => CompletionItemKind::REFERENCE,
+                Self::File { .. } => CompletionItemKind::FILE,
+                Self::Heading { .. } | Self::Block { .. } => CompletionItemKind::REFERENCE,
                 Self::Unresolved {
                     match_string: _,
                     infile_ref: _,
                     ..
                 } => CompletionItemKind::KEYWORD,
-                Self::Alias {..} => CompletionItemKind::ENUM,
+                Self::Alias { .. } => CompletionItemKind::ENUM,
                 Self::DailyNote { .. } => CompletionItemKind::EVENT,
             }),
             label_details: match self {
@@ -623,7 +642,7 @@ impl LinkCompletion<'_> {
                     detail: Some("Unresolved".into()),
                     description: None,
                 }),
-                Alias { filename, .. } => Some(CompletionItemLabelDetails{
+                Alias { filename, .. } => Some(CompletionItemLabelDetails {
                     detail: Some(format!("Alias: {}.md", filename)),
                     description: None,
                 }),
@@ -697,15 +716,15 @@ impl<'a> Completable<'a, MarkdownLinkCompleter<'a>> for LinkCompletion<'a> {
             ("", Some(ref infile)) => infile,
             // Get the first heading of the file, if possible.
             ("", None) if markdown_link_completer.settings().title_headings => match self {
-                Self::File {
-                    mdfile,
-                    ..
-                } => mdfile
+                Self::File { mdfile, .. } => mdfile
                     .headings
                     .first()
                     .map(|heading| heading.heading_text.as_str())
                     .unwrap_or(""),
-                Self::Alias { match_string: alias, .. } => alias,
+                Self::Alias {
+                    match_string: alias,
+                    ..
+                } => alias,
                 _ => "",
             },
             (display, _) => display,
@@ -745,14 +764,11 @@ impl<'a> Completable<'a, WikiLinkCompleter<'a>> for LinkCompletion<'a> {
 
         match wikilink_display_text {
             None => Some(self.default_completion(text_edit, &filter_text, completer)),
-            _ => Some(
-                CompletionItem{
-                    insert_text_format: Some(InsertTextFormat::SNIPPET),
-                    ..self.default_completion(text_edit, &filter_text, completer)
-                })
+            _ => Some(CompletionItem {
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
+                ..self.default_completion(text_edit, &filter_text, completer)
+            }),
         }
-
-        
     }
 }
 

@@ -84,10 +84,7 @@ impl FootnoteCompletion<'_> {
 }
 
 impl<'a> Completable<'a, FootnoteCompleter<'a>> for FootnoteCompletion<'a> {
-    fn completions(
-        &self,
-        completer: &FootnoteCompleter<'a>,
-    ) -> Option<CompletionItem> {
+    fn completions(&self, completer: &FootnoteCompleter<'a>) -> Option<CompletionItem> {
         let refname = &self.footnote.1.index;
 
         let path = self.footnote.0;

@@ -11,7 +11,8 @@ impl MDMetadata {
     pub fn new(text: &str) -> Option<MDMetadata> {
         // find text between --- at the beginning of the file
 
-        static RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^---\n(?<metadata>(\n|.)*?)\n---").unwrap());
+        static RE: Lazy<Regex> =
+            Lazy::new(|| Regex::new(r"^---\n(?<metadata>(\n|.)*?)\n---").unwrap());
 
         let metadata_match = RE.captures_iter(text).next()?.name("metadata");
 
@@ -43,12 +44,14 @@ mod tests {
 
     #[test]
     fn test_alias_list() {
-        let metadata = MDMetadata::new(r"---
+        let metadata = MDMetadata::new(
+            r"---
 aliases:
     - alias1
     - alias2
----").unwrap();
+---",
+        )
+        .unwrap();
         assert_eq!(metadata.aliases(), &["alias1", "alias2"]);
-            
     }
 }
