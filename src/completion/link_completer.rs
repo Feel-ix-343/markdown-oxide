@@ -360,7 +360,7 @@ impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
                 },
             },
             new_text: format!(
-                "{}{}]]",
+                "{}{}]]${{2:}}",
                 refname,
                 display
                     .map(|display| format!("|{}", display))
@@ -766,13 +766,10 @@ impl<'a> Completable<'a, WikiLinkCompleter<'a>> for LinkCompletion<'a> {
 
         let filter_text = completer.completion_filter_text(match_text);
 
-        match wikilink_display_text {
-            None => Some(self.default_completion(text_edit, &filter_text, completer)),
-            _ => Some(CompletionItem {
-                insert_text_format: Some(InsertTextFormat::SNIPPET),
-                ..self.default_completion(text_edit, &filter_text, completer)
-            }),
-        }
+        Some(CompletionItem {
+            insert_text_format: Some(InsertTextFormat::SNIPPET),
+            ..self.default_completion(text_edit, &filter_text, completer)
+        })
     }
 }
 
