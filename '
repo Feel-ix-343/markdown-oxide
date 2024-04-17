@@ -1,20 +1,18 @@
 
 /// High level module implementing highest level traits
-mod md_nodes;
-mod entities;
+mod vault;
+mod parsing;
+mod backlinking;
 pub(self) mod renderable;
 
 use std::path::Path;
 
-use anyhow::anyhow;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 pub use renderable::Renderable;
 
-use self::md_nodes::MDFile;
+pub(self) mod queryable;
 
 pub struct Vault{
-    memfs: Box<dyn MemFS>,
-    parser: Box<dyn MDFileParser>
 }
 
 
@@ -39,56 +37,9 @@ pub enum MemFSUpdate<'handler> {
 }
 
 impl<'fs> Vault {
-    /// Get an entity (that has a hierarchichical structure) at a position
-    pub fn entity_hierarchy(&self, location: &Location) -> anyhow::Result<&dyn RangedEntity> {
-        match location {
-            Location::File(path) => {
-                let parsed = self.parsed_file(path)?;
-
-
-            }
-            Location::All => todo!(),
-            Location::Folder(_) => todo!(),
-            Location::Location(_) => todo!(),
-        }
-    }
-
-    /// For if you want to get entities only of a specific type; Eg for completions of a specific type;
-    pub fn query_entities<T: Entity<'fs>, F: EntityFilter<'fs, T>>(&self, location: &Location, query: Query<T, F>) -> impl ParallelIterator<Item = SpecifiedEntity<T>>{
+    pub fn get_entity_hierarchy(&self, location: Location) -> impl ParallelIterator<Item = &dyn Entity> {
         todo!()
     }
-
-    pub fn get_references(&self, location: &Location) -> impl ParallelIterator<Item = Reference<'fs, FullReference<'fs>>> {
-        todo!()
-    }
-}
-
-impl<'fs> Vault {
-    fn parsed_file<'handler>(&mut self, path: &'handler Path) -> anyhow::Result<MDFile<'fs>> {
-        let file_text = self.memfs.get_file(path).ok_or(anyhow!("File not in memory filesystem"))?;
-        
-        // Potentially fetch from cache here -- or at least cache the result
-        let parsed = self.parser.parse(file_text)?;
-
-        Ok(parsed)
-    }
-
-    fn file_entity(&mut self, path: &Path) -> impl Enti
-
-}
-
-pub struct SpecifiedEntity<'fs, T: Entity<'fs>>{
-    entity: &'fs T
-}
-
-pub enum Query<'fs, T: Entity<'fs>, F: EntityFilter<'fs, T> = ()> {
-    All,
-    Some(F::FilterInput)
-}
-
-pub trait EntityFilter<'fs, T: Entity<'fs>> {
-    type FilterInput;
-    fn filter(self: &T, input: Self::FilterInput) -> bool;
 }
 
 pub enum Location<'handler> {
@@ -100,115 +51,26 @@ pub enum Location<'handler> {
 
 pub struct FileLocation<'handler> {
     path: &'handler Path,
-    line: Position,
-    character: Position
-}
-
-pub struct Position {
-    pub line: u32,
-    pub character: u32
+    line: u32,
+    character: u32
 }
 
 
 pub trait Entity<'memfs> {
-    fn view(&self) -> EntityView<'memfs>;
-    fn incoming(&self) -> impl ParallelIterator<Item = Reference<'memfs, IncomingReference<'memfs>>>;
-    fn outgoing(&self) -> impl ParallelIterator<Item = Reference<'memfs, OutgoingReference<'memfs>>>;
+    fn view(&self);
+    fn incoming(&self) -> impl ParallelIterator<Item = Reference<'memfs>>;
+    fn outgoing(&self) -> impl ParallelIterator<Item = Reference<'memfs>>;
     fn parent(&self) -> &'memfs dyn Entity<'memfs>;
-    fn children(&self) -> impl ParallelIterator<Item = &'memfs dyn Entity<'memfs>>;
+    fn children(&self)
 }
 
-pub struct EntityView<'fs> {
-    entity_type: EntityType<'fs>,
-    renderable: Renderable<'fs>
-}
+#[derive(Clone, Copy)]
+pub enum Reference<'memfs> {
+    /// From, To
+    Resolved(&'memfs dyn Entity<'memfs>, &'memfs dyn Entity<'memfs>),
 
-pub enum EntityType<'fs> {
-    Named(&'fs str),
-    Unnamed
-}
-
-pub struct Reference<'fs, T> {
-    range: FileRange<'fs>,
-    reference: ReferenceEnum<'fs, T>
-}
-
-pub enum ReferenceEnum<'fs, T: ReferenceTrait<'fs>> {
-    Resolved(T),
-    Unresolved(T)
-}
-
-pub trait ReferenceTrait<'fs> {
-    fn from(&self) -> &dyn Entity<'fs>;
-    fn to(&self) -> &dyn Entity<'fs>;
-}
-
-pub struct FileRange<'fs> {
-    file: &'fs Path,
-    start: Position,
-    end: Position
-}
-
-pub struct IncomingReference<'fs> {
-    from: &'fs dyn Entity<'fs>,
-    self_: &'fs dyn Entity<'fs>
-}
-
-impl<'fs> ReferenceTrait<'fs> for IncomingReference<'fs> {
-    fn from(&self) -> &dyn Entity<'fs> {
-        self.from
-    }
-    fn to(&self) -> &dyn Entity<'fs> {
-        self.self_
-    }
-}
-
-pub struct OutgoingReference<'fs> {
-    to: &'fs dyn Entity<'fs>,
-    self_: &'fs dyn Entity<'fs>
-}
-
-pub struct FullReference<'fs> {
-    from: &'fs dyn Entity<'fs>,
-    to: &'fs dyn Entity<'fs>
-}
-
-impl<'fs> ReferenceTrait<'fs> for FullReference<'fs> {
-    fn to(&self) -> &dyn Entity<'fs> {
-        self.to
-    }
-
-    fn from(&self) -> &dyn Entity<'fs> {
-        self.from
-    }
-}
-
-impl<'fs> ReferenceTrait<'fs> for OutgoingReference<'fs> {
-    fn from(&self) -> &dyn Entity<'fs> {
-        self.self_
-    }
-    fn to(&self) -> &dyn Entity<'fs> {
-        self.to
-    }
-}
-
-
-pub trait RangedEntity<'fs>: Entity<'fs> {
-    fn start(&self) -> u32;
-    fn end(&self) -> u32;
-    fn file(&self) -> &Path;
-}
-
-
-
-/// In memory file system
-pub(self) trait MemFS {
-    fn update<'handler>(&self, update: MemFSUpdate<'handler>) -> Self;
-    fn get_file<'handler>(&self, path: &'handler Path) -> Option<&'handler str>;
-}
-
-pub(self) trait MDFileParser {
-    fn parse<'memfs>(&self, text: &'memfs str) -> anyhow::Result<self::md_nodes::MDFile<'memfs>>;
+    /// From, To
+    Unresolved(&'memfs dyn Entity<'memfs>, &'memfs dyn Entity<'memfs>)
 }
 
 
