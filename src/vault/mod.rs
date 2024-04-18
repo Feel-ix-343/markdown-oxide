@@ -269,7 +269,17 @@ impl Vault {
                                 let mut path = self.root_dir().clone();
                                 path.push(&reference.data().reference_text);
 
-                                Some(Referenceable::UnresovledFile(path, &data.reference_text))
+Some(Referenceable::UnresovledFile(path, &data.reference_text))
+
+                                // match data.reference_text.chars().collect_vec().as_slice() {
+
+                                //     [..,'.','m','d'] => 
+                                //     ['.', '/', rest @ ..]
+                                //     | ['/', rest @ ..]
+                                //     | rest if !rest.contains(&'.') => Some(Referenceable::UnresovledFile(path, &data.reference_text)),
+                                //     _ => None
+                                // }
+
                             }
                             Reference::WikiHeadingLink(_data, end_path, heading)
                             | Reference::MDHeadingLink(_data, end_path, heading) => {
@@ -724,12 +734,16 @@ impl Reference {
             });
 
         static MD_LINK_RE: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r"\[(?<display>[^\[\]\.]*)\]\(<?(?<filepath>(\.?\/)?[^\[\]\|\.\#<>]+)(\.[^\# <>]+)?(\#(?<infileref>[^\[\]\.\|<>]+))?>?\)")
+            Regex::new(r"\[(?<display>[^\[\]\.]*)\]\(<?(?<filepath>(\.?\/)?[^\[\]\|\.\#<>]+)(?<ending>\.[^\# <>]+)?(\#(?<infileref>[^\[\]\.\|<>]+))?>?\)")
                 .expect("MD Link Not Constructing")
         }); // [display](relativePath)
 
         let md_links = MD_LINK_RE
             .captures_iter(text)
+            .filter(|captures| match captures.name("ending").map(|ending| ending.as_str()) {
+                Some(".md") | None => true,
+                _ => false
+            })
             .flat_map(RegexTuple::new)
             .flat_map(|regextuple| {
                 generic_link_constructor::<MDReferenceConstructor>(text, regextuple)
