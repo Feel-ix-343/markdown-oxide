@@ -991,7 +991,9 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
         display_text,
     }: RegexTuple,
 ) -> Option<Reference> {
-    if file_path.as_str().starts_with("http://") || file_path.as_str().starts_with("https://") {
+    if file_path.as_str().starts_with("http://") 
+    || file_path.as_str().starts_with("https://")
+    || file_path.as_str().starts_with("data:") {
         return None;
     }
 
