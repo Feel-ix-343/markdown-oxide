@@ -134,41 +134,22 @@ async function languageServerPath(context: vscode.ExtensionContext) {
 
   // Otherwise, check downloads and download if necessary
 	const targetDir = vscode.Uri.joinPath(context.globalStorageUri, versionTag);
-  let zippedFileName = serverBinName() + "zipped";
-	const targetZippedFile = vscode.Uri.joinPath(targetDir, zippedFileName);
+	const targetFile = vscode.Uri.joinPath(targetDir, serverBinName());
 
 
   try {
-    await vscode.workspace.fs.stat(targetZippedFile);
+    await vscode.workspace.fs.stat(targetFile);
 		console.log("Markdown Oxide is already downloaded");
   } catch {
-    await downloadServerFromGH(context, targetDir, targetZippedFile)
+    await downloadServerFromGH(context, targetDir, targetFile)
 
-    console.log(targetZippedFile.fsPath)
+    console.log(targetFile.fsPath)
 
-    // uncompress the file
-    if (os.platform() == "win32") {
-      // unzip the file
-    } else {
-      // untar the file
-      child_process
-        .execSync(`cd ${targetDir.fsPath} \\
-          && tar -xf ${targetZippedFile.fsPath} \\
-          && mv ${releaseBinName()}/${serverBinName()} ./ \\
-          && rm -rd ${releaseBinName()} \\
-          && rm ${targetZippedFile.fsPath} \\
-        `)
-
-    }
   }
 
-
-  const serverPath = vscode.Uri.joinPath(targetDir, serverBinName());
-  console.log({serverPath: serverPath.fsPath})
-
 	try {
-		await vscode.workspace.fs.stat(serverPath);
-		return serverPath.fsPath;
+		await vscode.workspace.fs.stat(targetFile);
+		return targetFile.fsPath;
 	} catch {
 		console.error("Failed to download Markdown Oxide server binary");
 		return null;
@@ -183,7 +164,7 @@ async function downloadServerFromGH(context: vscode.ExtensionContext, targetDir:
 
   await vscode.window.withProgress({
     cancellable: false,
-    title: "Downloading Markdown Oxide",
+    title: `Downloading Markdown Oxide ${versionTag}`,
     location: vscode.ProgressLocation.Notification,
   }, async (progress, _) => {
 			let lastPercent = 0;
@@ -246,7 +227,7 @@ async function downloadRelease(targetDir: vscode.Uri, targetFile: vscode.Uri, on
 
 
 function releaseDownloadUrl(): string {
-  return releaseBaseUrl + "/" + versionTag + "/" + releaseBinName() + releaseUrlExtension();
+  return releaseBaseUrl + "/" + versionTag + "/" + releaseBinName();
 }
 
 function releaseUrlExtension(): string {
