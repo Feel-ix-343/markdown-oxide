@@ -356,7 +356,7 @@ impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
                 },
                 end: Position {
                     line: self.line,
-                    character: (self.chars_in_line - 1).min(self.character + 2_u32),
+                    character: (self.chars_in_line).min(self.character + 2_u32),
                 },
             },
             new_text: format!(
