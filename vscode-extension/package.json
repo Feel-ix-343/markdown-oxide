@@ -53,6 +53,12 @@
 		"postinstall": "cd client && npm install && cd ../server && npm install && cd ..",
 		"test": "sh ./scripts/e2e.sh"
 	},
+	"dependencies": {
+		"@types/node-fetch": "^2.5.8",
+		"@types/which": "2.0.2",
+		"node-fetch": "^2.6.1",
+		"which": "2.0.2"
+	},
 	"devDependencies": {
 		"@types/mocha": "^10.0.6",
 		"@types/node": "^18.14.6",
