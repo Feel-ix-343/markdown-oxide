@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@types/yauzl": "^2.10.3",
+    "yauzl": "^3.1.3"
+  }
+}
