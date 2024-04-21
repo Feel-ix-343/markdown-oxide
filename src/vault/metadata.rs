@@ -16,13 +16,9 @@ impl MDMetadata {
 
         let metadata_match = RE.captures_iter(text).next()?.name("metadata");
 
-        println!("metadata_match: {:?}", metadata_match);
-
         let metadata_match = metadata_match?;
 
         let md_metadata = serde_yaml::from_str::<MDMetadata>(metadata_match.as_str());
-
-        println!("md_metadata: {:?}", md_metadata);
 
         md_metadata.ok()
     }

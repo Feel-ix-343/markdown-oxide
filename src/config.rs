@@ -109,12 +109,9 @@ fn momentjs_to_chrono_format_map() -> IndexMap<&'static str, &'static str> {
 fn convert_momentjs_to_chrono_format(moment_format: &str) -> String {
     let format_map = momentjs_to_chrono_format_map();
     let mut chrono_format = moment_format.to_string();
-    println!("{:?}", chrono_format);
 
     for (moment_token, chrono_token) in format_map.iter() {
-        println!("{:?}", chrono_token);
         chrono_format = chrono_format.replace(moment_token, chrono_token);
-        println!("{:?}", chrono_format);
     }
 
     chrono_format
