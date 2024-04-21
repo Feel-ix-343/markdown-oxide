@@ -67,9 +67,11 @@ jobs:
           dirname="$binary_name-${{ env.VERSION }}-${{ matrix.target }}"
           mkdir "$dirname"
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-          mv "target/${{ matrix.target }}/release/$binary_name.exe" "$dirname"
+            cp "target/${{ matrix.target }}/release/$binary_name.exe" "$dirname"
+            echo "BIN=target/${{ matrix.target }}/release/$binary_name.exe" >> $GITHUB_ENV
           else
-          mv "target/${{ matrix.target }}/release/$binary_name" "$dirname"
+            cp "target/${{ matrix.target }}/release/$binary_name" "$dirname"
+            echo "BIN=target/${{ matrix.target }}/release/$binary_name" >> $GITHUB_ENV
           fi
 
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
@@ -85,4 +87,5 @@ jobs:
         with:
           files: |
             ${{ env.ASSET }}
+            ${{ env.BIN }}
           
