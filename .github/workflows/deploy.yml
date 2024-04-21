@@ -84,7 +84,7 @@ jobs:
             echo "ASSET=$dirname.tar.gz" >> $GITHUB_ENV
             
             rm -rd $dirname
-            cp "target/${{ matrix.target }}/release/$binary_name.exe" "$dirname"
+            cp "target/${{ matrix.target }}/release/$binary_name" "$dirname"
             echo "BIN=$dirname" >> $GITHUB_ENV
           fi
 
