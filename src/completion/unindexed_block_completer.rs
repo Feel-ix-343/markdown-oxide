@@ -151,8 +151,8 @@ impl<'a> UnindexedBlock<'a> {
             .link_completer
             .vault()
             .select_referenceable_nodes(Some(block.file))
-            .into_iter()
-            .find(|referenceable| match referenceable {
+            .into_par_iter()
+            .find_any(|referenceable| match referenceable {
                 Referenceable::IndexedBlock(_path, indexed_block) => {
                     indexed_block.range.start.line == block.range.start.line
                 }
@@ -172,8 +172,8 @@ impl<'a> UnindexedBlock<'a> {
             _ => (
                 Some(Documentation::MarkupContent(MarkupContent {
                     kind: MarkupKind::Markdown,
-                    value: (block.range.start.line as isize - 5
-                        ..=block.range.start.line as isize + 5)
+                    value: (block.range.start.line as isize - 1
+                        ..=block.range.start.line as isize + 1)
                         .flat_map(|i| {
                             Some((
                                 completer
