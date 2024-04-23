@@ -8,8 +8,108 @@ Markdown Oxide's features are implemented in the form of a language server aimin
 
 ## Installation
 
-> [!IMPORTANT]
-> I'm working on getting this into package distributions. Installation/configuration should be easier soon. Also this is very pre-release and things may be broken
+Markdown Oxide is availiable in many text editors and on all platforms. 
+
+### Neovim
+
+1. Given neovim access to the binary.
+
+    - <details>
+         <summary>Cargo Install (from source)</summary>
+    
+        ```bash
+        cargo install --locked --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
+        ```
+    
+    </details>
+    
+    - <details>
+         <summary>AUR (from source)</summary>
+    
+        ```bash
+        paru -S markdown-oxide-git
+        ```
+
+        ```bash
+        yay -S markdown-oxide-git
+        ```
+    
+    </details>
+
+    - [Mason.nvim](https://github.com/williamboman/mason.nvim) (from hosted binary)
+  
+2. Modify your Neovim Configuration
+    - <details>
+        <summary>Modify LSP Config (making sure to adjust capabilities as follows)</summary>
+
+        ```lua        
+        -- An example nvim-lspconfig capabilities setting
+        local capabilities = require("cmp_nvim_lsp").default_capabilities(vim.lsp.protocol.make_client_capabilities())
+        
+        -- Ensure that dynamicRegistration is enabled! This allows the LS to take into account actions like the
+        -- Create Unresolved File code action, resolving completions for unindexed code blocks, ...
+        capabilities.workspace = {
+            didChangeWatchedFiles = {
+              dynamicRegistration = true,
+            },
+        }
+        
+        require("lspconfig").markdown_oxide.setup({
+            capabilities = capabilities, -- again, ensure that capabilities.workspace.didChangeWatchedFiles.dynamicRegistration = true
+            on_attach = on_attach -- configure your on attach config
+        })
+        ```
+
+    </details> 
+
+    - <details>
+        <summary>Modify your nvim-cmp configuration</summary>
+
+        Modify your nvim cmp source settings for nvim-lsp (note: you must have nvim-lsp installed)
+
+        ```lua        
+        {
+        name = 'nvim_lsp',
+          option = {
+            markdown_oxide = {
+              keyword_pattern = [[\(\k\| \|\/\|#\)\+]]
+            }
+          }
+        },
+        ```
+
+    </details>
+
+    - <details>
+        <summary>(optional) Enable Code Lens (eg for UI reference count)</summary>
+
+        Modify your lsp `on_attach` function.
+
+        ```lua
+        -- refresh codelens on TextChanged and InsertLeave as well
+        vim.api.nvim_create_autocmd({ 'TextChanged', 'InsertLeave', 'CursorHold', 'LspAttach' }, {
+            buffer = bufnr,
+            callback = vim.lsp.codelens.refresh,
+        })
+        
+        -- trigger codelens refresh
+        vim.api.nvim_exec_autocmds('User', { pattern = 'LspAttached' })
+        ```
+
+    </details>
+
+> [!NOTE]
+> To get references on files, you can have your cursor anywhere on the markdown file where there is not another referenceable (heading, tag, ...)
+
+### VSCode
+
+### Neovim
+
+### Helix
+
+### Zed
+
+
 
 
 ### Arch Linux
@@ -50,15 +150,25 @@ Adjust your neovim config as follows
 
 ```lua
 local lspconfig = require('lspconfig')
-local configs = require("lspconfig.configs")
+
+-- An example nvim-lspconfig capabilities setting
+local capabilities = require("cmp_nvim_lsp").default_capabilities(vim.lsp.protocol.make_client_capabilities())
+
+-- Ensure that dynamicRegistration is enabled! This allows the LS to take into account actions like the
+-- Create Unresolved File code action, resolving completions for unindexed code blocks, ...
+capabilities.workspace = {
+    didChangeWatchedFiles = {
+      dynamicRegistration = true,
+    },
+}
 
 require("lspconfig").markdown_oxide.setup({
-    capabilities = capabilities -- ensure that capabilities.workspace.didChangeWatchedFiles.dynamicRegistration = true
-    root_dir = lspconfig.util.root_pattern('.git', vim.fn.getcwd()), -- this is a temp fix for an error in the lspconfig for this LS
+    capabilities = capabilities, -- again, ensure that capabilities.workspace.didChangeWatchedFiles.dynamicRegistration = true
+    on_attach = on_attach -- configure your on attach config
 })
 ```
 
-then adjust your nvim-cmp source settings for the following. Note that this will likely change in the future.
+Then, adjust your nvim_lsp source settings for the following. This allows you to fuzzy match link completions with spaces in them. Note that pattern may change in the future.
 
 ```lua
 {
