@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::Arc;
 
 use completion::get_completions;
@@ -290,11 +291,12 @@ impl Backend {
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(&self, i: InitializeParams) -> Result<InitializeResult> {
-        let Some(root_uri) = i.root_uri else {
-            return Err(Error::new(ErrorCode::InvalidParams));
+        let root_dir = match i.root_uri {
+            Some(uri) => PathBuf::from_str(uri.path()).or(Err(Error::new(ErrorCode::InvalidParams)))?,
+            None => std::env::current_dir().or(Err(Error::new(ErrorCode::InvalidParams)))?,
         };
-        let root_dir = Path::new(root_uri.path());
-        let read_settings = match Settings::new(root_dir, &i.capabilities) {
+
+        let read_settings = match Settings::new(&root_dir, &i.capabilities) {
             Ok(settings) => settings,
             Err(e) => {
                 self.client
@@ -307,7 +309,7 @@ impl LanguageServer for Backend {
             }
         };
 
-        let Ok(vault) = Vault::construct_vault(&read_settings, root_dir) else {
+        let Ok(vault) = Vault::construct_vault(&read_settings, &root_dir) else {
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
         let mut value = self.vault.write().await;
