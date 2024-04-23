@@ -26,7 +26,7 @@ import { downloadFile } from './util';
 let client: LanguageClient;
 
 const extId = "moxide"
-const versionTag = "v0.0.19"
+const versionTag = "v0.0.20"
 
 const releaseBaseUrl = "https://github.com/Feel-ix-343/markdown-oxide/releases/download"
 export async function activate(context: ExtensionContext) {
