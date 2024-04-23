@@ -291,8 +291,9 @@ impl Backend {
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(&self, i: InitializeParams) -> Result<InitializeResult> {
+
         let root_dir = match i.root_uri {
-            Some(uri) => PathBuf::from_str(uri.path()).or(Err(Error::new(ErrorCode::InvalidParams)))?,
+            Some(uri) => uri.to_file_path().or(Err(Error::new(ErrorCode::InvalidParams)))?,
             None => std::env::current_dir().or(Err(Error::new(ErrorCode::InvalidParams)))?,
         };
 
