@@ -1,104 +1,212 @@
 # Markdown Oxide
 
-Markdown Oxide is attempting to be the best PKM system for software enthusiasts - people like me who are addicted to creating the best text editing experience. 
+Markdown Oxide is attempting to be the best PKM system for software enthusiasts - people like me who (in addition to note-taking) are addicted to creating the best text editing experience. 
 
-Markdown Oxide's PKM features are strongly inspired by Obsidian - in fact Markdown Oxide is fully compatible with your Obsidian vault. Markdown Oxide does not aim to fully replace Obsidian; it serves to provide a feature rich and advanced note taking experience. Obsidian remains a terrific front-end for your linked markdown notes. Generally, Markdown Oxide and Obsidian are quite alligned.
+Obsidian strongly inspires Markdown Oxide's PKM features - in fact, Markdown Oxide is fully compatible with your Obsidian vault. Markdown Oxide does not aim to fully replace Obsidian; it serves to provide a feature-rich and advanced note-taking experience. Obsidian remains a terrific front-end for your linked markdown notes. Also, in terms of features, Markdown Oxide and Obsidian are quite alligned.
 
 Markdown Oxide's features are implemented in the form of a language server aiming to be fully compatible with your favorite text editor and its ecosystem. Read on to learn what Markdown Oxide provides and how to install and configure it. 
 
 ## Installation
 
-> [!IMPORTANT]
-> I'm working on getting this into package distributions. Installation/configuration should be easier soon. Also this is very pre-release and things may be broken
-
-
-### Arch Linux
-
-If you are using Arch Linux, you can install the latest Git version through the AUR. The package name is `markdown-oxide-git`. You can install it using your preferred AUR helper; for example:
-
-```sh
-paru -S markdown-oxide-git
-```
-
-### Cargo (Linux, MacOS, Windows)
-
-If you have cargo installed, you can easily install the binary for the LS by running the following command:
-
-```sh
-cargo install --locked --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
-```
-
-### Manual (MacOS, Windows, Linux)
-
-Clone the repository and then run `cargo build --release`.
-
-You will subsequently need the path to the release binary when you configure your editor. It can be found relative to the root of the project at `target/release/markdown-oxide`
-
-## Usage
-
-To use the language server, you need to follow the instructions for your editor of choice below.
-
-### VSCode
-
-Go to [the VSCode extension readme](./vscode-extension/README.md) and run the commands listed
+(if you want to skip to the features, [click here](https://github.com/Feel-ix-343/markdown-oxide?tab=readme-ov-file#features))
 
 ### Neovim
 
-Make sure rust is installed properly and that you are using nvim cmp (I am not sure if it works in other completion engines)
+1. Given Neovim access to the binary.
 
-Adjust your neovim config as follows
+    - <details>
+         <summary>Cargo Install (from source)</summary>
+    
+        ```bash
+        cargo install --locked --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
+        ```
+    
+    </details>
+    
+    - <details>
+         <summary>AUR (from source)</summary>
+    
+        ```bash
+        paru -S markdown-oxide-git
+        ```
 
-```lua
-local lspconfig = require('lspconfig')
-local configs = require("lspconfig.configs")
+        ```bash
+        yay -S markdown-oxide-git
+        ```
+    
+    </details>
 
-require("lspconfig").markdown_oxide.setup({
-    capabilities = capabilities -- ensure that capabilities.workspace.didChangeWatchedFiles.dynamicRegistration = true
-    root_dir = lspconfig.util.root_pattern('.git', vim.fn.getcwd()), -- this is a temp fix for an error in the lspconfig for this LS
-})
-```
+    - [Mason.nvim](https://github.com/williamboman/mason.nvim) (from hosted binary)
+    - Nix Unstable: `pkgs.markdown-oxide`
+  
+2. Modify your Neovim Configuration
+    - <details>
+        <summary>Modify LSP Config (making sure to adjust capabilities as follows)</summary>
 
-then adjust your nvim-cmp source settings for the following. Note that this will likely change in the future.
+        ```lua        
+        -- An example nvim-lspconfig capabilities setting
+        local capabilities = require("cmp_nvim_lsp").default_capabilities(vim.lsp.protocol.make_client_capabilities())
+        
+        -- Ensure that dynamicRegistration is enabled! This allows the LS to take into account actions like the
+        -- Create Unresolved File code action, resolving completions for unindexed code blocks, ...
+        capabilities.workspace = {
+            didChangeWatchedFiles = {
+              dynamicRegistration = true,
+            },
+        }
+        
+        require("lspconfig").markdown_oxide.setup({
+            capabilities = capabilities, -- again, ensure that capabilities.workspace.didChangeWatchedFiles.dynamicRegistration = true
+            on_attach = on_attach -- configure your on attach config
+        })
+        ```
 
-```lua
-{
-name = 'nvim_lsp',
-  option = {
-    markdown_oxide = {
-      keyword_pattern = [[\(\k\| \|\/\|#\)\+]]
-    }
-  }
-},
-```
+    </details> 
+
+    - <details>
+        <summary>Modify your nvim-cmp configuration</summary>
+
+        Modify your nvim-cmp source settings for nvim-lsp (note: you must have nvim-lsp installed)
+
+        ```lua        
+        {
+        name = 'nvim_lsp',
+          option = {
+            markdown_oxide = {
+              keyword_pattern = [[\(\k\| \|\/\|#\)\+]]
+            }
+          }
+        },
+        ```
+
+    </details>
+
+    - <details>
+        <summary>(optional) Enable Code Lens (eg for UI reference count)</summary>
+
+        Modify your lsp `on_attach` function.
+
+        ```lua
+        -- refresh codelens on TextChanged and InsertLeave as well
+        vim.api.nvim_create_autocmd({ 'TextChanged', 'InsertLeave', 'CursorHold', 'LspAttach' }, {
+            buffer = bufnr,
+            callback = vim.lsp.codelens.refresh,
+        })
+        
+        -- trigger codelens refresh
+        vim.api.nvim_exec_autocmds('User', { pattern = 'LspAttached' })
+        ```
+
+    </details>
 
 
-I also recommend enabling codelens in neovim. Add this snippet to your on\_attach function for nvim-lspconfig
+### VSCode
+
+Install the [vscode extension](https://marketplace.visualstudio.com/items?itemName=FelixZeller.markdown-oxide) (called `Markdown Oxide`). As for how the extension uses uses the language server, there are two options
+1. Recommended: the extension will download the server's binary and use that
+2. The extension will use `markdown-oxide` from path. To install to your path, there are the following methods for VSCode:
+
+    - <details>
+         <summary>Cargo Install (from source)</summary>
+    
+        ```bash
+        cargo install --locked --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
+        ```
+    
+    </details>
+    
+    - <details>
+         <summary>AUR (from source)</summary>
+    
+        ```bash
+        paru -S markdown-oxide-git
+        ```
+
+        ```bash
+        yay -S markdown-oxide-git
+        ```
+    
+    </details>
+    
+    - Nix Unstable: `pkgs.markdown-oxide`
 
 
-```lua
--- refresh codelens on TextChanged and InsertLeave as well
-vim.api.nvim_create_autocmd({ 'TextChanged', 'InsertLeave', 'CursorHold', 'LspAttach' }, {
-    buffer = bufnr,
-    callback = vim.lsp.codelens.refresh,
-})
+### Zed
 
--- trigger codelens refresh
-vim.api.nvim_exec_autocmds('User', { pattern = 'LspAttached' })
-```
+Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly to VSCode, there are two methods for this extension to access the language server
+1. Recommended: the extension will download the server's binary and use that
+2. The extension will use `markdown-oxide` from path. To install to your path, there are the following methods for Zed:
+
+    - <details>
+         <summary>Cargo Install (from source)</summary>
+    
+        ```bash
+        cargo install --locked --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
+        ```
+    
+    </details>
+    
+    - <details>
+         <summary>AUR (from source)</summary>
+    
+        ```bash
+        paru -S markdown-oxide-git
+        ```
+
+        ```bash
+        yay -S markdown-oxide-git
+        ```
+    
+    </details>
+    
+    - Nix Unstable: `pkgs.markdown-oxide`
+
+    
+> [!Note]
+> Zed does not implement some of the language server protocol that this LS uses. Namely, unindexed block completions do not work at all. There are also other issues with the language server unique to Zed (such as completions being unexpectedly hidden). Over time, these issues will be resolved; for now, Zed provides an interesting exhibition for a potential (beautiful + fast) note-taking experience provided by markdown oxide
+
+### Helix
+
+For Helix, all you must do is install the language server's binary to your path. The following installation methods are available:
+- <details>
+     <summary>Cargo Install (from source)</summary>
+
+    ```bash
+    cargo install --locked --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
+    ```
+
+</details>
+
+- <details>
+     <summary>AUR (from source)</summary>
+
+    ```bash
+    paru -S markdown-oxide-git
+    ```
+
+    ```bash
+    yay -S markdown-oxide-git
+    ```
+
+</details>
+
+- Nix Unstable: `pkgs.markdown-oxide`
 
 
-*Test it out! Go to definitions, get references, and more!*
+> [!Note]
+> There are some major issues with markdown oxide on helix as it does not fully implement the language server protocol. Most obtrusive is that helix does not implement `is_incomplete` for completions, and since completion filtering and sorting happens on the server (for performance), you must manually re-request completions after typing (one method I have found is to exit and re-enter insert mode)
 
-> [!NOTE]
-> To get references on files, you can have your cursor anywhere on the markdown file where there is not another referenceable (heading, tag, ...)
 
-## Note on Linking Syntax
+## Linking Syntax
 
 The linking syntax is that of Obsidian's and can be found here https://help.obsidian.md/Linking+notes+and+files/Internal+links
 
-Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[articles/markdown oxide#Features|Markdown Oxide Features]] to link to a heading in `Markdown Oxide.md` file in the `articles` folder or [[Obsidian]] for the `Obsidian.md` file in the root folder. Markdown oxide also support markdown links
+Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[articles/markdown oxide#Features|Markdown Oxide Features]] to link to a heading in `Markdown Oxide.md` file in the `articles` folder or [[Obsidian]] for the `Obsidian.md` file in the root folder. Markdown oxide also supports markdown links
 
 ## Features
+
+> [!NOTE]
+> To interact with a file as a referenceable (for getting references, renaming, hover-view, ...), put your cursor/pointer anywhere on the markdown fide where there is not another referenceable (heading, tag, ...). 
 
 ### Completions
 
@@ -184,6 +292,8 @@ Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[arti
 - [ ] Dataview completions
 - [ ] Metadata tag completions
 - [ ] \`\`\`query\`\`\` code block completions
+- [ ] Semantic Search unindexed block completions
+- [ ] Contextual linking completions using vector database
 
 
 ### References
@@ -384,4 +494,4 @@ Here are the alternatives (open source authors are welcome to make PRs to add th
 
 ## ---The--bottom--line--------------------------------------------------
 
-Listen. I really like Vim motions. I also really love low-latency terminal editing. I very much so also like my Neovim LSP plugins, keymappings, and config. But Wow! I also like using Obsidian and Logseq. **Can't I just have it all???** Can't I be whisked away by the flow of Neovim while also experiencing the beauty of Obsidian???? Can't I detail my tasks on the CLI while viewing them in Logseq????? Well, I thought I could; for us all, there is markdown-oxide (which is still very pre-beta hah)
+Listen. I really like Vim motions. I also really love low-latency terminal editing. I very much so also like my Neovim LSP plugins, keymappings, and config. But Wow! I also like using Obsidian and Logseq. **Can't I just have it all???** Can't I be whisked away by the flow of Neovim while also experiencing the beauty of Obsidian???? Can't I detail my tasks on the CLI while viewing them in Logseq????? Well, I thought I could; now for us all, there is markdown-oxide (which is still very pre-beta fyi)
