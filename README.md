@@ -2,7 +2,7 @@
 
 Markdown Oxide is attempting to be the best PKM system for software enthusiasts - people like me who (in addition to note-taking) are addicted to creating the best text editing experience. 
 
-Markdown Oxide's PKM features are strongly inspired by Obsidian - in fact Markdown Oxide is fully compatible with your Obsidian vault. Markdown Oxide does not aim to fully replace Obsidian; it serves to provide a feature rich and advanced note taking experience. Obsidian remains a terrific front-end for your linked markdown notes. Also, in terms of features, Markdown Oxide and Obsidian are quite alligned.
+Obsidian strongly inspires Markdown Oxide's PKM features - in fact, Markdown Oxide is fully compatible with your Obsidian vault. Markdown Oxide does not aim to fully replace Obsidian; it serves to provide a feature-rich and advanced note-taking experience. Obsidian remains a terrific front-end for your linked markdown notes. Also, in terms of features, Markdown Oxide and Obsidian are quite alligned.
 
 Markdown Oxide's features are implemented in the form of a language server aiming to be fully compatible with your favorite text editor and its ecosystem. Read on to learn what Markdown Oxide provides and how to install and configure it. 
 
@@ -12,7 +12,7 @@ Markdown Oxide's features are implemented in the form of a language server aimin
 
 ### Neovim
 
-1. Given neovim access to the binary.
+1. Given Neovim access to the binary.
 
     - <details>
          <summary>Cargo Install (from source)</summary>
@@ -66,7 +66,7 @@ Markdown Oxide's features are implemented in the form of a language server aimin
     - <details>
         <summary>Modify your nvim-cmp configuration</summary>
 
-        Modify your nvim cmp source settings for nvim-lsp (note: you must have nvim-lsp installed)
+        Modify your nvim-cmp source settings for nvim-lsp (note: you must have nvim-lsp installed)
 
         ```lua        
         {
@@ -133,7 +133,7 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
 
 ### Zed
 
-Markdown Oxide is availiable as an extenion titled `Markdown Oxide`. Similarly to VSCode, there are two methods to for this extension to access the language server
+Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly to VSCode, there are two methods for this extension to access the language server
 1. Recommended: the extension will download the server's binary and use that
 2. The extension will use `markdown-oxide` from path. To install to your path, there are the following methods for Zed:
 
@@ -163,11 +163,11 @@ Markdown Oxide is availiable as an extenion titled `Markdown Oxide`. Similarly t
 
     
 > [!Note]
-> Zed does not implement some of the language server protocol that this LS uses. Namely, unindexed block completions do not work at all. There are also other issues with the language server unique to Zed (such as completions being unexpectedly hidden). Overtime, these issue will be resolved; for now, Zed provides an interesting exhibition for a potential note taking experience provided by markdown oxide
+> Zed does not implement some of the language server protocol that this LS uses. Namely, unindexed block completions do not work at all. There are also other issues with the language server unique to Zed (such as completions being unexpectedly hidden). Over time, these issues will be resolved; for now, Zed provides an interesting exhibition for a potential (beautiful + fast) note-taking experience provided by markdown oxide
 
 ### Helix
 
-For Helix, all you must do is install the language server's binary to your path. The following installation methods are availiable:
+For Helix, all you must do is install the language server's binary to your path. The following installation methods are available:
 - <details>
      <summary>Cargo Install (from source)</summary>
 
@@ -194,14 +194,14 @@ For Helix, all you must do is install the language server's binary to your path.
 
 
 > [!Note]
-> There are some major issue with markdown oxide on helix as it does not fully implement the language server protocol. Most obtrusive is that helix does not implement `is_incomplete` for completions, and since completion filtering and sorting happens on the server (for performance), you must manually rerequest completions after typing. 
+> There are some major issues with markdown oxide on helix as it does not fully implement the language server protocol. Most obtrusive is that helix does not implement `is_incomplete` for completions, and since completion filtering and sorting happens on the server (for performance), you must manually re-request completions after typing (one method I have found is to exit and re-enter insert mode)
 
 
 ## Linking Syntax
 
 The linking syntax is that of Obsidian's and can be found here https://help.obsidian.md/Linking+notes+and+files/Internal+links
 
-Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[articles/markdown oxide#Features|Markdown Oxide Features]] to link to a heading in `Markdown Oxide.md` file in the `articles` folder or [[Obsidian]] for the `Obsidian.md` file in the root folder. Markdown oxide also support markdown links
+Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[articles/markdown oxide#Features|Markdown Oxide Features]] to link to a heading in `Markdown Oxide.md` file in the `articles` folder or [[Obsidian]] for the `Obsidian.md` file in the root folder. Markdown oxide also supports markdown links
 
 ## Features
 
@@ -494,4 +494,4 @@ Here are the alternatives (open source authors are welcome to make PRs to add th
 
 ## ---The--bottom--line--------------------------------------------------
 
-Listen. I really like Vim motions. I also really love low-latency terminal editing. I very much so also like my Neovim LSP plugins, keymappings, and config. But Wow! I also like using Obsidian and Logseq. **Can't I just have it all???** Can't I be whisked away by the flow of Neovim while also experiencing the beauty of Obsidian???? Can't I detail my tasks on the CLI while viewing them in Logseq????? Well, I thought I could; for us all, there is markdown-oxide (which is still very pre-beta hah)
+Listen. I really like Vim motions. I also really love low-latency terminal editing. I very much so also like my Neovim LSP plugins, keymappings, and config. But Wow! I also like using Obsidian and Logseq. **Can't I just have it all???** Can't I be whisked away by the flow of Neovim while also experiencing the beauty of Obsidian???? Can't I detail my tasks on the CLI while viewing them in Logseq????? Well, I thought I could; now for us all, there is markdown-oxide (which is still very pre-beta fyi)
