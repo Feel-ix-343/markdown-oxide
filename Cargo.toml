@@ -29,4 +29,3 @@ walkdir = "2.4.0"
 
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/v{ version }/{ name }-v{ version }-{ target }{ archive-suffix }"
-pkg-fmt = "tgz"
