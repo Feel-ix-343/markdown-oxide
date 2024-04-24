@@ -287,7 +287,6 @@ Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[arti
 </details>
 
 - [ ] Subheading completions in the form [[file#heading#subheading]] from https://help.obsidian.md/Linking+notes+and+files/Internal+links#Link+to+a+heading+in+a+note (Note: right now you can link to subheadings through [[file#subheading]])
-- [ ] Callout/admonition completions
 - [ ] Metadata completions
 - [ ] Dataview completions
 - [ ] Metadata tag completions
