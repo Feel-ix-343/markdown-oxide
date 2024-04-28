@@ -207,9 +207,9 @@ For Helix, all you must do is install the language server's binary to your path.
 - <details>
     <summary>Cargo binstall (from hosted binary)</summary>
     
-        ```bash
-        cargo binstall --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
-        ```
+    ```bash
+    cargo binstall --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
+    ```
     
 </details>
 
