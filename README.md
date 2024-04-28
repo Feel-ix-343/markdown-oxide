@@ -27,7 +27,7 @@ Markdown Oxide's features are implemented in the form of a language server aimin
          <summary>Cargo binstall (from hosted binary)</summary>
     
         ```bash
-        cargo binstall markdown-oxide
+        cargo binstall --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
         ```
     
     </details>
@@ -123,6 +123,15 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
         ```
     
     </details>
+
+    - <details>
+         <summary>Cargo binstall (from hosted binary)</summary>
+    
+        ```bash
+        cargo binstall --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
+        ```
+    
+    </details>
     
     - <details>
          <summary>AUR (from source)</summary>
@@ -159,7 +168,7 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
          <summary>Cargo binstall (from hosted binary)</summary>
     
         ```bash
-        cargo binstall markdown-oxide
+        cargo binstall --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
         ```
     
     </details>
@@ -199,7 +208,7 @@ For Helix, all you must do is install the language server's binary to your path.
     <summary>Cargo binstall (from hosted binary)</summary>
     
         ```bash
-        cargo binstall markdown-oxide
+        cargo binstall --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
         ```
     
 </details>
