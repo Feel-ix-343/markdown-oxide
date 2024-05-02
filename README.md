@@ -27,7 +27,7 @@ Markdown Oxide's features are implemented in the form of a language server aimin
          <summary>Cargo binstall (from hosted binary)</summary>
     
         ```bash
-        cargo binstall --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
+        cargo install --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
         ```
     
     </details>
