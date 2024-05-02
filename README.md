@@ -24,7 +24,7 @@ Markdown Oxide's features are implemented in the form of a language server aimin
     </details>
 
     - <details>
-         <summary>Cargo binstall (from hosted binary)</summary>
+         <summary>Cargo binstall[1] (from hosted binary)</summary>
     
         ```bash
         cargo binstall --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
@@ -125,7 +125,7 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
     </details>
 
     - <details>
-         <summary>Cargo binstall (from hosted binary)</summary>
+         <summary>Cargo binstall[1] (from hosted binary)</summary>
     
         ```bash
         cargo binstall --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
@@ -165,7 +165,7 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
     </details>
 
     - <details>
-         <summary>Cargo binstall (from hosted binary)</summary>
+         <summary>Cargo binstall[1] (from hosted binary)</summary>
     
         ```bash
         cargo binstall --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
@@ -205,7 +205,7 @@ For Helix, all you must do is install the language server's binary to your path.
 </details>
 
 - <details>
-    <summary>Cargo binstall (from hosted binary)</summary>
+    <summary>Cargo binstall[1] (from hosted binary)</summary>
     
     ```bash
     cargo binstall --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
@@ -527,7 +527,6 @@ Here are the alternatives (open source authors are welcome to make PRs to add th
 - https://github.com/WhiskeyJack96/logseqlsp: This is a cool project and a great inspiration for Logseq support (which is upcoming). status: it doesn't seem that it is maintained and it (obviously) does not provide support for all of the obsidian syntax
 - The og https://github.com/artempyanykh/marksman: I used this for a while, but it is not obsidian specific and didn't act well with my vault. Additionally, the block completions in markdown-oxide allow for a fuzzy/grep search of the entire vault to generate the completions; I don't think Markman has any features like this; (this is a feature that Logseq signified for PKM; the concept that *anything is linkable* is quite powerful) 
 
+## Links
 
-## ---The--bottom--line--------------------------------------------------
-
-Listen. I really like Vim motions. I also really love low-latency terminal editing. I very much so also like my Neovim LSP plugins, keymappings, and config. But Wow! I also like using Obsidian and Logseq. **Can't I just have it all???** Can't I be whisked away by the flow of Neovim while also experiencing the beauty of Obsidian???? Can't I detail my tasks on the CLI while viewing them in Logseq????? Well, I thought I could; now for us all, there is markdown-oxide (which is still very pre-beta fyi)
+1: https://github.com/cargo-bins/cargo-binstall
