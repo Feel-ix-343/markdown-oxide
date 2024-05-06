@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use completion::get_completions;
@@ -24,6 +23,7 @@ use vault::Vault;
 mod codeactions;
 mod codelens;
 mod completion;
+mod commands;
 mod config;
 mod diagnostics;
 mod gotodef;
@@ -371,7 +371,7 @@ impl LanguageServer for Backend {
                     resolve_provider: None,
                 }),
                 execute_command_provider: Some(ExecuteCommandOptions {
-                    commands: vec!["apply_edits".into()],
+                    commands: vec!["apply_edits".into(), "jump".into()],
                     ..Default::default()
                 }),
                 semantic_tokens_provider: Some(
@@ -584,7 +584,16 @@ impl LanguageServer for Backend {
                 }
 
                 Ok(None)
-            }
+            },
+            ExecuteCommandParams { command, .. } if *command == *"jump" => {
+                let jump_to = params.arguments.first().and_then(|val| val.as_str());
+                let settings = self.bind_settings(|settings| Ok(settings.to_owned())).await?;
+                if let Some(doc) = commands::jump(&settings, jump_to) {
+                    self.client.show_document(doc).await?;
+                };
+                Ok(None)
+                // Ok(do)
+            },
             _ => Ok(None),
         }
     }
