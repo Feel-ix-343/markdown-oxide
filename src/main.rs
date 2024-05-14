@@ -22,8 +22,8 @@ use vault::Vault;
 
 mod codeactions;
 mod codelens;
-mod completion;
 mod commands;
+mod completion;
 mod config;
 mod diagnostics;
 mod gotodef;
@@ -291,9 +291,10 @@ impl Backend {
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(&self, i: InitializeParams) -> Result<InitializeResult> {
-
         let root_dir = match i.root_uri {
-            Some(uri) => uri.to_file_path().or(Err(Error::new(ErrorCode::InvalidParams)))?,
+            Some(uri) => uri
+                .to_file_path()
+                .or(Err(Error::new(ErrorCode::InvalidParams)))?,
             None => std::env::current_dir().or(Err(Error::new(ErrorCode::InvalidParams)))?,
         };
 
@@ -584,16 +585,14 @@ impl LanguageServer for Backend {
                 }
 
                 Ok(None)
-            },
+            }
             ExecuteCommandParams { command, .. } if *command == *"jump" => {
                 let jump_to = params.arguments.first().and_then(|val| val.as_str());
-                let settings = self.bind_settings(|settings| Ok(settings.to_owned())).await?;
-                if let Some(doc) = commands::jump(&settings, jump_to) {
-                    self.client.show_document(doc).await?;
-                };
-                Ok(None)
-                // Ok(do)
-            },
+                let settings = self
+                    .bind_settings(|settings| Ok(settings.to_owned()))
+                    .await?;
+                commands::jump(&self.client, &settings, jump_to).await
+            }
             _ => Ok(None),
         }
     }

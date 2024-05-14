@@ -1,55 +1,75 @@
-use chrono::NaiveDateTime;
-use chrono::offset::Local;
+use std::fs::File;
+use std::path::Path;
+
 use crate::config::Settings;
+use chrono::offset::Local;
+use chrono::NaiveDateTime;
 use fuzzydate::parse;
-use tower_lsp::lsp_types::{ShowDocumentParams, Url};
+use serde_json::Value;
+use tower_lsp::jsonrpc::{Error, Result};
+use tower_lsp::lsp_types::{MessageType, ShowDocumentParams, Url};
 
-
-// fn file_to_datetime(filename: &str, format: &str) -> Result<NaiveDateTime> {
-//     // default to the beginning of an underspecified interval,
-//     // top of hour, beginning of day, start of week
-//
-//     let items = StrftimeItems::new(format);
-//     let mut parsed = Parsed::new();
-//     parse(&mut parsed, "2024-04-01", items);
-//     parsed.to_naive_datetime_with_offset(0)
-// }
-
-
-fn datetime_to_file(datetime: NaiveDateTime, format: &str) -> Option<Url> {
-    Url::parse(&format!("file:///home/kxnr/wiki/journal/{}", &datetime.format(format).to_string())).ok()
+fn file_to_datetime(filename: &str, format: &str) -> Option<NaiveDateTime> {
+    // re-hydrate a datetime from a dailynote filename
+    todo!()
 }
 
-// fn increment_file(filename: &str, increment: JournalIncrement, format: &str) -> Result<String> {
-//     let current_as_datetime = file_to_datetime(filename, format);
-//
-//     let next_as_datetime = match increment {
-//         JournalIncrement::Hours(hours) => current_as_datetime.checked_add_signed(TimeDelta::hours(hours)),
-//         JournalIncrement::Days(days) => current_as_datetime.checked_add_signed(TimeDelta::days(days)),
-//         JournalIncrement::Weeks(weeks) => current_as_datetime.checked_add_signed(TimeDelta::weeks(weeks)),
-//         JournalIncrement::Months(months) => current_as_datetime.checked_add_months(months),
-//         JournalIncrement::Years(years) => current_as_datetime.checked_add_months(12*years),
-//     }
-//
-//     datetime_to_file(next_as_datetime, format)
-// }
+fn datetime_to_file(datetime: NaiveDateTime, settings: &Settings) -> Option<Url> {
+    let filename = datetime.format(&settings.dailynote).to_string();
+    let path = Path::new(&filename);
 
-pub fn jump(settings: &Settings, jump_to: Option<&str>) -> Option<ShowDocumentParams> {
+    Url::from_file_path(path.with_extension("md")).ok()
+}
+
+pub async fn jump(
+    client: &tower_lsp::Client,
+    settings: &Settings,
+    jump_to: Option<&str>,
+) -> Result<Option<Value>> {
     // if jump_to is None, use the current time.
-    // TODO: special syntax to reference the current file and the current time
-    // TODO: make fuzzydate relative to any date
-    // TODO: create file
 
     let note_file = match jump_to {
-        Some(jmp_str) => parse(jmp_str).ok().and_then(|dt| datetime_to_file(dt, &settings.dailynote)),
-        None => datetime_to_file(Local::now().naive_local(), &settings.dailynote)
+        Some(jmp_str) => parse(jmp_str)
+            .ok()
+            .and_then(|dt| datetime_to_file(dt, &settings)),
+        None => datetime_to_file(Local::now().naive_local(), &settings),
     };
 
-    note_file.map(|uri| ShowDocumentParams{ uri, 
-        external: Some(false),
-        take_focus: Some(true),
-        selection: None })
+    if let Some(uri) = note_file {
+        // file creation can fail and return an Err, ignore this and try
+        // to open the file on the off chance the client knows what to do
+        // TODO: log failure to create file
+        let _ = uri.to_file_path().map(|path| {
+            path.parent().map(|parent| std::fs::create_dir_all(parent));
+            File::create_new(path.as_path().to_owned())
+        });
+
+        client
+            .show_document(ShowDocumentParams {
+                uri,
+                external: Some(false),
+                take_focus: Some(true),
+                selection: None,
+            })
+            .await
+            .map(|success| Some(success.into()))
+    } else {
+        client
+            .log_message(
+                MessageType::ERROR,
+                format!("could not parse {jump_to:?}: {:?}", jump_to.map(parse)),
+            )
+            .await;
+        Err(Error::invalid_params(
+            "Could not parse journal format as a valid uri.".to_string(),
+        ))
+    }
 }
 
-
-// TODO; next and prev
+pub fn jump_relative(
+    client: tower_lsp::Client,
+    settings: &Settings,
+    jump_to: &str,
+) -> Result<Option<Value>> {
+    todo!("pending PR in fuzzydate to specify base time")
+}
