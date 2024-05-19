@@ -99,6 +99,30 @@ Markdown Oxide's features are implemented in the form of a language server aimin
 
     </details>
 
+    - <details>
+        <summary>(optional) Enable opening daily notes with natural langauge</summary>
+
+        Modify your lsp `on_attach` function to support opening daily notes with, for example, `:Daily two days ago` or `:Daily next monday`
+
+        ```lua
+        -- setup Markdown Oxide daily note commands
+        if client.name == "markdown_oxide" then
+
+          vim.api.nvim_create_user_command(
+            "Daily",
+            function(args)
+              local input = args.args
+
+              vim.lsp.buf.execute_command({command="jump", arguments={input}})
+
+            end,
+            {desc = 'Open daily note', nargs = "*"}
+          )
+        end
+        ```
+
+    </details>
+
 
 ### VSCode
 
