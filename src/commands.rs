@@ -2,6 +2,7 @@ use std::fs::File;
 use std::path::Path;
 
 use crate::config::Settings;
+use crate::vault::{self, Vault};
 use chrono::offset::Local;
 use chrono::NaiveDateTime;
 use fuzzydate::parse;
@@ -14,25 +15,29 @@ fn file_to_datetime(filename: &str, format: &str) -> Option<NaiveDateTime> {
     todo!()
 }
 
-fn datetime_to_file(datetime: NaiveDateTime, settings: &Settings) -> Option<Url> {
-    let filename = datetime.format(&settings.dailynote).to_string();
-    let path = Path::new(&filename);
+fn datetime_to_file(datetime: NaiveDateTime, dailynote_format: &str, root_dir: &Path) -> Option<Url> {
+    let filename = datetime.format(dailynote_format).to_string();
+    let path = root_dir.join(&filename);
+
+    println!("path: {:?}", path);
 
     Url::from_file_path(path.with_extension("md")).ok()
 }
 
 pub async fn jump(
     client: &tower_lsp::Client,
+    root_dir: &Path,
     settings: &Settings,
     jump_to: Option<&str>,
 ) -> Result<Option<Value>> {
     // if jump_to is None, use the current time.
 
+    let daily_note_format = &settings.dailynote;
     let note_file = match jump_to {
         Some(jmp_str) => parse(jmp_str)
             .ok()
-            .and_then(|dt| datetime_to_file(dt, &settings)),
-        None => datetime_to_file(Local::now().naive_local(), &settings),
+            .and_then(|dt| datetime_to_file(dt, &daily_note_format, root_dir)),
+        None => datetime_to_file(Local::now().naive_local(), &daily_note_format, root_dir),
     };
 
     if let Some(uri) = note_file {
@@ -41,7 +46,9 @@ pub async fn jump(
         // TODO: log failure to create file
         let _ = uri.to_file_path().map(|path| {
             path.parent().map(|parent| std::fs::create_dir_all(parent));
-            File::create_new(path.as_path().to_owned())
+            if !path.exists() {
+                let _ = File::create(path.as_path().to_owned());
+            } 
         });
 
         client
@@ -61,7 +68,7 @@ pub async fn jump(
             )
             .await;
         Err(Error::invalid_params(
-            "Could not parse journal format as a valid uri.".to_string(),
+            format!("Could not parse journal format ({jump_to:?}) as a valid uri: {:?}.", jump_to.map(parse)),
         ))
     }
 }
@@ -72,4 +79,26 @@ pub fn jump_relative(
     jump_to: &str,
 ) -> Result<Option<Value>> {
     todo!("pending PR in fuzzydate to specify base time")
+}
+
+// tests
+#[cfg(test)]
+mod tests {
+    use fuzzydate::parse;
+
+    use crate::config::Settings;
+
+    use super::datetime_to_file;
+
+
+    #[test]
+    fn test_string_to_file() {
+
+        let input = "today";
+
+        let parsed_datetime = parse(input).unwrap();
+
+        let file = datetime_to_file(parsed_datetime, "%Y-%m-%d", &std::fs::canonicalize("./").unwrap()).unwrap();
+
+    }
 }

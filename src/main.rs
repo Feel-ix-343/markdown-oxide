@@ -591,7 +591,8 @@ impl LanguageServer for Backend {
                 let settings = self
                     .bind_settings(|settings| Ok(settings.to_owned()))
                     .await?;
-                commands::jump(&self.client, &settings, jump_to).await
+                let root_dir = self.bind_vault(|vault| Ok(vault.root_dir().to_owned())).await?;
+                commands::jump(&self.client, &root_dir, &settings, jump_to).await
             }
             _ => Ok(None),
         }
