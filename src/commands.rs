@@ -2,18 +2,12 @@ use std::fs::File;
 use std::path::Path;
 
 use crate::config::Settings;
-use crate::vault::{self, Vault};
 use chrono::offset::Local;
 use chrono::NaiveDateTime;
 use fuzzydate::parse;
 use serde_json::Value;
 use tower_lsp::jsonrpc::{Error, Result};
 use tower_lsp::lsp_types::{MessageType, ShowDocumentParams, Url};
-
-fn file_to_datetime(filename: &str, format: &str) -> Option<NaiveDateTime> {
-    // re-hydrate a datetime from a dailynote filename
-    todo!()
-}
 
 fn datetime_to_file(datetime: NaiveDateTime, dailynote_format: &str, root_dir: &Path) -> Option<Url> {
     let filename = datetime.format(dailynote_format).to_string();
@@ -73,20 +67,10 @@ pub async fn jump(
     }
 }
 
-pub fn jump_relative(
-    client: tower_lsp::Client,
-    settings: &Settings,
-    jump_to: &str,
-) -> Result<Option<Value>> {
-    todo!("pending PR in fuzzydate to specify base time")
-}
-
 // tests
 #[cfg(test)]
 mod tests {
     use fuzzydate::parse;
-
-    use crate::config::Settings;
 
     use super::datetime_to_file;
 
@@ -98,7 +82,7 @@ mod tests {
 
         let parsed_datetime = parse(input).unwrap();
 
-        let file = datetime_to_file(parsed_datetime, "%Y-%m-%d", &std::fs::canonicalize("./").unwrap()).unwrap();
+        let _ = datetime_to_file(parsed_datetime, "%Y-%m-%d", &std::fs::canonicalize("./").unwrap()).unwrap();
 
     }
 }
