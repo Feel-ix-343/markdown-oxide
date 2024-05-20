@@ -109,7 +109,7 @@ Markdown Oxide's features are implemented in the form of a language server aimin
     </details>
 
     - <details>
-        <summary>(optional) Enable opening daily notes with natural langauge</summary>
+        <summary>(optional; requires latest commit) Enable opening daily notes with natural langauge</summary>
 
         Modify your lsp `on_attach` function to support opening daily notes with, for example, `:Daily two days ago` or `:Daily next monday`. The specification can be found [here](https://docs.rs/fuzzydate/latest/fuzzydate/)
 
