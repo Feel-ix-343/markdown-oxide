@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use completion::get_completions;
@@ -23,6 +22,7 @@ use vault::Vault;
 
 mod codeactions;
 mod codelens;
+mod commands;
 mod completion;
 mod config;
 mod diagnostics;
@@ -291,9 +291,10 @@ impl Backend {
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(&self, i: InitializeParams) -> Result<InitializeResult> {
-
         let root_dir = match i.root_uri {
-            Some(uri) => uri.to_file_path().or(Err(Error::new(ErrorCode::InvalidParams)))?,
+            Some(uri) => uri
+                .to_file_path()
+                .or(Err(Error::new(ErrorCode::InvalidParams)))?,
             None => std::env::current_dir().or(Err(Error::new(ErrorCode::InvalidParams)))?,
         };
 
@@ -371,7 +372,7 @@ impl LanguageServer for Backend {
                     resolve_provider: None,
                 }),
                 execute_command_provider: Some(ExecuteCommandOptions {
-                    commands: vec!["apply_edits".into()],
+                    commands: vec!["apply_edits".into(), "jump".into()],
                     ..Default::default()
                 }),
                 semantic_tokens_provider: Some(
@@ -584,6 +585,14 @@ impl LanguageServer for Backend {
                 }
 
                 Ok(None)
+            }
+            ExecuteCommandParams { command, .. } if *command == *"jump" => {
+                let jump_to = params.arguments.first().and_then(|val| val.as_str());
+                let settings = self
+                    .bind_settings(|settings| Ok(settings.to_owned()))
+                    .await?;
+                let root_dir = self.bind_vault(|vault| Ok(vault.root_dir().to_owned())).await?;
+                commands::jump(&self.client, &root_dir, &settings, jump_to).await
             }
             _ => Ok(None),
         }

@@ -1,6 +1,6 @@
 # Markdown Oxide
 
-Markdown Oxide is attempting to be the best PKM system for software enthusiasts - people like me who (in addition to note-taking) are addicted to creating the best text editing experience. 
+Markdown Oxide is attempting to be the best Personal Knowledge Management (PKM) system for software enthusiasts - people like me who (in addition to note-taking) are addicted to creating the best text editing experience. **Bring your own text editor and let `markdown-oxide` be your PKM!**
 
 Obsidian strongly inspires Markdown Oxide's PKM features - in fact, Markdown Oxide is fully compatible with your Obsidian vault. Markdown Oxide does not aim to fully replace Obsidian; it serves to provide a feature-rich and advanced note-taking experience. Obsidian remains a terrific front-end for your linked markdown notes. Also, in terms of features, Markdown Oxide and Obsidian are quite alligned.
 
@@ -19,6 +19,15 @@ Markdown Oxide's features are implemented in the form of a language server aimin
     
         ```bash
         cargo install --locked --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
+        ```
+    
+    </details>
+
+    - <details>
+         <summary>Cargo binstall[1] (from hosted binary)</summary>
+    
+        ```bash
+        cargo binstall --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
         ```
     
     </details>
@@ -99,6 +108,30 @@ Markdown Oxide's features are implemented in the form of a language server aimin
 
     </details>
 
+    - <details>
+        <summary>(optional; requires latest commit) Enable opening daily notes with natural langauge</summary>
+
+        Modify your lsp `on_attach` function to support opening daily notes with, for example, `:Daily two days ago` or `:Daily next monday`. The specification can be found [here](https://docs.rs/fuzzydate/latest/fuzzydate/)
+
+        ```lua
+        -- setup Markdown Oxide daily note commands
+        if client.name == "markdown_oxide" then
+
+          vim.api.nvim_create_user_command(
+            "Daily",
+            function(args)
+              local input = args.args
+
+              vim.lsp.buf.execute_command({command="jump", arguments={input}})
+
+            end,
+            {desc = 'Open daily note', nargs = "*"}
+          )
+        end
+        ```
+
+    </details>
+
 
 ### VSCode
 
@@ -111,6 +144,15 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
     
         ```bash
         cargo install --locked --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
+        ```
+    
+    </details>
+
+    - <details>
+         <summary>Cargo binstall[1] (from hosted binary)</summary>
+    
+        ```bash
+        cargo binstall --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
         ```
     
     </details>
@@ -145,6 +187,15 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
         ```
     
     </details>
+
+    - <details>
+         <summary>Cargo binstall[1] (from hosted binary)</summary>
+    
+        ```bash
+        cargo binstall --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
+        ```
+    
+    </details>
     
     - <details>
          <summary>AUR (from source)</summary>
@@ -175,6 +226,15 @@ For Helix, all you must do is install the language server's binary to your path.
     cargo install --locked --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
     ```
 
+</details>
+
+- <details>
+    <summary>Cargo binstall[1] (from hosted binary)</summary>
+    
+    ```bash
+    cargo binstall --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
+    ```
+    
 </details>
 
 - <details>
@@ -287,6 +347,7 @@ Generally, this is `[[relativeFilePath(#heading)?(|display text)?]]` e.g. [[arti
 </details>
 
 - [ ] Subheading completions in the form [[file#heading#subheading]] from https://help.obsidian.md/Linking+notes+and+files/Internal+links#Link+to+a+heading+in+a+note (Note: right now you can link to subheadings through [[file#subheading]])
+- [ ] Headings in the current file
 - [ ] Metadata completions
 - [ ] Dataview completions
 - [ ] Metadata tag completions
@@ -490,7 +551,6 @@ Here are the alternatives (open source authors are welcome to make PRs to add th
 - https://github.com/WhiskeyJack96/logseqlsp: This is a cool project and a great inspiration for Logseq support (which is upcoming). status: it doesn't seem that it is maintained and it (obviously) does not provide support for all of the obsidian syntax
 - The og https://github.com/artempyanykh/marksman: I used this for a while, but it is not obsidian specific and didn't act well with my vault. Additionally, the block completions in markdown-oxide allow for a fuzzy/grep search of the entire vault to generate the completions; I don't think Markman has any features like this; (this is a feature that Logseq signified for PKM; the concept that *anything is linkable* is quite powerful) 
 
+## Links
 
-## ---The--bottom--line--------------------------------------------------
-
-Listen. I really like Vim motions. I also really love low-latency terminal editing. I very much so also like my Neovim LSP plugins, keymappings, and config. But Wow! I also like using Obsidian and Logseq. **Can't I just have it all???** Can't I be whisked away by the flow of Neovim while also experiencing the beauty of Obsidian???? Can't I detail my tasks on the CLI while viewing them in Logseq????? Well, I thought I could; now for us all, there is markdown-oxide (which is still very pre-beta fyi)
+1: https://github.com/cargo-bins/cargo-binstall
