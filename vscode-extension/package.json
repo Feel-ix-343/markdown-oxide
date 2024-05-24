@@ -3,7 +3,7 @@
   "displayName": "Markdown Oxide",
 	"description": "Let's record your consciousness! Bring your own text editor! Implemented as a language server compatible with any text editor, Markdown-Oxide is attempting to be the best PKM system for software enthusiasts",
 	"author": "Felix Zeller",
-	"version": "1.0.4",
+	"version": "1.0.5",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/Feel-ix-343/markdown-oxide"
