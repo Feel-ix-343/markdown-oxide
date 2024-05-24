@@ -240,7 +240,7 @@ function releaseBinName(): string {
 
   let platform_string: string = null;
   if (platform == "win32") {
-    platform_string = "pc-windows-gnu"
+    platform_string = "pc-windows-gnu.exe"
   } else if (platform == "darwin") {
     platform_string = "apple-darwin"
   } else if (platform == "linux") {
