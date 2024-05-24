@@ -9,7 +9,6 @@ import fetch from "node-fetch"
 import * as fs from "fs"
 import * as stream from "stream"
 import {promisify} from "util"
-import * as child_process from "child_process"
 
 import {
 	LanguageClient,
@@ -20,8 +19,6 @@ import {
 	TransportKind,
 	URI
 } from 'vscode-languageclient/node';
-import { unzip } from 'zlib';
-import { downloadFile } from './util';
 
 let client: LanguageClient;
 
@@ -229,16 +226,6 @@ async function downloadRelease(targetDir: vscode.Uri, targetFile: vscode.Uri, on
 function releaseDownloadUrl(): string {
   return releaseBaseUrl + "/" + versionTag + "/" + releaseBinName();
 }
-
-function releaseUrlExtension(): string {
-  const platform = os.platform();
-  if (platform == "win32") {
-    return ".zip"
-  } else {
-    return ".tar.gz"
-  }
-}
-
 
 function releaseBinName(): string {
 	const platform = os.platform();
