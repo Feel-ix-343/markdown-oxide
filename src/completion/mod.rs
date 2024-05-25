@@ -1,7 +1,5 @@
 use std::path::{Path, PathBuf};
 
-use rayon::prelude::*;
-
 use tower_lsp::lsp_types::{CompletionItem, CompletionList, CompletionParams, CompletionResponse};
 
 use crate::{config::Settings, vault::Vault};
