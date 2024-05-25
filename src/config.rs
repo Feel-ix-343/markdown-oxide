@@ -10,6 +10,8 @@ use tower_lsp::lsp_types::ClientCapabilities;
 pub struct Settings {
     /// Format of daily notes
     pub dailynote: String,
+    /// Diffrent pages path than default
+    pub new_file_folder_path: String,
     pub heading_completions: bool,
     pub title_headings: bool,
     pub unresolved_diagnostics: bool,
@@ -21,9 +23,8 @@ pub struct Settings {
 impl Settings {
     pub fn new(root_dir: &Path, capabilities: &ClientCapabilities) -> anyhow::Result<Settings> {
         let obsidian_daily_note = obsidian_dailynote_converted(root_dir);
-
+        let obsidian_new_file_folder_path= obsidian_new_file_folder_path(root_dir);
         let expanded = shellexpand::tilde("~/.config/moxide/settings");
-
         let settings = Config::builder()
             .add_source(
                 File::with_name(&format!(
@@ -35,6 +36,10 @@ impl Settings {
                 .required(false),
             )
             .add_source(File::with_name(&expanded).required(false))
+            .set_default(
+                "new_file_folder_path",
+                obsidian_new_file_folder_path.unwrap_or("".to_string())
+                )?
             .set_default(
                 "dailynote",
                 obsidian_daily_note.unwrap_or("%Y-%m-%d".to_string()),
@@ -76,6 +81,20 @@ fn obsidian_dailynote_converted(root_dir: &Path) -> Option<String> {
     });
 
     daily_note
+}
+fn obsidian_new_file_folder_path(root_dir: &Path) -> Option<String> {
+    let obsidian_settings_file = root_dir.join(".obsidian").join("app.json");
+    let file = std::fs::read(obsidian_settings_file).ok();
+    let config: Option<HashMap<String, String>> =
+        file.and_then(|file| serde_json::from_slice(&file).ok());
+
+    let new_file_folder_path = config.as_ref().and_then(|config| {
+        config
+            .get("newFileFolderPath")
+            .map(|new_file_folder_path| convert_momentjs_to_chrono_format(new_file_folder_path))
+    });
+
+    new_file_folder_path
 }
 
 use std::collections::HashMap;

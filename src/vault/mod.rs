@@ -59,13 +59,13 @@ impl Vault {
             ropes: ropes.into(),
             md_files: md_files.into(),
             root_dir: root_dir.into(),
+            pages_dir : context.new_file_folder_path.clone().into()
         })
     }
 
     pub fn update_vault(context: &Settings, old: &mut Vault, new_file: (&PathBuf, &str)) {
         let new_md_file = MDFile::new(context, new_file.1, new_file.0.clone());
         let new = old.md_files.get_mut(new_file.0);
-
         match new {
             Some(file) => {
                 *file = new_md_file;
@@ -136,6 +136,7 @@ pub struct Vault {
     pub md_files: MyHashMap<MDFile>,
     pub ropes: MyHashMap<Rope>,
     root_dir: PathBuf,
+    pages_dir: PathBuf,
 }
 
 /// Methods using vaults data
@@ -327,6 +328,9 @@ Some(Referenceable::UnresovledFile(path, &data.reference_text))
 
     pub fn root_dir(&self) -> &PathBuf {
         &self.root_dir
+    }
+    pub fn pages_dir(&self) -> &PathBuf {
+        &self.pages_dir
     }
 
     pub fn select_references_for_referenceable(
@@ -1306,15 +1310,6 @@ impl Refname {
         Some(last.to_string())
     }
 
-    pub fn file_refname(&self) -> Option<String> {
-        let file_key = self.link_file_key()?;
-
-        match &self.infile_ref {
-            Some(infile_ref) => format!("{}#{}", file_key, infile_ref),
-            None => file_key.clone(),
-        }
-        .into()
-    }
 }
 
 impl Deref for Refname {

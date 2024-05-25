@@ -38,6 +38,7 @@ pub fn code_actions(
                     Reference::WikiFileLink(_data) => {
                         let mut new_path_buf = PathBuf::new();
                         new_path_buf.push(vault.root_dir());
+                        new_path_buf.push(vault.pages_dir());
                         new_path_buf.push(&reference.data().reference_text);
                         new_path_buf.set_extension("md");
 
