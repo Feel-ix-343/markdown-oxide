@@ -27,11 +27,12 @@ pub async fn jump(
     // if jump_to is None, use the current time.
 
     let daily_note_format = &settings.dailynote;
+    let daily_note_path = root_dir.join(&settings.daily_notes_folder);
     let note_file = match jump_to {
         Some(jmp_str) => parse(jmp_str)
             .ok()
             .and_then(|dt| datetime_to_file(dt, &daily_note_format, root_dir)),
-        None => datetime_to_file(Local::now().naive_local(), &daily_note_format, root_dir),
+        None => datetime_to_file(Local::now().naive_local(), &daily_note_format, &daily_note_path),
     };
 
     if let Some(uri) = note_file {

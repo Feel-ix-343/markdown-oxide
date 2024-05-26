@@ -12,6 +12,7 @@ pub struct Settings {
     pub dailynote: String,
     /// Diffrent pages path than default
     pub new_file_folder_path: String,
+    pub daily_notes_folder: String,
     pub heading_completions: bool,
     pub title_headings: bool,
     pub unresolved_diagnostics: bool,
@@ -22,7 +23,7 @@ pub struct Settings {
 
 impl Settings {
     pub fn new(root_dir: &Path, capabilities: &ClientCapabilities) -> anyhow::Result<Settings> {
-        let obsidian_daily_note = obsidian_dailynote_converted(root_dir);
+        let (obsidian_daily_note,obsidian_daily_notes_folder) = obsidian_dailynote_details(root_dir);
         let obsidian_new_file_folder_path= obsidian_new_file_folder_path(root_dir);
         let expanded = shellexpand::tilde("~/.config/moxide/settings");
         let settings = Config::builder()
@@ -39,6 +40,10 @@ impl Settings {
             .set_default(
                 "new_file_folder_path",
                 obsidian_new_file_folder_path.unwrap_or("".to_string())
+                )?
+            .set_default(
+                "daily_notes_folder",
+                obsidian_daily_notes_folder.unwrap_or("".to_string())
                 )?
             .set_default(
                 "dailynote",
@@ -68,20 +73,28 @@ impl Settings {
     }
 }
 
-fn obsidian_dailynote_converted(root_dir: &Path) -> Option<String> {
+fn obsidian_dailynote_details(root_dir: &Path) -> (Option<String>, Option<String>) {
+
     let daily_notes_config_file = root_dir.join(".obsidian").join("daily-notes.json");
     let file = std::fs::read(daily_notes_config_file).ok();
     let config: Option<HashMap<String, String>> =
         file.and_then(|file| serde_json::from_slice(&file).ok());
-
     let daily_note = config.as_ref().and_then(|config| {
         config
             .get("format")
             .map(|format| convert_momentjs_to_chrono_format(format))
     });
 
-    daily_note
+    let daily_notes_folder = config.as_ref().and_then(|config| {
+        config
+            .get("dailyNotesFolder")
+            .map(|daily_notes_folder| convert_momentjs_to_chrono_format(daily_notes_folder))
+    });
+
+    (daily_note, daily_notes_folder)
 }
+
+
 fn obsidian_new_file_folder_path(root_dir: &Path) -> Option<String> {
     let obsidian_settings_file = root_dir.join(".obsidian").join("app.json");
     let file = std::fs::read(obsidian_settings_file).ok();
@@ -96,6 +109,7 @@ fn obsidian_new_file_folder_path(root_dir: &Path) -> Option<String> {
 
     new_file_folder_path
 }
+
 
 use std::collections::HashMap;
 
