@@ -35,6 +35,7 @@ mod symbol;
 mod tokens;
 mod ui;
 mod vault;
+mod daily;
 
 #[derive(Debug)]
 struct Backend {
@@ -634,9 +635,12 @@ impl LanguageServer for Backend {
     }
 
     async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
+
+        let settings  =self.bind_settings(|settings| Ok(settings.clone())).await?;
+
         self.bind_vault(|vault| {
             let path = params_path!(params)?;
-            Ok(codeactions::code_actions(vault, &params, &path))
+            Ok(codeactions::code_actions(vault, &params, &path, &settings))
         })
         .await
     }

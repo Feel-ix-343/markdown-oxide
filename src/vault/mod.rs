@@ -59,7 +59,6 @@ impl Vault {
             ropes: ropes.into(),
             md_files: md_files.into(),
             root_dir: root_dir.into(),
-            pages_dir : context.new_file_folder_path.clone().into()
         })
     }
 
@@ -136,7 +135,6 @@ pub struct Vault {
     pub md_files: MyHashMap<MDFile>,
     pub ropes: MyHashMap<Rope>,
     root_dir: PathBuf,
-    pages_dir: PathBuf,
 }
 
 /// Methods using vaults data
@@ -328,9 +326,6 @@ Some(Referenceable::UnresovledFile(path, &data.reference_text))
 
     pub fn root_dir(&self) -> &PathBuf {
         &self.root_dir
-    }
-    pub fn pages_dir(&self) -> &PathBuf {
-        &self.pages_dir
     }
 
     pub fn select_references_for_referenceable(
@@ -1529,7 +1524,7 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
 // tests
 #[cfg(test)]
 mod vault_tests {
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
 
     use itertools::Itertools;
     use tower_lsp::lsp_types::{Position, Range};
@@ -1538,7 +1533,6 @@ mod vault_tests {
     use crate::vault::{MDLinkReferenceDefinition, Refname};
 
     use super::Reference::*;
-    use super::Vault;
     use super::{MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference, Referenceable};
 
     #[test]

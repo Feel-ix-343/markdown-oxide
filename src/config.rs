@@ -4,6 +4,7 @@ use anyhow::anyhow;
 use config::{Config, File};
 use indexmap::IndexMap;
 use serde::Deserialize;
+use serde_json::Value;
 use tower_lsp::lsp_types::ClientCapabilities;
 
 #[derive(Deserialize, Debug, Clone)]
@@ -87,8 +88,8 @@ fn obsidian_dailynote_details(root_dir: &Path) -> (Option<String>, Option<String
 
     let daily_notes_folder = config.as_ref().and_then(|config| {
         config
-            .get("dailyNotesFolder")
-            .map(|daily_notes_folder| convert_momentjs_to_chrono_format(daily_notes_folder))
+            .get("folder")
+            .cloned()
     });
 
     (daily_note, daily_notes_folder)
@@ -98,13 +99,27 @@ fn obsidian_dailynote_details(root_dir: &Path) -> (Option<String>, Option<String
 fn obsidian_new_file_folder_path(root_dir: &Path) -> Option<String> {
     let obsidian_settings_file = root_dir.join(".obsidian").join("app.json");
     let file = std::fs::read(obsidian_settings_file).ok();
-    let config: Option<HashMap<String, String>> =
-        file.and_then(|file| serde_json::from_slice(&file).ok());
+    let config: Option<HashMap<String, Value>> =
+        file.and_then(|file| {
+        let parsed = serde_json::from_slice(&file);
+        parsed.ok()
+    });
+
 
     let new_file_folder_path = config.as_ref().and_then(|config| {
-        config
+
+        let path = config
             .get("newFileFolderPath")
-            .map(|new_file_folder_path| convert_momentjs_to_chrono_format(new_file_folder_path))
+            .and_then(|value| value.as_str())
+            .map(String::from);
+
+        if config.get("newFileLocation").and_then(|v| v.as_str()) == Some(&"folder") {
+            return path
+        } else {
+            return None
+        }
+
+
     });
 
     new_file_folder_path

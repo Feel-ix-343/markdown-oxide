@@ -8,14 +8,14 @@ use tower_lsp::lsp_types::{
 };
 
 use crate::{
-    diagnostics::path_unresolved_references,
-    vault::{Reference, Vault},
+    config::Settings, daily::filename_is_formatted, diagnostics::path_unresolved_references, vault::{Reference, Vault}
 };
 
 pub fn code_actions(
     vault: &Vault,
     params: &CodeActionParams,
     path: &Path,
+    settings: &Settings
 ) -> Option<Vec<CodeActionOrCommand>> {
     // Diagnostics
     // get all links for changed file
@@ -36,10 +36,15 @@ pub fn code_actions(
             .flat_map(|(_path, reference)| {
                 match reference {
                     Reference::WikiFileLink(_data) => {
-                        let mut new_path_buf = PathBuf::new();
-                        new_path_buf.push(vault.root_dir());
-                        new_path_buf.push(vault.pages_dir());
-                        new_path_buf.push(&reference.data().reference_text);
+                        let filename = &reference.data().reference_text;
+
+                        let mut new_path_buf = vault.root_dir().clone();
+                        if filename_is_formatted(settings, filename) {
+                            new_path_buf.push(&settings.daily_notes_folder);
+                        } else {
+                            new_path_buf.push(&settings.new_file_folder_path);
+                        }
+                        new_path_buf.push(filename);
                         new_path_buf.set_extension("md");
 
                         let new_path = Url::from_file_path(&new_path_buf).ok()?;
@@ -64,8 +69,12 @@ pub fn code_actions(
                     }
                     Reference::WikiHeadingLink(_data, link_path, heading) => {
 
-                        let mut new_path_buf = PathBuf::new();
-                        new_path_buf.push(vault.root_dir());
+                        let mut new_path_buf = vault.root_dir().clone();
+                        if filename_is_formatted(settings, link_path) {
+                            new_path_buf.push(&settings.daily_notes_folder);
+                        } else {
+                            new_path_buf.push(&settings.new_file_folder_path);
+                        }
                         new_path_buf.push(link_path);
                         new_path_buf.set_extension("md");
 
