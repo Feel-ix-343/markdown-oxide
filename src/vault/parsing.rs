@@ -210,7 +210,7 @@ fj aklfjd
                         character: 3,
                     },
                 }
-                    .into(),
+                .into(),
             },
             MDCodeBlock {
                 range: Range {
@@ -223,7 +223,7 @@ fj aklfjd
                         character: 3,
                     },
                 }
-                    .into(),
+                .into(),
             },
         ];
 

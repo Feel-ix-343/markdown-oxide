@@ -34,7 +34,7 @@ pub fn semantic_tokens_full(
                 reference.data().range.start.character,
             )
         })
-        .fold(vec![], |acc, (path, reference)| {
+        .fold(vec![], |acc, (_path, reference)| {
             let range = reference.data().range;
 
             let is_unresolved = path_unresolved

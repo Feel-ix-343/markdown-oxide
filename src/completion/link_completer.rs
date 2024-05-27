@@ -16,7 +16,10 @@ use tower_lsp::lsp_types::{
 };
 
 use crate::{
-    completion::util::check_in_code_block, config::Settings, ui::preview_referenceable, vault::{MDFile, MDHeading, Rangeable, Reference, Referenceable, Vault}
+    completion::util::check_in_code_block,
+    config::Settings,
+    ui::preview_referenceable,
+    vault::{MDFile, MDHeading, Reference, Referenceable, Vault},
 };
 
 use super::{
@@ -35,11 +38,9 @@ pub struct MarkdownLinkCompleter<'a> {
     /// the infile ref; the range is the whole span of the infile ref. (including the ^ for Block refs)
     pub infile_ref: Option<(PartialInfileRef, LineRange)>,
 
-    pub partial_link: (String, LineRange),
     pub full_range: LineRange,
     pub line_nr: usize,
     pub position: Position,
-    pub file_path: std::path::PathBuf,
     pub vault: &'a Vault,
     pub context_path: &'a Path,
     pub settings: &'a Settings,
@@ -173,15 +174,15 @@ impl<'a> LinkCompleter<'a> for MarkdownLinkCompleter<'a> {
     }
 }
 
-
-
 impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
     fn construct(context: Context<'a>, line: usize, character: usize) -> Option<Self>
     where
         Self: Sized,
     {
-        if context.settings.references_in_codeblocks == false && check_in_code_block(&context, line, character) {
-            return None
+        if context.settings.references_in_codeblocks == false
+            && check_in_code_block(&context, line, character)
+        {
+            return None;
         }
 
         let Context {
@@ -243,14 +244,12 @@ impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
             path: (reftext.as_str().to_string(), reftext.range()),
             display: (display.as_str().to_string(), display.range()),
             infile_ref: partial_infileref,
-            partial_link: (full.as_str().to_string(), full.range()),
             full_range,
             line_nr: line,
             position: Position {
                 line: line as u32,
                 character: character as u32,
             },
-            file_path: path.to_path_buf(),
             vault,
             context_path: context.path,
             settings: context.settings,
@@ -375,9 +374,10 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
     where
         Self: Sized,
     {
-
-        if context.settings.references_in_codeblocks == false && check_in_code_block(&context, line, character) {
-            return None
+        if context.settings.references_in_codeblocks == false
+            && check_in_code_block(&context, line, character)
+        {
+            return None;
         }
 
         let Context {

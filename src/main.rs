@@ -25,6 +25,7 @@ mod codelens;
 mod commands;
 mod completion;
 mod config;
+mod daily;
 mod diagnostics;
 mod gotodef;
 mod hover;
@@ -591,7 +592,9 @@ impl LanguageServer for Backend {
                 let settings = self
                     .bind_settings(|settings| Ok(settings.to_owned()))
                     .await?;
-                let root_dir = self.bind_vault(|vault| Ok(vault.root_dir().to_owned())).await?;
+                let root_dir = self
+                    .bind_vault(|vault| Ok(vault.root_dir().to_owned()))
+                    .await?;
                 commands::jump(&self.client, &root_dir, &settings, jump_to).await
             }
             _ => Ok(None),
@@ -634,9 +637,11 @@ impl LanguageServer for Backend {
     }
 
     async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
+        let settings = self.bind_settings(|settings| Ok(settings.clone())).await?;
+
         self.bind_vault(|vault| {
             let path = params_path!(params)?;
-            Ok(codeactions::code_actions(vault, &params, &path))
+            Ok(codeactions::code_actions(vault, &params, &path, &settings))
         })
         .await
     }

@@ -13,8 +13,6 @@ use rayon::prelude::*;
 
 pub struct FootnoteCompleter<'a> {
     vault: &'a Vault,
-    line: usize,
-    character: usize,
     path: &'a Path,
 }
 
@@ -32,8 +30,6 @@ impl<'a> Completer<'a> for FootnoteCompleter<'a> {
         {
             Some(FootnoteCompleter {
                 path: context.path,
-                character,
-                line,
                 vault: context.vault,
             })
         } else {
