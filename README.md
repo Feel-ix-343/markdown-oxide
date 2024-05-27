@@ -538,6 +538,19 @@ semantic_tokens = true
 tags_in_codeblocks = true
 # Resolve references in code blocks
 references_in_codeblocks = true
+
+# The folder for new files to be created in; this is relevant for the code action that creates
+# from an unresolved link. If not specified, it will import from your obsidian config option titled
+# "Default Location for new notes" -- which is "" by default too. 
+new_file_folder_path = ""
+
+
+# The folder for new daily notes: this is applied for the create file for unresolved link code action
+# as well as the Today, Tomorrow, Yesterday, and Daily... lsp commands
+#
+# This is also imported from obsidian if not specified: specifically the option titled "New file location"
+daily_notes_folder = ""
+
 ```
 
 
