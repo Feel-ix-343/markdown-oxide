@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use pathdiff::diff_paths;
 use tower_lsp::lsp_types::{
