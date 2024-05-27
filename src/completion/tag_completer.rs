@@ -9,7 +9,9 @@ use tower_lsp::lsp_types::{
 };
 
 use crate::{
-    completion::util::check_in_code_block, ui, vault::{MDTag, Referenceable, Vault}
+    completion::util::check_in_code_block,
+    ui,
+    vault::{MDTag, Referenceable, Vault},
 };
 
 use super::{
@@ -33,12 +35,11 @@ impl<'a> Completer<'a> for TagCompleter<'a> {
     where
         Self: Sized + Completer<'a>,
     {
-
-
-        if context.settings.tags_in_codeblocks == false && check_in_code_block(&context, line, character) {
-            return None
+        if context.settings.tags_in_codeblocks == false
+            && check_in_code_block(&context, line, character)
+        {
+            return None;
         }
-
 
         static PARTIAL_TAG_REGEX: Lazy<Regex> =
             Lazy::new(|| Regex::new(r"\#(?<text>[a-zA-Z0-9\/]*)").unwrap());

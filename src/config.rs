@@ -24,8 +24,9 @@ pub struct Settings {
 
 impl Settings {
     pub fn new(root_dir: &Path, capabilities: &ClientCapabilities) -> anyhow::Result<Settings> {
-        let (obsidian_daily_note,obsidian_daily_notes_folder) = obsidian_dailynote_details(root_dir);
-        let obsidian_new_file_folder_path= obsidian_new_file_folder_path(root_dir);
+        let (obsidian_daily_note, obsidian_daily_notes_folder) =
+            obsidian_dailynote_details(root_dir);
+        let obsidian_new_file_folder_path = obsidian_new_file_folder_path(root_dir);
         let expanded = shellexpand::tilde("~/.config/moxide/settings");
         let settings = Config::builder()
             .add_source(
@@ -40,12 +41,12 @@ impl Settings {
             .add_source(File::with_name(&expanded).required(false))
             .set_default(
                 "new_file_folder_path",
-                obsidian_new_file_folder_path.unwrap_or("".to_string())
-                )?
+                obsidian_new_file_folder_path.unwrap_or("".to_string()),
+            )?
             .set_default(
                 "daily_notes_folder",
-                obsidian_daily_notes_folder.unwrap_or("".to_string())
-                )?
+                obsidian_daily_notes_folder.unwrap_or("".to_string()),
+            )?
             .set_default(
                 "dailynote",
                 obsidian_daily_note.unwrap_or("%Y-%m-%d".to_string()),
@@ -75,7 +76,6 @@ impl Settings {
 }
 
 fn obsidian_dailynote_details(root_dir: &Path) -> (Option<String>, Option<String>) {
-
     let daily_notes_config_file = root_dir.join(".obsidian").join("daily-notes.json");
     let file = std::fs::read(daily_notes_config_file).ok();
     let config: Option<HashMap<String, String>> =
@@ -86,45 +86,36 @@ fn obsidian_dailynote_details(root_dir: &Path) -> (Option<String>, Option<String
             .map(|format| convert_momentjs_to_chrono_format(format))
     });
 
-    let daily_notes_folder = config.as_ref().and_then(|config| {
-        config
-            .get("folder")
-            .cloned()
-    });
+    let daily_notes_folder = config
+        .as_ref()
+        .and_then(|config| config.get("folder").cloned());
 
     (daily_note, daily_notes_folder)
 }
 
-
 fn obsidian_new_file_folder_path(root_dir: &Path) -> Option<String> {
     let obsidian_settings_file = root_dir.join(".obsidian").join("app.json");
     let file = std::fs::read(obsidian_settings_file).ok();
-    let config: Option<HashMap<String, Value>> =
-        file.and_then(|file| {
+    let config: Option<HashMap<String, Value>> = file.and_then(|file| {
         let parsed = serde_json::from_slice(&file);
         parsed.ok()
     });
 
-
     let new_file_folder_path = config.as_ref().and_then(|config| {
-
         let path = config
             .get("newFileFolderPath")
             .and_then(|value| value.as_str())
             .map(String::from);
 
         if config.get("newFileLocation").and_then(|v| v.as_str()) == Some(&"folder") {
-            return path
+            return path;
         } else {
-            return None
+            return None;
         }
-
-
     });
 
     new_file_folder_path
 }
-
 
 use std::collections::HashMap;
 

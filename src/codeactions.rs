@@ -8,14 +8,17 @@ use tower_lsp::lsp_types::{
 };
 
 use crate::{
-    config::Settings, daily::filename_is_formatted, diagnostics::path_unresolved_references, vault::{Reference, Vault}
+    config::Settings,
+    daily::filename_is_formatted,
+    diagnostics::path_unresolved_references,
+    vault::{Reference, Vault},
 };
 
 pub fn code_actions(
     vault: &Vault,
     params: &CodeActionParams,
     path: &Path,
-    settings: &Settings
+    settings: &Settings,
 ) -> Option<Vec<CodeActionOrCommand>> {
     // Diagnostics
     // get all links for changed file

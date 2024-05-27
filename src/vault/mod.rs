@@ -268,17 +268,16 @@ impl Vault {
                                 let mut path = self.root_dir().clone();
                                 path.push(&reference.data().reference_text);
 
-Some(Referenceable::UnresovledFile(path, &data.reference_text))
+                                Some(Referenceable::UnresovledFile(path, &data.reference_text))
 
                                 // match data.reference_text.chars().collect_vec().as_slice() {
 
-                                //     [..,'.','m','d'] => 
+                                //     [..,'.','m','d'] =>
                                 //     ['.', '/', rest @ ..]
                                 //     | ['/', rest @ ..]
                                 //     | rest if !rest.contains(&'.') => Some(Referenceable::UnresovledFile(path, &data.reference_text)),
                                 //     _ => None
                                 // }
-
                             }
                             Reference::WikiHeadingLink(_data, end_path, heading)
                             | Reference::MDHeadingLink(_data, end_path, heading) => {
@@ -739,10 +738,12 @@ impl Reference {
 
         let md_links = MD_LINK_RE
             .captures_iter(text)
-            .filter(|captures| match captures.name("ending").map(|ending| ending.as_str()) {
-                Some(".md") | None => true,
-                _ => false
-            })
+            .filter(
+                |captures| match captures.name("ending").map(|ending| ending.as_str()) {
+                    Some(".md") | None => true,
+                    _ => false,
+                },
+            )
             .flat_map(RegexTuple::new)
             .flat_map(|regextuple| {
                 generic_link_constructor::<MDReferenceConstructor>(text, regextuple)
@@ -990,9 +991,10 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
         display_text,
     }: RegexTuple,
 ) -> Option<Reference> {
-    if file_path.as_str().starts_with("http://") 
-    || file_path.as_str().starts_with("https://")
-    || file_path.as_str().starts_with("data:") {
+    if file_path.as_str().starts_with("http://")
+        || file_path.as_str().starts_with("https://")
+        || file_path.as_str().starts_with("data:")
+    {
         return None;
     }
 
@@ -1304,7 +1306,6 @@ impl Refname {
 
         Some(last.to_string())
     }
-
 }
 
 impl Deref for Refname {
