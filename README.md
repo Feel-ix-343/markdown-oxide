@@ -551,6 +551,14 @@ new_file_folder_path = ""
 # This is also imported from obsidian if not specified: specifically the option titled "New file location"
 daily_notes_folder = ""
 
+
+# Whether markdown links should include an extension or not
+# for example [File](file.md) or [File](file)
+include_md_extension_md_link = false
+
+# Whether wikilinks should include an extension or not (needed for Markor compatibility)
+# for example [[File]] or [[File.md]]
+include_md_extension_wikilink = false
 ```
 
 
