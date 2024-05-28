@@ -153,9 +153,15 @@ impl<'a> LinkCompleter<'a> for MarkdownLinkCompleter<'a> {
 
     /// Will add <$1> to the refname if it contains spaces
     fn completion_text_edit(&self, display: Option<&str>, refname: &str) -> CompletionTextEdit {
+        let ext = if self.settings().include_md_extension_md_link {
+            ".md"
+        } else {
+            ""
+        };
+
         let link_ref_text = match refname.contains(' ') {
-            true => format!("<{}>", refname),
-            false => refname.to_owned(),
+            true => format!("<{}{}>", refname, ext),
+            false => format!("{}{}", refname, ext),
         };
 
         CompletionTextEdit::Edit(TextEdit {
@@ -347,6 +353,11 @@ impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
     }
 
     fn completion_text_edit(&self, display: Option<&str>, refname: &str) -> CompletionTextEdit {
+        let ext = if self.settings().include_md_extension_wikilink {
+            ".md"
+        } else {
+            ""
+        };
         CompletionTextEdit::Edit(TextEdit {
             range: Range {
                 start: Position {
@@ -358,9 +369,11 @@ impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
                     character: (self.chars_in_line).min(self.character + 2_u32),
                 },
             },
+
             new_text: format!(
-                "{}{}]]${{2:}}",
+                "{}{}{}]]${{2:}}",
                 refname,
+                ext,
                 display
                     .map(|display| format!("|{}", display))
                     .unwrap_or("".to_string())

@@ -20,6 +20,8 @@ pub struct Settings {
     pub semantic_tokens: bool,
     pub tags_in_codeblocks: bool,
     pub references_in_codeblocks: bool,
+    pub include_md_extension_md_link: bool,
+    pub include_md_extension_wikilink: bool,
 }
 
 impl Settings {
@@ -57,6 +59,8 @@ impl Settings {
             .set_default("semantic_tokens", true)?
             .set_default("tags_in_codeblocks", true)?
             .set_default("references_in_codeblocks", true)?
+            .set_default("include_md_extension_md_link", false)?
+            .set_default("include_md_extension_wikilink", false)?
             .set_override_option(
                 "semantic_tokens",
                 capabilities.text_document.as_ref().and_then(|it| {
