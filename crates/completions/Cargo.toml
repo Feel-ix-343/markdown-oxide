@@ -1,0 +1,9 @@
+[package]
+name = "completions"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rayon.workspace = true
+do-notation.workspace = true
+tower-lsp.workspace = true

@@ -1,0 +1,35 @@
+[package]
+name = "markdown-oxide"
+version = "0.0.21"
+edition = "2021"
+repository = "https://github.com/Feel-ix-343/markdown-oxide"
+
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+config.workspace = true
+do-notation.workspace = true
+fuzzydate.workspace = true
+indexmap.workspace = true
+itertools.workspace = true
+nanoid.workspace = true
+nucleo-matcher.workspace = true
+once_cell.workspace = true
+pathdiff.workspace = true
+rayon.workspace = true
+regex.workspace = true
+ropey.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+shellexpand.workspace = true
+tokio.workspace = true
+tower-lsp.workspace = true
+walkdir.workspace = true
+completions.workspace = true
+
+
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-v{ version }-{ target }{ archive-suffix }"

@@ -3,7 +3,6 @@ use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use completion::get_completions;
 use config::Settings;
 use diagnostics::diagnostics;
 use itertools::Itertools;
@@ -20,10 +19,10 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 use vault::Vault;
 
+
 mod codeactions;
 mod codelens;
 mod commands;
-mod completion;
 mod config;
 mod daily;
 mod diagnostics;

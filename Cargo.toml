@@ -1,12 +1,11 @@
-[package]
-name = "markdown-oxide"
-version = "0.0.21"
-edition = "2021"
-repository = "https://github.com/Feel-ix-343/markdown-oxide"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[workspace]
+members = [
+  "crates/markdown-oxide"
+] # other `members` are specified in dependencies
+resolver = "2"
 
-[dependencies]
+[workspace.dependencies]
 anyhow = "1.0.80"
 chrono = "0.4.35"
 config = "0.14.0"
@@ -29,5 +28,6 @@ tokio = { version = "1.34.0", features = ["full"] }
 tower-lsp = { git = "https://github.com/Feel-ix-343/tower-lsp" }
 walkdir = "2.4.0"
 
-[package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/v{ version }/{ name }-v{ version }-{ target }{ archive-suffix }"
+
+# local crates
+completions.path = "crates/completions"

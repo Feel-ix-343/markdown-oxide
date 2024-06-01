@@ -3,13 +3,17 @@ use do_notation::m;
 use tower_lsp::lsp_types::{CompletionItem, CompletionTextEdit, Documentation, MarkupContent, MarkupKind};
 
 
-
-pub(super) trait Completer{
+pub(super) trait Completer {
     fn completions(&self, location: &Location) -> Option<impl IndexedParallelIterator<Item = Box<dyn Completion>>>;
 }
 
-pub(super) trait Completion{
-    fn label(&self) -> String;
+pub(super) enum Label {
+    Extract(String),
+    Full(String)
+}
+
+pub(super) trait Completion: Send + Sync {
+    fn label(&self) -> Label;
     fn label_detail(&self) -> Option<String>;
     fn kind(&self) -> tower_lsp::lsp_types::CompletionItemKind;
     fn detail(&self) -> Option<String>;
