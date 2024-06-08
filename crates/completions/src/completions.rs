@@ -2,60 +2,52 @@ use rayon::prelude::*;
 use do_notation::m;
 use tower_lsp::lsp_types::{CompletionItem, CompletionTextEdit, Documentation, MarkupContent, MarkupKind};
 
+use crate::adapters::{Context, Parser};
 
 pub(super) trait Completer {
     fn completions(&self, location: &Location) -> Option<impl IndexedParallelIterator<Item = Box<dyn Completion>>>;
 }
 
-pub(super) enum Label {
-    Extract(String),
-    Full(String)
-}
-
-pub(super) trait Completion: Send + Sync {
-    fn label(&self) -> Label;
+pub(super) trait Completion: Send + Sync  {
+    fn label(&self) -> String;
     fn label_detail(&self) -> Option<String>;
     fn kind(&self) -> tower_lsp::lsp_types::CompletionItemKind;
     fn detail(&self) -> Option<String>;
     fn documentation(&self) -> Option<String>;
     fn deprecated(&self) -> Option<bool>;
     fn preselect(&self) -> Option<bool>;
-    fn filter_text(&self) -> Option<String>;
     fn text_edit(&self) -> tower_lsp::lsp_types::TextEdit;
-    fn additional_text_edits(&self) -> Option<Vec<tower_lsp::lsp_types::TextEdit>>;
     fn command(&self) -> Option<tower_lsp::lsp_types::Command>;
-    fn commit_characters(&self) -> Option<Vec<String>>;
     
     // TODO: possibly an ID to handle completion resolve
 }
 
 pub (super) struct Location;
 
-pub (super) trait Context {
-    fn max_query_completion_items(&self) -> usize;
-}
 
 pub (super) fn completions(
     location: &Location,
-    context: &impl Context,
+    context: &Context,
+    parser: &Parser,
     referencer: &impl Completer,
     syntax_completer: &impl Completer,
     actions_completer: &impl Completer
 ) -> Option<tower_lsp::lsp_types::CompletionResponse> {
 
-    let actions_completions = actions_completer.completions(location);
-    let syntax_completions = syntax_completer.completions(location);
+    // let actions_completions = actions_completer.completions(location);
+    // let syntax_completions = syntax_completer.completions(location);
     let references_completions = referencer.completions(location);
 
     let all_completions = m! {
-        actions <- actions_completions;
-        syntax_completions <- syntax_completions;
+        // actions <- actions_completions;
+        // syntax_completions <- syntax_completions;
         references_completions <- references_completions;
 
         Some(
-            actions
-                .chain(syntax_completions)
-                .chain(references_completions.take(context.max_query_completion_items()))
+            // actions
+            //     .chain(syntax_completions)
+            //     .chain(references_completions.take(context.max_query_completion_items()))
+            references_completions.take(context.max_query_completion_items())
         )
     }?;
 
@@ -64,13 +56,13 @@ pub (super) fn completions(
         tower_lsp::lsp_types::CompletionResponse::List(
             tower_lsp::lsp_types::CompletionList {
                 is_incomplete: true,
-                items: completion_items(all_completions)
+                items: completion_items(all_completions, parser)
             }
         )
     )
 }
 
-fn completion_items(completion_items: impl IndexedParallelIterator<Item = Box<dyn Completion>>) 
+fn completion_items(completion_items: impl IndexedParallelIterator<Item = Box<dyn Completion>>, parser: &Parser) 
     -> Vec<tower_lsp::lsp_types::CompletionItem> {
 
     completion_items.into_par_iter()
@@ -89,11 +81,9 @@ fn completion_items(completion_items: impl IndexedParallelIterator<Item = Box<dy
             },
             deprecated: completion.deprecated(),
             preselect: completion.preselect(),
-            filter_text: completion.filter_text(),
+            filter_text: Some(parser.entered_completion_string().to_string()),
             text_edit: Some(CompletionTextEdit::Edit(completion.text_edit())),
-            additional_text_edits: completion.additional_text_edits(),
             command: completion.command(),
-            commit_characters: completion.commit_characters(),
             sort_text: Some(idx.to_string()),
             ..Default::default()
         })

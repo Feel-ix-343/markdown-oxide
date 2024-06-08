@@ -1,4 +1,0 @@
-
-
-
-// impl Query for ...
