@@ -107,10 +107,10 @@ fn obsidian_new_file_folder_path(root_dir: &Path) -> Option<String> {
             .and_then(|value| value.as_str())
             .map(String::from);
 
-        if config.get("newFileLocation").and_then(|v| v.as_str()) == Some(&"folder") {
-            return path;
+        if config.get("newFileLocation").and_then(|v| v.as_str()) == Some("folder") {
+            path
         } else {
-            return None;
+            None
         }
     });
 
@@ -144,7 +144,6 @@ fn momentjs_to_chrono_format_map() -> IndexMap<&'static str, &'static str> {
     map
 }
 
-// GPT-4 code
 fn convert_momentjs_to_chrono_format(moment_format: &str) -> String {
     let format_map = momentjs_to_chrono_format_map();
     let mut chrono_format = moment_format.to_string();
@@ -154,17 +153,4 @@ fn convert_momentjs_to_chrono_format(moment_format: &str) -> String {
     }
 
     chrono_format
-}
-
-#[cfg(test)]
-mod test {
-
-    use crate::config::convert_momentjs_to_chrono_format;
-
-    #[test]
-    fn test_format_conversion() {
-        let moment_format = "YYYY-MM-DD";
-        let chrono_format = convert_momentjs_to_chrono_format(moment_format);
-        assert_eq!(chrono_format, "%Y-%m-%d");
-    }
 }

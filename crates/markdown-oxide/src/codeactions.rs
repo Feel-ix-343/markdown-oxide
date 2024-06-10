@@ -8,11 +8,14 @@ use tower_lsp::lsp_types::{
 };
 
 use crate::{
-    config::Settings,
     daily::filename_is_formatted,
     diagnostics::path_unresolved_references,
-    vault::{Reference, Vault},
+    
 };
+
+use moxide_config::Settings;
+
+use vault::{Reference, Vault};
 
 pub fn code_actions(
     vault: &Vault,
@@ -39,6 +42,7 @@ pub fn code_actions(
             .flat_map(|(_path, reference)| {
                 match reference {
                     Reference::WikiFileLink(_data) => {
+
                         let filename = &reference.data().reference_text;
 
                         let mut new_path_buf = vault.root_dir().clone();

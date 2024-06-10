@@ -30,7 +30,7 @@ impl MDMetadata {
 
 #[cfg(test)]
 mod tests {
-    use crate::vault::metadata::MDMetadata;
+    use crate::metadata::MDMetadata;
 
     #[test]
     fn test_aliases() {

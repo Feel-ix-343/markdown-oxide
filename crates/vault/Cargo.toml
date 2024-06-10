@@ -1,0 +1,18 @@
+[package]
+name = "vault"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rayon.workspace = true
+do-notation.workspace = true
+tower-lsp.workspace = true
+itertools.workspace = true
+ropey.workspace = true
+serde.workspace = true
+walkdir.workspace = true
+regex.workspace = true
+once_cell.workspace = true
+pathdiff.workspace = true
+serde_yaml.workspace = true
+moxide_config.workspace = true

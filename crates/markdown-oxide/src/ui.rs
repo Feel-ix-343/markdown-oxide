@@ -3,7 +3,7 @@ use std::path::Path;
 use itertools::Itertools;
 use tower_lsp::lsp_types::{MarkupContent, MarkupKind};
 
-use crate::vault::{get_obsidian_ref_path, Preview, Reference, Referenceable, Vault};
+use vault::{get_obsidian_ref_path, Preview, Reference, Referenceable, Vault};
 
 fn referenceable_string(vault: &Vault, referenceables: &[Referenceable]) -> Option<String> {
     let referenceable = referenceables.first()?;

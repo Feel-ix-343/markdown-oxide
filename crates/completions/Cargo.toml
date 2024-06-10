@@ -7,3 +7,5 @@ edition = "2021"
 rayon.workspace = true
 do-notation.workspace = true
 tower-lsp.workspace = true
+vault.workspace = true
+moxide_config.workspace = true

@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::path::Path;
 
-use crate::config::Settings;
+use moxide_config::Settings;
 use chrono::offset::Local;
 use chrono::NaiveDateTime;
 use fuzzydate::parse;
@@ -15,7 +15,7 @@ fn datetime_to_file(
     root_dir: &Path,
 ) -> Option<Url> {
     let filename = datetime.format(dailynote_format).to_string();
-    let path = root_dir.join(&filename);
+    let path = root_dir.join(filename);
 
     println!("path: {:?}", path);
 
@@ -35,10 +35,10 @@ pub async fn jump(
     let note_file = match jump_to {
         Some(jmp_str) => parse(jmp_str)
             .ok()
-            .and_then(|dt| datetime_to_file(dt, &daily_note_format, &daily_note_path)),
+            .and_then(|dt| datetime_to_file(dt, daily_note_format, &daily_note_path)),
         None => datetime_to_file(
             Local::now().naive_local(),
-            &daily_note_format,
+            daily_note_format,
             &daily_note_path,
         ),
     };
@@ -48,9 +48,9 @@ pub async fn jump(
         // to open the file on the off chance the client knows what to do
         // TODO: log failure to create file
         let _ = uri.to_file_path().map(|path| {
-            path.parent().map(|parent| std::fs::create_dir_all(parent));
+            path.parent().map(std::fs::create_dir_all);
 
-            let _ = File::create_new(path.as_path().to_owned());
+            let _ = File::create_new(path.as_path());
         });
 
         client

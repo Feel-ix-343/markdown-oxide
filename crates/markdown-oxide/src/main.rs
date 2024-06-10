@@ -3,7 +3,7 @@ use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use config::Settings;
+use moxide_config::Settings;
 use diagnostics::diagnostics;
 use itertools::Itertools;
 use rayon::prelude::*;
@@ -23,7 +23,6 @@ use vault::Vault;
 mod codeactions;
 mod codelens;
 mod commands;
-mod config;
 mod daily;
 mod diagnostics;
 mod gotodef;
@@ -34,7 +33,6 @@ mod rename;
 mod symbol;
 mod tokens;
 mod ui;
-mod vault;
 
 #[derive(Debug)]
 struct Backend {
@@ -556,7 +554,7 @@ impl LanguageServer for Backend {
         }; // TODO: this is bad
 
         let res = self
-            .bind_vault(|vault| Ok(get_completions(vault, &files, &params, &path, &settings)))
+            .bind_vault(|vault| Ok(completions::get_completions(vault, &files, &params, &path, &settings)))
             .await;
 
         let elapsed = timer.elapsed();

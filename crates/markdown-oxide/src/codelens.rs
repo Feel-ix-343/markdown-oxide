@@ -3,7 +3,7 @@ use std::path::Path;
 use itertools::Itertools;
 use tower_lsp::lsp_types::{CodeLens, CodeLensParams, Command, Location, Position, Url};
 
-use crate::vault::{Referenceable, Vault};
+use vault::{Referenceable, Vault};
 
 use serde::Serialize;
 

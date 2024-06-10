@@ -3,10 +3,9 @@ use std::path::{Path, PathBuf};
 use rayon::prelude::*;
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Url};
 
-use crate::{
-    config::Settings,
-    vault::{self, Reference, Referenceable, Vault},
-};
+use moxide_config::Settings;
+
+use vault::{self, Reference, Referenceable, Vault};
 
 pub fn path_unresolved_references<'a>(
     vault: &'a Vault,

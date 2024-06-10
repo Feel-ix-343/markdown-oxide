@@ -6,7 +6,7 @@ use tower_lsp::lsp_types::{
     SymbolKind, Url, WorkspaceSymbolParams,
 };
 
-use crate::vault::{MDHeading, Referenceable, Vault};
+use vault::{MDHeading, Referenceable, Vault};
 
 pub fn workspace_symbol(
     vault: &Vault,
@@ -130,8 +130,9 @@ fn map_to_lsp_tree(tree: Vec<Node>) -> Vec<DocumentSymbol> {
 mod test {
     use crate::{
         symbol,
-        vault::{HeadingLevel, MDHeading},
     };
+
+    use vault::{HeadingLevel, MDHeading};
 
     #[test]
     fn test_simple_tree() {

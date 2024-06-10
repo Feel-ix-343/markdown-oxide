@@ -1,7 +1,36 @@
 use std::{ops::Range, path::{Path, PathBuf}};
 
 use crate::completions::Location;
+use moxide_config::Settings as MoxideSettings;
 use rayon::prelude::*;
+use vault::Vault;
+
+pub(crate) struct Context {
+}
+
+impl Context {
+    pub fn new(vault: &Vault, settings: &MoxideSettings) -> Context {
+        todo!()
+    }
+
+    pub fn parser(&self) -> &Parser {
+        todo!()
+    }
+
+    pub fn querier(&self) -> &Querier {
+        todo!()
+    }
+
+    pub fn entity_view(&self) -> &EntityView {
+        todo!()
+    }
+
+    pub fn settings(&self) -> &Settings {
+        todo!()
+    }
+}
+
+
 
 
 pub (crate) struct Parser;
@@ -46,17 +75,17 @@ pub(crate) enum LinkingStyle {
 
 
 /// Querying the markdown entities in the vault: files, headings, blocks
-pub (crate) struct Querier;
+pub (crate) struct Querier<'fs>(&'fs str);
 
-impl Querier {
-    pub(crate) fn named_grep_query(&self, query: &NamedQuery) -> impl IndexedParallelIterator<Item = NamedEntity> {
-        todo!()
+impl<'fs> Querier<'fs> {
+    pub(crate) fn named_grep_query<'a>(&'a self, query: &NamedQuery) -> impl IndexedParallelIterator<Item = NamedEntity> + 'a {
+        vec![].into_par_iter()
     }
     // fn named_semantic_query
 
-    pub(crate) fn unnamed_grep_query(&self, query: &BlockQuery) -> impl IndexedParallelIterator<Item = BlockEntity> {
-        todo!()
-    }
+    // pub(crate) fn unnamed_grep_query(&self, query: &BlockQuery) -> impl IndexedParallelIterator<Item = BlockEntity> {
+    //     todo!()
+    // }
 
     // note; this lifetime might be wrong
     pub(crate) fn first_heading_of_file(&self, path: &Path) -> Option<&str> {
@@ -65,23 +94,14 @@ impl Querier {
 }
 
 
-pub (crate) struct Context;
+pub (crate) struct Settings;
 
-impl Context {
+impl Settings {
     pub(crate) fn max_query_completion_items(&self) -> usize {
         todo!()
     }
 
     pub(crate) fn file_as_first_heading(&self) -> bool {
-        todo!()
-    }
-
-    pub(crate) fn path_settings(&self) -> &PathSettings {
-        todo!()
-    }
-
-    /// Get the path of the directory of the file being edited
-    pub(crate) fn cwd(&self) -> &Path {
         todo!()
     }
 
@@ -199,14 +219,10 @@ pub(crate) enum InfileSpecifier<'fs> {
 }
 
 
-pub(crate) struct NamedEntity<'a> {
-    pub(crate) context: &'a Context,
-    pub(crate) querier: &'a Querier,
-    pub(crate) entity_view: &'a EntityView,
-    pub(crate) parser: &'a Parser,
+pub(crate) struct NamedEntity {
 }
 
-impl<'fs> NamedEntity<'fs> {
+impl<'fs> NamedEntity {
     pub(crate) fn info(&self) -> NamedEntityInfo<'fs> {
         todo!()
     }
@@ -263,31 +279,3 @@ pub(crate) enum UnresolvedFileEntityType<'a> {
     // anything else?
 }
 
-
-
-pub (crate) struct BlockEntity<'fs>;
-
-impl<'fs> BlockEntity<'fs> {
-    pub(crate) fn indexed_info(&self) -> Option<IndexedBlockEntityInfo<'fs>> {
-        todo!()
-    }
-    pub(crate) fn path(&self) -> PathBuf {
-        todo!()
-    }
-    pub(crate) fn line_range(&self) -> Range<usize> {
-        todo!()
-    }
-    pub(crate) fn extract(&self) -> Option<String> {
-        todo!()
-    }
-    pub(crate) fn block_index(&self) -> Option<&'fs str> {
-        todo!()
-    }
-    pub(crate) fn documentation(&self) -> Option<&str> {
-        todo!()
-    }
-}
-
-pub(crate) struct IndexedBlockEntityInfo<'fs> {
-    index: &'fs str
-}

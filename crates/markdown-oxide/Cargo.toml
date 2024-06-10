@@ -27,7 +27,12 @@ shellexpand.workspace = true
 tokio.workspace = true
 tower-lsp.workspace = true
 walkdir.workspace = true
+
+
+
 completions.workspace = true
+vault.workspace = true
+moxide_config.workspace = true
 
 
 

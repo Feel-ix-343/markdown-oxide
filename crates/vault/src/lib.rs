@@ -685,7 +685,7 @@ impl Default for Reference {
 
 use Reference::*;
 
-use crate::config::Settings;
+use moxide_config::Settings;
 
 use self::{metadata::MDMetadata, parsing::MDCodeBlock};
 
@@ -1530,8 +1530,8 @@ mod vault_tests {
     use itertools::Itertools;
     use tower_lsp::lsp_types::{Position, Range};
 
-    use crate::vault::{HeadingLevel, ReferenceData};
-    use crate::vault::{MDLinkReferenceDefinition, Refname};
+    use crate::{HeadingLevel, ReferenceData};
+    use crate::{MDLinkReferenceDefinition, Refname};
 
     use super::Reference::*;
     use super::{MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference, Referenceable};

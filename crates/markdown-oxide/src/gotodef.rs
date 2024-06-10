@@ -2,7 +2,7 @@ use std::path::Path;
 
 use tower_lsp::lsp_types::{Location, Position, Url};
 
-use crate::vault::{Referenceable, Vault};
+use vault::{Referenceable, Vault};
 
 pub fn goto_definition(
     vault: &Vault,
