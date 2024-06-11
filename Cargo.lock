@@ -163,8 +163,12 @@ name = "completions"
 version = "0.1.0"
 dependencies = [
  "do-notation",
+ "moxide_config",
+ "nucleo-matcher",
  "rayon",
+ "regex",
  "tower-lsp",
+ "vault",
 ]
 
 [[package]]
@@ -638,6 +642,7 @@ dependencies = [
  "fuzzydate",
  "indexmap",
  "itertools",
+ "moxide_config",
  "nanoid",
  "nucleo-matcher",
  "once_cell",
@@ -651,6 +656,7 @@ dependencies = [
  "shellexpand",
  "tokio",
  "tower-lsp",
+ "vault",
  "walkdir",
 ]
 
@@ -684,6 +690,28 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "moxide_config"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "config",
+ "do-notation",
+ "indexmap",
+ "itertools",
+ "once_cell",
+ "pathdiff",
+ "rayon",
+ "regex",
+ "ropey",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "shellexpand",
+ "tower-lsp",
+ "walkdir",
 ]
 
 [[package]]
@@ -1459,6 +1487,24 @@ dependencies = [
  "idna",
  "percent-encoding",
  "serde",
+]
+
+[[package]]
+name = "vault"
+version = "0.1.0"
+dependencies = [
+ "do-notation",
+ "itertools",
+ "moxide_config",
+ "once_cell",
+ "pathdiff",
+ "rayon",
+ "regex",
+ "ropey",
+ "serde",
+ "serde_yaml",
+ "tower-lsp",
+ "walkdir",
 ]
 
 [[package]]

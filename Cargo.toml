@@ -31,3 +31,5 @@ walkdir = "2.4.0"
 
 # local crates
 completions.path = "crates/completions"
+moxide_config.path = "crates/moxide_config"
+vault.path = "crates/vault"

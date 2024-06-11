@@ -9,3 +9,5 @@ do-notation.workspace = true
 tower-lsp.workspace = true
 vault.workspace = true
 moxide_config.workspace = true
+regex.workspace = true
+nucleo-matcher.workspace = true
