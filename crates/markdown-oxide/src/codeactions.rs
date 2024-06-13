@@ -7,11 +7,7 @@ use tower_lsp::lsp_types::{
     Position, Range, ResourceOp, TextDocumentEdit, TextEdit, Url, WorkspaceEdit,
 };
 
-use crate::{
-    daily::filename_is_formatted,
-    diagnostics::path_unresolved_references,
-    
-};
+use crate::{daily::filename_is_formatted, diagnostics::path_unresolved_references};
 
 use moxide_config::Settings;
 

@@ -3,9 +3,9 @@ use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use moxide_config::Settings;
 use diagnostics::diagnostics;
 use itertools::Itertools;
+use moxide_config::Settings;
 use rayon::prelude::*;
 use references::references;
 use serde_json::Value;
@@ -18,7 +18,6 @@ use tower_lsp::jsonrpc::{Error, ErrorCode, Result};
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 use vault::Vault;
-
 
 mod codeactions;
 mod codelens;
@@ -554,7 +553,11 @@ impl LanguageServer for Backend {
         }; // TODO: this is bad
 
         let res = self
-            .bind_vault(|vault| Ok(completions::get_completions(vault, &files, &params, &path, &settings)))
+            .bind_vault(|vault| {
+                Ok(completions::get_completions(
+                    vault, &files, &params, &path, &settings,
+                ))
+            })
             .await;
 
         let elapsed = timer.elapsed();

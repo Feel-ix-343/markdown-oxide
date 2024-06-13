@@ -128,9 +128,7 @@ fn map_to_lsp_tree(tree: Vec<Node>) -> Vec<DocumentSymbol> {
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        symbol,
-    };
+    use crate::symbol;
 
     use vault::{HeadingLevel, MDHeading};
 

@@ -317,6 +317,13 @@ impl Vault {
             .map(|slice| slice.chars().collect_vec())
     }
 
+    pub fn select_line_str<'a>(&'a self, path: &Path, line: usize) -> Option<&'a str> {
+        let rope = self.ropes.get(path)?;
+
+        let line = rope.get_line(line)?;
+        line.as_str()
+    }
+
     pub fn select_headings(&self, path: &Path) -> Option<&Vec<MDHeading>> {
         let md_file = self.md_files.get(path)?;
         let headings = &md_file.headings;

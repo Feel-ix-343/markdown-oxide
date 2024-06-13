@@ -12,6 +12,16 @@ Configure your daily note formatting in the config file
 
 today is 2024-03-27
 
+[[testTest.md#Heading 1
+
+[[Test#Heading 1]]
+
+[[TestTesttest]]
+
+[[Test#Heading 1]]
+
+[[Random File#Heading 1]]
+
 [next Tuesday](2024-04-02)
 
 [tomorrow](2024-03-28)

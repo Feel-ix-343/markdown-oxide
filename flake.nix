@@ -3,25 +3,33 @@
 
   inputs = {
     nixpkgs.url      = "github:NixOS/nixpkgs/nixos-unstable";
-    rust-overlay.url = "github:oxalica/rust-overlay";
     flake-utils.url  = "github:numtide/flake-utils";
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, rust-overlay, flake-utils, ... }:
+  outputs = { self, nixpkgs, flake-utils, fenix, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        overlays = [ (import rust-overlay) ];
+        overlays = [ fenix.overlays.default ];
         pkgs = import nixpkgs {
           inherit system overlays;
         };
       in
-      with pkgs;
       {
-        devShells.default = mkShell {
+        devShells.default = pkgs.mkShell {
           buildInputs = [
-            openssl
-            pkg-config
-            rust-bin.nightly."2024-05-20".default
+            pkgs.openssl
+            pkgs.pkg-config
+            (pkgs.fenix.complete.withComponents [
+              "cargo"
+              "clippy"
+              "rust-src"
+              "rustfmt"
+            ])
+            pkgs.rust-analyzer-nightly
           ];
 
           shellHook = ''

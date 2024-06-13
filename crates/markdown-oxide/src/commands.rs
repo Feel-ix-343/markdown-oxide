@@ -1,10 +1,10 @@
 use std::fs::File;
 use std::path::Path;
 
-use moxide_config::Settings;
 use chrono::offset::Local;
 use chrono::NaiveDateTime;
 use fuzzydate::parse;
+use moxide_config::Settings;
 use serde_json::Value;
 use tower_lsp::jsonrpc::{Error, Result};
 use tower_lsp::lsp_types::{MessageType, ShowDocumentParams, Url};

@@ -1,0 +1,78 @@
+use std::path::Path;
+
+use nucleo_matcher::{pattern::{self, Normalization}, Matcher};
+use vault::Vault;
+use rayon::prelude::*;
+
+pub(crate) struct Querier<'a> {
+    vault: &'a Vault
+}
+
+impl<'a> Querier<'a> {
+    fn new(vault: &'a Vault) -> Self {
+        Self { vault }
+    }
+}
+
+impl<'a> Querier<'a> {
+    fn query(&self, file_ref: FileRef) -> Vec<&'a Path> {
+        let paths = self.vault.md_files
+            .keys()
+            .map(|key| (key.file_name().unwrap().to_str().unwrap().to_string(), key))
+            .collect::<Vec<_>>();
+
+        let matched = fuzzy_match(&file_ref, paths);
+        matched.into_par_iter()
+            .map(|((_, path), _)| path as &Path)
+            .collect()
+    }
+}
+
+impl<'a> Matchable for (String, &'a PathBuf) {
+    fn match_string(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+
+pub trait Matchable {
+    fn match_string(&self) -> &str;
+}
+
+
+struct NucleoMatchable<T: Matchable>(T);
+impl<T: Matchable> Deref for NucleoMatchable<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T: Matchable> AsRef<str> for NucleoMatchable<T> {
+    fn as_ref(&self) -> &str {
+        self.match_string()
+    }
+}
+
+
+
+use crate::parser::{FileRef, Parser};
+pub fn fuzzy_match<'a, T: Matchable>(
+    filter_text: &str,
+    items: impl IntoIterator<Item = T>,
+) -> Vec<(T, u32)> {
+    let items = items.into_iter().map(NucleoMatchable);
+
+    let mut matcher = Matcher::new(nucleo_matcher::Config::DEFAULT);
+    let matches = pattern::Pattern::parse(
+        filter_text,
+        pattern::CaseMatching::Smart,
+        Normalization::Smart,
+    )
+        .match_list(items, &mut matcher);
+
+    matches
+        .into_iter()
+        .map(|(item, score)| (item.0, score))
+        .collect()
+}

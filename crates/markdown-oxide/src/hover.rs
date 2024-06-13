@@ -2,9 +2,7 @@ use std::path::Path;
 
 use tower_lsp::lsp_types::{Hover, HoverContents, HoverParams};
 
-use crate::{
-    ui::{preview_reference, preview_referenceable},
-};
+use crate::ui::{preview_reference, preview_referenceable};
 
 use vault::Vault;
 
