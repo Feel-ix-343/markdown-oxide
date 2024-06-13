@@ -59,7 +59,7 @@ fn to_completion_response(
     named_entities: impl IndexedParallelIterator<Item = NamedEntity>,
 ) -> CompletionResponse {
     let items = named_entities
-        .take(20)
+        .take(50)
         .enumerate()
         .flat_map(|(i, entity)| {
             let label = entity_to_label(&entity);
