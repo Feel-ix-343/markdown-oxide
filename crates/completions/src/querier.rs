@@ -21,7 +21,10 @@ impl<'a> Querier<'a> {
 }
 
 impl<'a> Querier<'a> {
-    pub fn query(&self, link_query: LinkQuery) -> impl IndexedParallelIterator<Item = NamedEntity> {
+    pub fn query(
+        &self,
+        link_query: NamedEntityQuery,
+    ) -> impl IndexedParallelIterator<Item = NamedEntity> {
         let named_entities = self.get_named_entities();
         let matchables = named_entities.map(MatchableNamedEntity::from);
 
@@ -53,19 +56,19 @@ impl<'a> Querier<'a> {
     }
 }
 
-fn link_query_string(link_query: LinkQuery) -> String {
+fn link_query_string(link_query: NamedEntityQuery) -> String {
     match link_query {
-        LinkQuery {
-            file_ref,
-            infile_ref: None,
+        NamedEntityQuery {
+            file_query: file_ref,
+            infile_query: None,
         } => file_ref.to_string(),
-        LinkQuery {
-            file_ref,
-            infile_ref: Some(InfileRef::Heading(heading_string)),
+        NamedEntityQuery {
+            file_query: file_ref,
+            infile_query: Some(NamedEntityInfileQuery::Heading(heading_string)),
         } => format!("{file_ref}#{heading_string}"),
-        LinkQuery {
-            file_ref,
-            infile_ref: Some(InfileRef::Index(index)),
+        NamedEntityQuery {
+            file_query: file_ref,
+            infile_query: Some(NamedEntityInfileQuery::Index(index)),
         } => format!("{file_ref}#^{index}"),
     }
 }
@@ -74,7 +77,7 @@ pub struct NamedEntity<'a>(pub &'a Path, pub NamedEntityInfo<'a>);
 
 use NamedEntityInfo::*;
 
-use crate::parser::{InfileRef, LinkQuery};
+use crate::parser::{NamedEntityInfileQuery, NamedEntityQuery};
 pub enum NamedEntityInfo<'a> {
     File,
     Heading(&'a str),
