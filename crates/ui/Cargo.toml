@@ -1,0 +1,9 @@
+[package]
+name = "ui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tower-lsp.workspace = true
+itertools.workspace = true
+vault.workspace = true
