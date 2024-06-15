@@ -11,3 +11,4 @@ vault.workspace = true
 moxide_config.workspace = true
 regex.workspace = true
 nucleo-matcher.workspace = true
+ui.workspace = true

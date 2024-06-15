@@ -107,10 +107,11 @@ fn parse_link_line(
         },
         char_range,
         QuerySyntaxInfo {
-            display,
             syntax_type_info: match syntax_type {
-                SyntaxType::Wiki => QuerySyntaxTypeInfo::Wiki,
-                SyntaxType::Markdown => QuerySyntaxTypeInfo::Markdown,
+                SyntaxType::Wiki => QuerySyntaxTypeInfo::Wiki { display },
+                SyntaxType::Markdown => QuerySyntaxTypeInfo::Markdown {
+                    display: display.expect("that the display should not be none on markdown link"),
+                },
             },
         },
     ))
@@ -130,7 +131,6 @@ pub enum NamedEntityInfileQuery<'a> {
     Index(&'a str),
 }
 
-pub(crate) type FileRef<'a> = &'a str;
 pub struct QueryInfo<'fs> {
     pub line: usize,
     pub char_range: Range<usize>,
@@ -140,21 +140,29 @@ pub struct QueryInfo<'fs> {
 pub struct QuerySyntaxInfo<'fs> {
     /// Display: If None, there is no display syntax entered; If Some, this is a structure for it
     /// but the string could be empty; for example [[file#heading|]] or even [](file#heaing)
-    pub display: Option<&'fs str>,
-    pub syntax_type_info: QuerySyntaxTypeInfo,
+    pub syntax_type_info: QuerySyntaxTypeInfo<'fs>,
+}
+
+impl QuerySyntaxInfo<'_> {
+    pub fn display(&self) -> Option<&str> {
+        match self.syntax_type_info {
+            QuerySyntaxTypeInfo::Markdown { display } => Some(display),
+            QuerySyntaxTypeInfo::Wiki { display } => display,
+        }
+    }
 }
 
 /// This is a plain enum for now, but there may be item specific syntax used. For example, if file
 /// extensions are used or if paths are used
 #[derive(Debug, PartialEq)]
-pub enum QuerySyntaxTypeInfo {
-    Markdown,
-    Wiki,
+pub enum QuerySyntaxTypeInfo<'a> {
+    Markdown { display: &'a str },
+    Wiki { display: Option<&'a str> },
 }
 
 // NOTE: Enables mocking for tests and provides a slight benefit of decoupling Parser from vault as
 // memfs -- which will eventually be replaced by a true MemFS crate.
-trait ParserMemfs {
+trait ParserMemfs: Send + Sync {
     fn select_line_str(&self, path: &Path, line: usize) -> Option<&str>;
 }
 
@@ -285,8 +293,12 @@ mod completion_parser_tests {
         );
 
         assert_eq!(range, 51 - 21..74 - 21);
-        assert_eq!(info.display, Some("this is a query"));
-        assert_eq!(info.syntax_type_info, QuerySyntaxTypeInfo::Markdown);
+        assert_eq!(
+            info.syntax_type_info,
+            QuerySyntaxTypeInfo::Markdown {
+                display: "this is a query"
+            }
+        );
     }
 
     #[test]
@@ -302,8 +314,12 @@ mod completion_parser_tests {
             }
         );
         assert_eq!(range, 51 - 21..81 - 21);
-        assert_eq!(info.display, Some("this is a query"));
-        assert_eq!(info.syntax_type_info, QuerySyntaxTypeInfo::Markdown);
+        assert_eq!(
+            info.syntax_type_info,
+            QuerySyntaxTypeInfo::Markdown {
+                display: "this is a query"
+            }
+        );
     }
 
     #[test]
@@ -318,8 +334,12 @@ mod completion_parser_tests {
             }
         );
         assert_eq!(range, 51 - 21..82 - 21);
-        assert_eq!(info.display, Some("this is a query"));
-        assert_eq!(info.syntax_type_info, QuerySyntaxTypeInfo::Markdown);
+        assert_eq!(
+            info.syntax_type_info,
+            QuerySyntaxTypeInfo::Markdown {
+                display: "this is a query"
+            }
+        );
     }
 
     #[test]
@@ -334,29 +354,33 @@ mod completion_parser_tests {
             }
         );
         assert_eq!(range, 51 - 21..81 - 21);
-        assert_eq!(info.display, Some("this is a query"));
-        assert_eq!(info.syntax_type_info, QuerySyntaxTypeInfo::Markdown);
+        assert_eq!(
+            info.syntax_type_info,
+            QuerySyntaxTypeInfo::Markdown {
+                display: "this is a query"
+            }
+        );
     }
 
     #[test]
     fn markdown_syntax_display_text() {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [](file#^index) jfkdlsa fjdkl ";
         let (_parsed, _range, info) = parse_link_line(line, 63 - 21).unwrap();
-        assert_eq!(info.display, Some(""))
+        assert_eq!(info.display(), Some(""))
     }
 
     #[test]
     fn wiki_syntax_display_text_none() {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [[file#^index|]] jfkdlsa fjdkl ";
         let (_parsed, _range, info) = parse_link_line(line, 63 - 21).unwrap();
-        assert_eq!(info.display, Some(""))
+        assert_eq!(info.display(), Some(""))
     }
 
     #[test]
     fn wiki_syntax_display_text_some() {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [[file#^index|some]] jfkdlsa fjdkl ";
         let (_parsed, _range, info) = parse_link_line(line, 63 - 21).unwrap();
-        assert_eq!(info.display, Some("some"))
+        assert_eq!(info.display(), Some("some"))
     }
 
     #[test]
@@ -378,7 +402,7 @@ mod completion_parser_tests {
         let line = "fjlfjdl fjkl lkjfkld [display](file query f sdklafjdkl  j[another linke](file)";
         let (parsed, _range, info) = parse_link_line(line, 62 - 21).unwrap();
         assert_eq!(parsed.file_query, "file query");
-        assert_eq!(info.display, Some("display"))
+        assert_eq!(info.display(), Some("display"))
     }
 
     #[test]
@@ -386,7 +410,7 @@ mod completion_parser_tests {
         let line = "fjlfjdl fjkl lkjfkld [display](file) f sdklafjdkl [another](fjsdklf dsjkl fdj asklfsdjklf ";
         let (parsed, _range, info) = parse_link_line(line, 94 - 21).unwrap();
         assert_eq!(parsed.file_query, "fjsdklf dsjkl");
-        assert_eq!(info.display, Some("another"))
+        assert_eq!(info.display(), Some("another"))
     }
 
     #[test]

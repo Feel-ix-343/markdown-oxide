@@ -22,6 +22,27 @@ today is 2024-03-27
 
 [[Random File#Heading 1]]
 
+[](Test File#First Heading)
+
+[display](Test File)
+
+[display text](Fiile#Heading)
+
+[[Test File#First Heading]]
+
+
+[[Test File#First Heading|Display]]
+
+[[Test#Heading 1 2]]
+
+[[Th |fj kld
+
+[[Test File#First Heading]]
+
+[](Test File#First Heading)
+
+[](Test#Heading 1 2)
+
 [next Tuesday](2024-04-02)
 
 [tomorrow](2024-03-28)

@@ -1,9 +1,9 @@
 
 
-[[Test File#First Heading]]
 
-This is another test file
+[[Test#Heading 1 2]]
 
+[Heading](Fiile#Heading)
 
 # This is a test heading
 

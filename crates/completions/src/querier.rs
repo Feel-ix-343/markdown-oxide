@@ -3,6 +3,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::{
+    entity::NamedEntity,
+    entity::NamedEntityTypeInfo::*,
+    parser::{NamedEntityInfileQuery, NamedEntityQuery},
+};
 use nucleo_matcher::{
     pattern::{self, Normalization},
     Matcher,
@@ -40,19 +45,7 @@ impl<'a> Querier<'a> {
         self.vault
             .select_referenceable_nodes(None)
             .into_par_iter()
-            .flat_map(|it| match it {
-                Referenceable::File(path, _) => Some(NamedEntity(path, File)),
-                Referenceable::Heading(
-                    path,
-                    MDHeading {
-                        heading_text: data, ..
-                    },
-                ) => Some(NamedEntity(path, Heading(data))),
-                Referenceable::IndexedBlock(path, MDIndexedBlock { index: data, .. }) => {
-                    Some(NamedEntity(path, IndexedBlock(data)))
-                }
-                _ => None,
-            })
+            .flat_map(|it| NamedEntity::from_referenceable(it))
     }
 }
 
@@ -73,24 +66,13 @@ fn link_query_string(link_query: NamedEntityQuery) -> String {
     }
 }
 
-pub struct NamedEntity<'a>(pub &'a Path, pub NamedEntityInfo<'a>);
-
-use NamedEntityInfo::*;
-
-use crate::parser::{NamedEntityInfileQuery, NamedEntityQuery};
-pub enum NamedEntityInfo<'a> {
-    File,
-    Heading(&'a str),
-    IndexedBlock(&'a str),
-}
-
 struct MatchableNamedEntity<'a>(String, NamedEntity<'a>);
 
 impl<'a> From<NamedEntity<'a>> for MatchableNamedEntity<'a> {
     fn from(value: NamedEntity<'a>) -> Self {
-        let file_ref = value.0.file_name().unwrap().to_str().unwrap();
+        let file_ref = value.info().path.file_name().unwrap().to_str().unwrap();
 
-        let match_string = match value.1 {
+        let match_string = match value.info().type_info {
             Heading(heading) => format!("{file_ref}#{heading}"),
             IndexedBlock(index) => format!("{file_ref}#^{index}"),
             _ => file_ref.to_string(),

@@ -1,7 +1,7 @@
 
 [workspace]
 members = [
-  "crates/markdown-oxide"
+  "crates/markdown-oxide", 
 ] # other `members` are specified in dependencies
 resolver = "2"
 
@@ -33,3 +33,4 @@ walkdir = "2.4.0"
 completions.path = "crates/completions"
 moxide_config.path = "crates/moxide_config"
 vault.path = "crates/vault"
+ui.path = "crates/ui"
