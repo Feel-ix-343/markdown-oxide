@@ -4,8 +4,8 @@ use std::{
 };
 
 use crate::{
-    entity::{Entity, NamedEntityData, NamedEntityTypeInfo::*},
-    parser::{EntityQuery, NamedEntityInfileQuery, NamedQueryData},
+    entity::{Entity, NamedEntityData, NamedEntityTypeInfo::*, UnnamedEntityData},
+    parser::{EntityQuery, NamedEntityInfileQuery, NamedQueryData, UnnamedQueryData},
 };
 use nucleo_matcher::{
     pattern::{self, Normalization},
@@ -25,7 +25,7 @@ impl<'a> Querier<'a> {
 }
 
 impl<'a> Querier<'a> {
-    pub fn query(
+    pub fn named_query(
         &self,
         link_query: EntityQuery<NamedQueryData>,
     ) -> impl IndexedParallelIterator<Item = Entity<NamedEntityData>> {
@@ -45,6 +45,13 @@ impl<'a> Querier<'a> {
             .select_referenceable_nodes(None)
             .into_par_iter()
             .flat_map(|it| Entity::from_referenceable(it))
+    }
+
+    pub fn unnamed_query(
+        &self,
+        link_query: EntityQuery<UnnamedQueryData>,
+    ) -> impl IndexedParallelIterator<Item = Entity<UnnamedEntityData>> {
+        vec![].into_par_iter()
     }
 }
 

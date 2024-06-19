@@ -1,6 +1,6 @@
 use std::{ops::Range, path::Path};
 
-use regex::Regex;
+use md_regex_parser::MDLinkParser;
 use vault::Vault;
 
 use crate::Location;
@@ -34,101 +34,39 @@ impl Parser<'_> {
         location: Location,
     ) -> Option<(EntityQuery<UnnamedQueryData>, QueryInfo)> {
         let line_string = self.memfs.select_line_str(location.path, location.line)?;
-        todo!()
+
+        let (link_query, char_range, info) =
+            line_parse_unnamed_query(line_string, location.character)?;
+
+        Some((
+            link_query,
+            QueryInfo {
+                char_range,
+                line: location.line,
+                query_syntax_info: info,
+            },
+        ))
     }
 }
 
-#[derive(Debug)]
-enum ParsedLinkType {
-    Closed,
-    Unclosed,
+// NOTE: Enables mocking for tests and provides a slight benefit of decoupling Parser from vault as
+// memfs -- which will eventually be replaced by a true MemFS crate.
+trait ParserMemfs: Send + Sync {
+    fn select_line_str(&self, path: &Path, line: usize) -> Option<&str>;
 }
-#[derive(Debug, PartialEq)]
-enum SyntaxType {
-    Markdown,
-    Wiki,
+
+impl ParserMemfs for Vault {
+    fn select_line_str(&self, path: &Path, line: usize) -> Option<&str> {
+        self.select_line_str(path, line)
+    }
 }
-fn line_parse_named_query(
-    line_string: &str,
-    character: usize,
-) -> Option<(EntityQuery<NamedQueryData>, Range<usize>, QuerySyntaxInfo)> {
-    let link_char = r"[^\[\]\(\)]";
-    let query_re = format!(
-        r"(?<file_ref>{link_char}*?)(#((\^(?<index>{link_char}*?))|(?<heading>{link_char}*?)))??"
-    );
 
-    let wiki_re_with_closing = Regex::new(&format!(
-        r"\[\[{query_re}(\|(?<display>{link_char}*?))?\]\]"
-    ))
-    .expect("Regex failed to compile");
-
-    // TODO: consider supporting display text without closing? When would this ever happen??
-    let wiki_re_without_closing =
-        Regex::new(&format!(r"\[\[{query_re}$")).expect("Regex failed to compile");
-
-    let md_re_with_closing = Regex::new(&format!(r"\[(?<display>{link_char}*?)\]\({query_re}\)"))
-        .expect("Regex failed to compile");
-
-    let md_re_without_closing = Regex::new(&format!(r"\[(?<display>{link_char}*?)\]\({query_re}$"))
-        .expect("Regex failed to compile");
-
-    let (c, link_type, syntax_type) = wiki_re_with_closing
-        .captures_iter(line_string)
-        .find(|c| c.get(0).is_some_and(|m| m.range().contains(&character)))
-        .map(|c| (c, ParsedLinkType::Closed, SyntaxType::Wiki))
-        .or_else(|| {
-            wiki_re_without_closing
-                .captures_iter(&line_string[..character])
-                .find(|c| c.get(0).is_some_and(|m| m.range().start < character))
-                .map(|c| (c, ParsedLinkType::Unclosed, SyntaxType::Wiki))
-        })
-        .or_else(|| {
-            md_re_with_closing
-                .captures_iter(line_string)
-                .find(|c| c.get(0).is_some_and(|m| m.range().contains(&character)))
-                .map(|c| (c, ParsedLinkType::Closed, SyntaxType::Markdown))
-        })
-        .or_else(|| {
-            md_re_without_closing
-                .captures_iter(&line_string[..character])
-                .find(|c| c.get(0).is_some_and(|m| m.range().start < character))
-                .map(|c| (c, ParsedLinkType::Unclosed, SyntaxType::Markdown))
-        })?;
-
-    let char_range = c.get(0)?.range().start..(match link_type {
-        ParsedLinkType::Closed => c.get(0)?.range().end,
-        ParsedLinkType::Unclosed => character, // this should be correct because the character is one
-                                               // beyond the last character typed, so it is the exclusive
-                                               // range
-    });
-
-    let file_ref = c.name("file_ref")?.as_str();
-    let infile_ref = c
-        .name("heading")
-        .map(|m| NamedEntityInfileQuery::Heading(m.as_str()))
-        .or_else(|| {
-            c.name("index")
-                .map(|m| NamedEntityInfileQuery::Index(m.as_str()))
-        });
-    let display = c.name("display").map(|m| m.as_str());
-
-    Some((
-        EntityQuery {
-            data: NamedQueryData {
-                file_query: file_ref,
-                infile_query: infile_ref,
-            },
-        },
-        char_range,
-        QuerySyntaxInfo {
-            syntax_type_info: match syntax_type {
-                SyntaxType::Wiki => QuerySyntaxTypeInfo::Wiki { display },
-                SyntaxType::Markdown => QuerySyntaxTypeInfo::Markdown {
-                    display: display.expect("that the display should not be none on markdown link"),
-                },
-            },
-        },
-    ))
+impl<'a> Parser<'a> {
+    pub(crate) fn new(vault: &'a Vault) -> Self {
+        Self {
+            memfs: vault as &dyn ParserMemfs,
+        }
+    }
 }
 
 pub struct EntityQuery<T: EntityQueryTypeInfo> {
@@ -150,11 +88,13 @@ pub enum NamedEntityInfileQuery<'a> {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct UnnamedQueryData;
+pub struct UnnamedQueryData<'a> {
+    pub grep_string: &'a str,
+}
 
-trait EntityQueryTypeInfo {}
+pub trait EntityQueryTypeInfo {}
 impl EntityQueryTypeInfo for NamedQueryData<'_> {}
-impl EntityQueryTypeInfo for UnnamedQueryData {}
+impl EntityQueryTypeInfo for UnnamedQueryData<'_> {}
 
 pub struct QueryInfo<'fs> {
     pub line: usize,
@@ -184,29 +124,168 @@ pub enum QuerySyntaxTypeInfo<'a> {
     Markdown { display: &'a str },
     Wiki { display: Option<&'a str> },
 }
+fn line_parse_named_query(
+    line_string: &str,
+    character: usize,
+) -> Option<(EntityQuery<NamedQueryData>, Range<usize>, QuerySyntaxInfo)> {
+    let query_re = MDLinkParser::new(line_string, character);
+    let (captures, range, info) = query_re.parse_with_re(|char_class| {
+        format!(r"(?<file_ref>{char_class}*?)(#((\^(?<index>{char_class}*?))|(?<heading>{char_class}*?)))??")
+    })?;
 
-// NOTE: Enables mocking for tests and provides a slight benefit of decoupling Parser from vault as
-// memfs -- which will eventually be replaced by a true MemFS crate.
-trait ParserMemfs: Send + Sync {
-    fn select_line_str(&self, path: &Path, line: usize) -> Option<&str>;
+    let file_ref = captures.name("file_ref")?.as_str();
+    let infile_ref = captures
+        .name("heading")
+        .map(|m| NamedEntityInfileQuery::Heading(m.as_str()))
+        .or_else(|| {
+            captures
+                .name("index")
+                .map(|m| NamedEntityInfileQuery::Index(m.as_str()))
+        });
+
+    Some((
+        EntityQuery {
+            data: NamedQueryData {
+                file_query: file_ref,
+                infile_query: infile_ref,
+            },
+        },
+        range,
+        info,
+    ))
 }
 
-impl ParserMemfs for Vault {
-    fn select_line_str(&self, path: &Path, line: usize) -> Option<&str> {
-        self.select_line_str(path, line)
+fn line_parse_unnamed_query(
+    line_string: &str,
+    character: usize,
+) -> Option<(EntityQuery<UnnamedQueryData>, Range<usize>, QuerySyntaxInfo)> {
+    let (captures, range, info) = MDLinkParser::new(line_string, character)
+        .parse_with_re(|char| format!(" (?<grep>{char}*?)"))?;
+
+    let grep_string = captures.name("grep")?.as_str();
+
+    Some((
+        EntityQuery {
+            data: UnnamedQueryData { grep_string },
+        },
+        range,
+        info,
+    ))
+}
+
+mod md_regex_parser {
+    use std::ops::Range;
+
+    use regex::{Captures, Regex};
+
+    use super::{QuerySyntaxInfo, QuerySyntaxTypeInfo};
+
+    pub struct MDLinkParser<'a> {
+        hay: &'a str,
+        character: usize,
     }
-}
 
-impl<'a> Parser<'a> {
-    pub(crate) fn new(vault: &'a Vault) -> Self {
-        Self {
-            memfs: vault as &dyn ParserMemfs,
+    impl<'a> MDLinkParser<'a> {
+        pub fn new(string: &'a str, character: usize) -> MDLinkParser {
+            MDLinkParser {
+                hay: string,
+                character,
+            }
         }
+
+        pub fn parse_with_re(
+            &self,
+            regex_builder: impl Fn(&'static str) -> String,
+        ) -> Option<(Captures<'a>, Range<usize>, QuerySyntaxInfo<'a>)> {
+            let link_char = r"[^\[\]\(\)]";
+
+            let query_re = regex_builder(link_char);
+
+            let wiki_re_with_closing = Regex::new(&format!(
+                r"\[\[{query_re}(\|(?<display>{link_char}*?))?\]\]"
+            ))
+            .expect("Regex failed to compile");
+
+            // TODO: consider supporting display text without closing? When would this ever happen??
+            let wiki_re_without_closing =
+                Regex::new(&format!(r"\[\[{query_re}$")).expect("Regex failed to compile");
+
+            let md_re_with_closing =
+                Regex::new(&format!(r"\[(?<display>{link_char}*?)\]\({query_re}\)"))
+                    .expect("Regex failed to compile");
+
+            let md_re_without_closing =
+                Regex::new(&format!(r"\[(?<display>{link_char}*?)\]\({query_re}$"))
+                    .expect("Regex failed to compile");
+
+            let (c, link_type, syntax_type) = wiki_re_with_closing
+                .captures_iter(self.hay)
+                .find(|c| {
+                    c.get(0)
+                        .is_some_and(|m| m.range().contains(&self.character))
+                })
+                .map(|c| (c, ParsedLinkType::Closed, SyntaxType::Wiki))
+                .or_else(|| {
+                    wiki_re_without_closing
+                        .captures_iter(&self.hay[..self.character])
+                        .find(|c| c.get(0).is_some_and(|m| m.range().start < self.character))
+                        .map(|c| (c, ParsedLinkType::Unclosed, SyntaxType::Wiki))
+                })
+                .or_else(|| {
+                    md_re_with_closing
+                        .captures_iter(self.hay)
+                        .find(|c| {
+                            c.get(0)
+                                .is_some_and(|m| m.range().contains(&self.character))
+                        })
+                        .map(|c| (c, ParsedLinkType::Closed, SyntaxType::Markdown))
+                })
+                .or_else(|| {
+                    md_re_without_closing
+                        .captures_iter(&self.hay[..self.character])
+                        .find(|c| c.get(0).is_some_and(|m| m.range().start < self.character))
+                        .map(|c| (c, ParsedLinkType::Unclosed, SyntaxType::Markdown))
+                })?;
+
+            let char_range = c.get(0)?.range().start..(match link_type {
+                ParsedLinkType::Closed => c.get(0)?.range().end,
+                ParsedLinkType::Unclosed => self.character, // this should be correct because the character is one
+                                                            // beyond the last character typed, so it is the exclusive
+                                                            // range
+            });
+
+            let display = c.name("display").map(|m| m.as_str());
+
+            Some((
+                c,
+                char_range,
+                QuerySyntaxInfo {
+                    syntax_type_info: match syntax_type {
+                        SyntaxType::Wiki => QuerySyntaxTypeInfo::Wiki { display },
+                        SyntaxType::Markdown => QuerySyntaxTypeInfo::Markdown {
+                            display: display
+                                .expect("that the display should not be none on markdown link"),
+                        },
+                    },
+                },
+            ))
+        }
+    }
+
+    #[derive(Debug)]
+    enum ParsedLinkType {
+        Closed,
+        Unclosed,
+    }
+    #[derive(Debug, PartialEq)]
+    enum SyntaxType {
+        Markdown,
+        Wiki,
     }
 }
 
 #[cfg(test)]
-mod completion_parser_tests {
+mod named_query_parse_tests {
     use crate::parser::line_parse_named_query;
     use crate::parser::{NamedEntityInfileQuery, NamedQueryData, QuerySyntaxTypeInfo};
 
@@ -448,5 +527,44 @@ mod completion_parser_tests {
                 " heading with a # in it and a ^ ajfkl"
             ))
         )
+    }
+}
+
+#[cfg(test)]
+mod unnamed_query_tests {
+    use crate::parser::line_parse_unnamed_query;
+
+    #[test]
+    fn basic_test() {
+        let text = "fjkalf kdsjfkd  [[ fjakl fdjk]] fjdl kf j";
+        let (d, _, _) = line_parse_unnamed_query(text, 50 - 21).unwrap();
+        assert_eq!("fjakl fdjk", d.data.grep_string)
+    }
+
+    #[test]
+    fn unclosed() {
+        let text = "fjkalf kdsjfkd  [[ fjakl fdjk fjdl kf j";
+        let (d, _, _) = line_parse_unnamed_query(text, 50 - 21).unwrap();
+        assert_eq!("fjakl fdjk", d.data.grep_string)
+    }
+
+    #[test]
+    fn multiple_closed() {
+        let text = "fjka[[thisis ]] [[ fjakl fdjk]][[fjk]]j";
+        let (d, _, _) = line_parse_unnamed_query(text, 50 - 21).unwrap();
+        assert_eq!("fjakl fdjk", d.data.grep_string)
+    }
+
+    #[test]
+    fn multiple_unclosed() {
+        let text = "fjka[[thisis ]] [[ fjakl fdjk  jklfd slk [[fjk]]j";
+        let (d, _, _) = line_parse_unnamed_query(text, 50 - 21).unwrap();
+        assert_eq!("fjakl fdjk", d.data.grep_string)
+    }
+
+    #[test]
+    fn not_unnamed_query() {
+        let text = "fjka[[thisis ]] [[fjakl fdjkk]]  jklfd slk [[fjk]]j";
+        assert!(line_parse_unnamed_query(text, 50 - 21).is_none())
     }
 }

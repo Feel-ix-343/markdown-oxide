@@ -4,7 +4,7 @@ use tower_lsp::lsp_types::{
 };
 
 use crate::{
-    entity::{Entity, NamedEntityData, NamedEntityTypeInfo},
+    entity::{Entity, NamedEntityData, NamedEntityTypeInfo, UnnamedEntityData},
     entity_viewer::EntityViewer,
     parser::{QueryInfo, QuerySyntaxInfo, QuerySyntaxTypeInfo},
     settings::SettingsAdapter,
@@ -13,7 +13,7 @@ use crate::{
 
 use rayon::prelude::*;
 
-pub fn completion_response(
+pub fn named_completion_response(
     cx: &Context,
     info: &QueryInfo,
     named_entities: impl rayon::iter::IndexedParallelIterator<Item = Entity<NamedEntityData>>,
@@ -177,4 +177,12 @@ fn documentation(
             value: text,
         },
     ))
+}
+
+pub fn unnamed_completion_response(
+    cx: &Context,
+    info: &QueryInfo,
+    named_entities: impl rayon::iter::IndexedParallelIterator<Item = Entity<UnnamedEntityData>>,
+) -> CompletionResponse {
+    todo!()
 }

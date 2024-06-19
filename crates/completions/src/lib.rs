@@ -16,7 +16,7 @@ use moxide_config::Settings;
 use parser::Parser;
 use querier::Querier;
 use settings::SettingsAdapter;
-use to_ui::completion_response;
+use to_ui::{named_completion_response, unnamed_completion_response};
 use tower_lsp::lsp_types::{CompletionParams, CompletionResponse};
 use vault::Vault;
 
@@ -44,11 +44,30 @@ pub fn get_completions(
 }
 
 fn completions(cx: &Context, location: Location) -> Option<CompletionResponse> {
-    let (named_entity_query, query_syntax_info) = cx.parser().parse_named_entity_query(location)?;
-    let named_entities = cx.querier().query(named_entity_query);
-    Some(completion_response(&cx, &query_syntax_info, named_entities))
+    if let Some((named_entity_query, query_syntax_info)) =
+        cx.parser().parse_named_entity_query(location)
+    {
+        let named_entities = cx.querier().named_query(named_entity_query);
+        Some(named_completion_response(
+            cx,
+            &query_syntax_info,
+            named_entities,
+        ))
+    } else if let Some((named_entity_query, query_syntax_info)) =
+        cx.parser().parse_unnamed_entity_query(location)
+    {
+        let unnamed_entities = cx.querier().unnamed_query(named_entity_query);
+        Some(unnamed_completion_response(
+            cx,
+            &query_syntax_info,
+            unnamed_entities,
+        ))
+    } else {
+        None
+    }
 }
 
+#[derive(Debug, Clone, Copy)]
 struct Location<'fs> {
     path: &'fs Path,
     line: usize,
