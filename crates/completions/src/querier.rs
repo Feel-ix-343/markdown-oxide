@@ -4,16 +4,15 @@ use std::{
 };
 
 use crate::{
-    entity::NamedEntity,
-    entity::NamedEntityTypeInfo::*,
-    parser::{NamedEntityInfileQuery, NamedEntityQuery},
+    entity::{Entity, NamedEntityData, NamedEntityTypeInfo::*},
+    parser::{EntityQuery, NamedEntityInfileQuery, NamedQueryData},
 };
 use nucleo_matcher::{
     pattern::{self, Normalization},
     Matcher,
 };
 use rayon::prelude::*;
-use vault::{MDHeading, MDIndexedBlock, Referenceable, Vault};
+use vault::Vault;
 
 pub(crate) struct Querier<'a> {
     vault: &'a Vault,
@@ -28,8 +27,8 @@ impl<'a> Querier<'a> {
 impl<'a> Querier<'a> {
     pub fn query(
         &self,
-        link_query: NamedEntityQuery,
-    ) -> impl IndexedParallelIterator<Item = NamedEntity> {
+        link_query: EntityQuery<NamedQueryData>,
+    ) -> impl IndexedParallelIterator<Item = Entity<NamedEntityData>> {
         let named_entities = self.get_named_entities();
         let matchables = named_entities.map(MatchableNamedEntity::from);
 
@@ -41,35 +40,35 @@ impl<'a> Querier<'a> {
         matched.into_par_iter().map(|(it, _)| it.into())
     }
 
-    fn get_named_entities(&self) -> impl ParallelIterator<Item = NamedEntity<'a>> {
+    fn get_named_entities(&self) -> impl ParallelIterator<Item = Entity<NamedEntityData>> {
         self.vault
             .select_referenceable_nodes(None)
             .into_par_iter()
-            .flat_map(|it| NamedEntity::from_referenceable(it))
+            .flat_map(|it| Entity::from_referenceable(it))
     }
 }
 
-fn link_query_string(link_query: NamedEntityQuery) -> String {
-    match link_query {
-        NamedEntityQuery {
+fn link_query_string(link_query: EntityQuery<NamedQueryData>) -> String {
+    match link_query.data {
+        NamedQueryData {
             file_query: file_ref,
             infile_query: None,
         } => file_ref.to_string(),
-        NamedEntityQuery {
+        NamedQueryData {
             file_query: file_ref,
             infile_query: Some(NamedEntityInfileQuery::Heading(heading_string)),
         } => format!("{file_ref}#{heading_string}"),
-        NamedEntityQuery {
+        NamedQueryData {
             file_query: file_ref,
             infile_query: Some(NamedEntityInfileQuery::Index(index)),
         } => format!("{file_ref}#^{index}"),
     }
 }
 
-struct MatchableNamedEntity<'a>(String, NamedEntity<'a>);
+struct MatchableNamedEntity<'a>(String, Entity<'a, NamedEntityData<'a>>);
 
-impl<'a> From<NamedEntity<'a>> for MatchableNamedEntity<'a> {
-    fn from(value: NamedEntity<'a>) -> Self {
+impl<'a> From<Entity<'a, NamedEntityData<'a>>> for MatchableNamedEntity<'a> {
+    fn from(value: Entity<'a, NamedEntityData<'a>>) -> Self {
         let file_ref = value.info().path.file_name().unwrap().to_str().unwrap();
 
         let match_string = match value.info().type_info {
@@ -82,14 +81,14 @@ impl<'a> From<NamedEntity<'a>> for MatchableNamedEntity<'a> {
     }
 }
 
-impl<'a> From<MatchableNamedEntity<'a>> for NamedEntity<'a> {
+impl<'a> From<MatchableNamedEntity<'a>> for Entity<'a, NamedEntityData<'a>> {
     fn from(value: MatchableNamedEntity<'a>) -> Self {
         value.1
     }
 }
 
 impl<'a> Deref for MatchableNamedEntity<'a> {
-    type Target = NamedEntity<'a>;
+    type Target = Entity<'a, NamedEntityData<'a>>;
     fn deref(&self) -> &Self::Target {
         &self.1
     }

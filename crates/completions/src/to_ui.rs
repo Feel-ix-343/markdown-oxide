@@ -4,7 +4,7 @@ use tower_lsp::lsp_types::{
 };
 
 use crate::{
-    entity::{NamedEntity, NamedEntityInfo, NamedEntityTypeInfo},
+    entity::{Entity, NamedEntityData, NamedEntityTypeInfo},
     entity_viewer::EntityViewer,
     parser::{QueryInfo, QuerySyntaxInfo, QuerySyntaxTypeInfo},
     settings::SettingsAdapter,
@@ -16,7 +16,7 @@ use rayon::prelude::*;
 pub fn completion_response(
     cx: &Context,
     info: &QueryInfo,
-    named_entities: impl rayon::iter::IndexedParallelIterator<Item = NamedEntity>,
+    named_entities: impl rayon::iter::IndexedParallelIterator<Item = Entity<NamedEntityData>>,
 ) -> CompletionResponse {
     let items = named_entities
         .take(50)
@@ -44,7 +44,7 @@ pub fn completion_response(
     })
 }
 
-fn icon(named_entity: &NamedEntity) -> CompletionItemKind {
+fn icon(named_entity: &Entity<NamedEntityData>) -> CompletionItemKind {
     match named_entity.info().type_info {
         NamedEntityTypeInfo::File => CompletionItemKind::FILE,
         NamedEntityTypeInfo::Heading(..) | NamedEntityTypeInfo::IndexedBlock(..) => {
@@ -53,7 +53,7 @@ fn icon(named_entity: &NamedEntity) -> CompletionItemKind {
     }
 }
 
-fn named_entity_file_ref(entity: &NamedEntity) -> String {
+fn named_entity_file_ref(entity: &Entity<NamedEntityData>) -> String {
     entity
         .info()
         .path
@@ -64,18 +64,18 @@ fn named_entity_file_ref(entity: &NamedEntity) -> String {
         .to_string()
 }
 
-fn label(entity: &NamedEntity) -> String {
+fn label(entity: &Entity<NamedEntityData>) -> String {
     let file_ref = named_entity_file_ref(entity); // TODO: abstract this better; there is possible duplication in querier
     match entity.info() {
-        NamedEntityInfo {
+        NamedEntityData {
             path: _,
             type_info: NamedEntityTypeInfo::File,
         } => file_ref.to_string(),
-        NamedEntityInfo {
+        NamedEntityData {
             path: _,
             type_info: NamedEntityTypeInfo::Heading(heading),
         } => format!("{file_ref}#{heading}"),
-        NamedEntityInfo {
+        NamedEntityData {
             path: _,
             type_info: NamedEntityTypeInfo::IndexedBlock(index),
         } => format!("{file_ref}#^{index}"),
@@ -85,7 +85,7 @@ fn label(entity: &NamedEntity) -> String {
 // TODO: you should be able to simplify this by getting the total range and the query.
 /// Text is filtered based on the range of the text edit being made This inserts the query label
 /// into the relevant location while sending the user entered text for the rest of the range.
-fn filter_text(info: &QueryInfo, named_entity: &NamedEntity) -> String {
+fn filter_text(info: &QueryInfo, named_entity: &Entity<NamedEntityData>) -> String {
     match info.query_syntax_info {
         QuerySyntaxInfo {
             syntax_type_info: QuerySyntaxTypeInfo::Wiki { display: _ },
@@ -102,11 +102,15 @@ fn filter_text(info: &QueryInfo, named_entity: &NamedEntity) -> String {
 }
 
 /// This is label for now, but when we consider file extensions, this will change
-fn entity_ref(named_entity: &NamedEntity) -> String {
+fn entity_ref(named_entity: &Entity<NamedEntityData>) -> String {
     label(named_entity)
 }
 
-fn text_edit(settings: &SettingsAdapter, info: &QueryInfo, named_entity: &NamedEntity) -> TextEdit {
+fn text_edit(
+    settings: &SettingsAdapter,
+    info: &QueryInfo,
+    named_entity: &Entity<NamedEntityData>,
+) -> TextEdit {
     let entity_ref = entity_ref(named_entity);
     let new_text = match &info.query_syntax_info {
         QuerySyntaxInfo {
@@ -161,7 +165,10 @@ fn text_edit(settings: &SettingsAdapter, info: &QueryInfo, named_entity: &NamedE
     TextEdit { range, new_text }
 }
 
-fn documentation(viewer: &EntityViewer, named_entity: &NamedEntity) -> Option<Documentation> {
+fn documentation(
+    viewer: &EntityViewer,
+    named_entity: &Entity<NamedEntityData>,
+) -> Option<Documentation> {
     let text = viewer.entity_view(named_entity)?;
 
     Some(Documentation::MarkupContent(

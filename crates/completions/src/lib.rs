@@ -44,7 +44,7 @@ pub fn get_completions(
 }
 
 fn completions(cx: &Context, location: Location) -> Option<CompletionResponse> {
-    let (named_entity_query, query_syntax_info) = cx.parser().parse_link(location)?;
+    let (named_entity_query, query_syntax_info) = cx.parser().parse_named_entity_query(location)?;
     let named_entities = cx.querier().query(named_entity_query);
     Some(completion_response(&cx, &query_syntax_info, named_entities))
 }

@@ -1,17 +1,15 @@
 use std::{ops::Range, path::Path};
 use vault::{MDHeading, MDIndexedBlock, Referenceable};
 
-pub struct NamedEntity<'a>(
-    NamedEntityInfo<'a>,
-    Referenceable<'a>,
-    NamedEntityLocationInfo<'a>,
-);
+pub struct Entity<'a, T: EntityData>(T, Referenceable<'a>, NamedEntityLocationInfo<'a>);
 
-impl<'a> NamedEntity<'a> {
-    pub fn from_referenceable(referenceable: Referenceable<'a>) -> Option<NamedEntity<'a>> {
+impl<'a> Entity<'a, NamedEntityData<'a>> {
+    pub fn from_referenceable(
+        referenceable: Referenceable<'a>,
+    ) -> Option<Entity<'a, NamedEntityData<'a>>> {
         match referenceable {
-            Referenceable::File(path, _) => Some(NamedEntity(
-                NamedEntityInfo {
+            Referenceable::File(path, _) => Some(Entity(
+                NamedEntityData {
                     path,
                     type_info: File,
                 },
@@ -28,8 +26,8 @@ impl<'a> NamedEntity<'a> {
                     range,
                     ..
                 },
-            ) => Some(NamedEntity(
-                NamedEntityInfo {
+            ) => Some(Entity(
+                NamedEntityData {
                     path,
                     type_info: Heading(data),
                 },
@@ -44,8 +42,8 @@ impl<'a> NamedEntity<'a> {
                 MDIndexedBlock {
                     index: data, range, ..
                 },
-            ) => Some(NamedEntity(
-                NamedEntityInfo {
+            ) => Some(Entity(
+                NamedEntityData {
                     path,
                     type_info: IndexedBlock(data),
                 },
@@ -60,8 +58,8 @@ impl<'a> NamedEntity<'a> {
     }
 }
 
-impl NamedEntity<'_> {
-    pub fn info(&self) -> &NamedEntityInfo {
+impl Entity<'_, NamedEntityData<'_>> {
+    pub fn info(&self) -> &NamedEntityData {
         &self.0
     }
 
@@ -70,7 +68,7 @@ impl NamedEntity<'_> {
     }
 }
 
-pub struct NamedEntityInfo<'a> {
+pub struct NamedEntityData<'a> {
     pub path: &'a Path,
     pub type_info: NamedEntityTypeInfo<'a>,
 }
@@ -88,8 +86,14 @@ pub struct NamedEntityLocationInfo<'a> {
 }
 
 /// this is a mapping for convient vault api usage. It may be come unnecesasry in the future
-impl<'a> From<&NamedEntity<'a>> for Referenceable<'a> {
-    fn from(value: &NamedEntity<'a>) -> Self {
+impl<'a, T: EntityData> From<&Entity<'a, T>> for Referenceable<'a> {
+    fn from(value: &Entity<'a, T>) -> Self {
         value.1.clone() // TODO: ensure that cost is acceptable
     }
 }
+
+pub struct UnnamedEntityData;
+
+pub trait EntityData {}
+impl EntityData for NamedEntityData<'_> {}
+impl EntityData for UnnamedEntityData {}

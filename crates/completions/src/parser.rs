@@ -10,10 +10,14 @@ pub(crate) struct Parser<'a> {
 }
 
 impl Parser<'_> {
-    pub(crate) fn parse_link(&self, location: Location) -> Option<(NamedEntityQuery, QueryInfo)> {
+    pub fn parse_named_entity_query(
+        &self,
+        location: Location,
+    ) -> Option<(EntityQuery<NamedQueryData>, QueryInfo)> {
         let line_string = self.memfs.select_line_str(location.path, location.line)?;
 
-        let (link_query, char_range, info) = parse_link_line(line_string, location.character)?;
+        let (link_query, char_range, info) =
+            line_parse_named_query(line_string, location.character)?;
 
         Some((
             link_query,
@@ -23,6 +27,14 @@ impl Parser<'_> {
                 query_syntax_info: info,
             },
         ))
+    }
+
+    pub fn parse_unnamed_entity_query(
+        &self,
+        location: Location,
+    ) -> Option<(EntityQuery<UnnamedQueryData>, QueryInfo)> {
+        let line_string = self.memfs.select_line_str(location.path, location.line)?;
+        todo!()
     }
 }
 
@@ -36,10 +48,10 @@ enum SyntaxType {
     Markdown,
     Wiki,
 }
-fn parse_link_line(
+fn line_parse_named_query(
     line_string: &str,
     character: usize,
-) -> Option<(NamedEntityQuery, Range<usize>, QuerySyntaxInfo)> {
+) -> Option<(EntityQuery<NamedQueryData>, Range<usize>, QuerySyntaxInfo)> {
     let link_char = r"[^\[\]\(\)]";
     let query_re = format!(
         r"(?<file_ref>{link_char}*?)(#((\^(?<index>{link_char}*?))|(?<heading>{link_char}*?)))??"
@@ -101,9 +113,11 @@ fn parse_link_line(
     let display = c.name("display").map(|m| m.as_str());
 
     Some((
-        NamedEntityQuery {
-            file_query: file_ref,
-            infile_query: infile_ref,
+        EntityQuery {
+            data: NamedQueryData {
+                file_query: file_ref,
+                infile_query: infile_ref,
+            },
         },
         char_range,
         QuerySyntaxInfo {
@@ -117,8 +131,12 @@ fn parse_link_line(
     ))
 }
 
+pub struct EntityQuery<T: EntityQueryTypeInfo> {
+    pub data: T,
+}
+
 #[derive(Debug, PartialEq)]
-pub struct NamedEntityQuery<'a> {
+pub struct NamedQueryData<'a> {
     pub file_query: &'a str,
     pub infile_query: Option<NamedEntityInfileQuery<'a>>,
 }
@@ -130,6 +148,13 @@ pub enum NamedEntityInfileQuery<'a> {
     /// Can be empty; excludes the ^
     Index(&'a str),
 }
+
+#[derive(Debug, PartialEq)]
+pub struct UnnamedQueryData;
+
+trait EntityQueryTypeInfo {}
+impl EntityQueryTypeInfo for NamedQueryData<'_> {}
+impl EntityQueryTypeInfo for UnnamedQueryData {}
 
 pub struct QueryInfo<'fs> {
     pub line: usize,
@@ -182,19 +207,18 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod completion_parser_tests {
-    use crate::parser::{
-        parse_link_line, NamedEntityInfileQuery, NamedEntityQuery, QuerySyntaxTypeInfo,
-    };
+    use crate::parser::line_parse_named_query;
+    use crate::parser::{NamedEntityInfileQuery, NamedQueryData, QuerySyntaxTypeInfo};
 
     #[test]
     fn test_file() {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [[file]] jfkdlsa fjdkl ";
 
-        let (parsed, range, ..) = parse_link_line(line, 55 - 21).unwrap();
+        let (parsed, range, ..) = line_parse_named_query(line, 55 - 21).unwrap();
 
         assert_eq!(
-            parsed,
-            NamedEntityQuery {
+            parsed.data,
+            NamedQueryData {
                 file_query: "file",
                 infile_query: None
             }
@@ -207,11 +231,11 @@ mod completion_parser_tests {
     fn test_infile_ref_heading() {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [[file#heading]] jfkdlsa fjdkl ";
 
-        let (parsed, ..) = parse_link_line(line, 58 - 19).unwrap();
+        let (parsed, ..) = line_parse_named_query(line, 58 - 19).unwrap();
 
         assert_eq!(
-            parsed,
-            NamedEntityQuery {
+            parsed.data,
+            NamedQueryData {
                 file_query: "file",
                 infile_query: Some(NamedEntityInfileQuery::Heading("heading"))
             }
@@ -222,11 +246,11 @@ mod completion_parser_tests {
     fn test_infile_ref_index() {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [[file#^index]] fjdlkf jsdakl";
 
-        let (parsed, ..) = parse_link_line(line, 58 - 19).unwrap();
+        let (parsed, ..) = line_parse_named_query(line, 58 - 19).unwrap();
 
         assert_eq!(
-            parsed,
-            NamedEntityQuery {
+            parsed.data,
+            NamedQueryData {
                 file_query: "file",
                 infile_query: Some(NamedEntityInfileQuery::Index("index"))
             }
@@ -237,11 +261,11 @@ mod completion_parser_tests {
     fn test_blank_infile_index() {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [[file#^]]";
 
-        let (parsed, ..) = parse_link_line(line, 58 - 19).unwrap();
+        let (parsed, ..) = line_parse_named_query(line, 58 - 19).unwrap();
 
         assert_eq!(
-            parsed,
-            NamedEntityQuery {
+            parsed.data,
+            NamedQueryData {
                 file_query: "file",
                 infile_query: Some(NamedEntityInfileQuery::Index(""))
             }
@@ -252,11 +276,11 @@ mod completion_parser_tests {
     fn test_blank_infile_heading() {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [[file#]]";
 
-        let (parsed, ..) = parse_link_line(line, 58 - 22).unwrap();
+        let (parsed, ..) = line_parse_named_query(line, 58 - 22).unwrap();
 
         assert_eq!(
-            parsed,
-            NamedEntityQuery {
+            parsed.data,
+            NamedQueryData {
                 file_query: "file",
                 infile_query: Some(NamedEntityInfileQuery::Heading(""))
             }
@@ -268,11 +292,11 @@ mod completion_parser_tests {
         //                                                         C
         let line = "fjlfjdl fjkl lkjfkld fklasj   [[this is a query jf dkljfa ";
 
-        let (parsed, ..) = parse_link_line(line, 68 - 21).unwrap();
+        let (parsed, ..) = line_parse_named_query(line, 68 - 21).unwrap();
 
         assert_eq!(
-            parsed,
-            NamedEntityQuery {
+            parsed.data,
+            NamedQueryData {
                 file_query: "this is a query",
                 infile_query: None
             }
@@ -282,11 +306,11 @@ mod completion_parser_tests {
     #[test]
     fn test_markdown_link() {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [this is a query](file) jfkdlsa fjdkl ";
-        let (parsed, range, info) = parse_link_line(line, 53 - 21).unwrap();
+        let (parsed, range, info) = line_parse_named_query(line, 53 - 21).unwrap();
 
         assert_eq!(
-            parsed,
-            NamedEntityQuery {
+            parsed.data,
+            NamedQueryData {
                 file_query: "file",
                 infile_query: None
             }
@@ -305,10 +329,10 @@ mod completion_parser_tests {
     fn test_markdown_link_no_closing() {
         //                                                                      C
         let line = "fjlfjdl fjkl lkjfkld fklasj   [this is a query](file jfkldas fjklsd jfkls";
-        let (parsed, range, info) = parse_link_line(line, 81 - 21).unwrap();
+        let (parsed, range, info) = line_parse_named_query(line, 81 - 21).unwrap();
         assert_eq!(
-            parsed,
-            NamedEntityQuery {
+            parsed.data,
+            NamedQueryData {
                 file_query: "file jfkldas",
                 infile_query: None
             }
@@ -325,10 +349,10 @@ mod completion_parser_tests {
     #[test]
     fn test_markdown_closed_infile_query() {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [this is a query](file#heading) jfkdlsa fjdkl ";
-        let (parsed, range, info) = parse_link_line(line, 63 - 21).unwrap();
+        let (parsed, range, info) = line_parse_named_query(line, 63 - 21).unwrap();
         assert_eq!(
-            parsed,
-            NamedEntityQuery {
+            parsed.data,
+            NamedQueryData {
                 file_query: "file",
                 infile_query: Some(NamedEntityInfileQuery::Heading("heading"))
             }
@@ -345,10 +369,10 @@ mod completion_parser_tests {
     #[test]
     fn test_markdown_closed_infile_query_index() {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [this is a query](file#^index) jfkdlsa fjdkl ";
-        let (parsed, range, info) = parse_link_line(line, 63 - 21).unwrap();
+        let (parsed, range, info) = line_parse_named_query(line, 63 - 21).unwrap();
         assert_eq!(
-            parsed,
-            NamedEntityQuery {
+            parsed.data,
+            NamedQueryData {
                 file_query: "file",
                 infile_query: Some(NamedEntityInfileQuery::Index("index"))
             }
@@ -365,61 +389,61 @@ mod completion_parser_tests {
     #[test]
     fn markdown_syntax_display_text() {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [](file#^index) jfkdlsa fjdkl ";
-        let (_parsed, _range, info) = parse_link_line(line, 63 - 21).unwrap();
+        let (_parsed, _range, info) = line_parse_named_query(line, 63 - 21).unwrap();
         assert_eq!(info.display(), Some(""))
     }
 
     #[test]
     fn wiki_syntax_display_text_none() {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [[file#^index|]] jfkdlsa fjdkl ";
-        let (_parsed, _range, info) = parse_link_line(line, 63 - 21).unwrap();
+        let (_parsed, _range, info) = line_parse_named_query(line, 63 - 21).unwrap();
         assert_eq!(info.display(), Some(""))
     }
 
     #[test]
     fn wiki_syntax_display_text_some() {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [[file#^index|some]] jfkdlsa fjdkl ";
-        let (_parsed, _range, info) = parse_link_line(line, 63 - 21).unwrap();
+        let (_parsed, _range, info) = line_parse_named_query(line, 63 - 21).unwrap();
         assert_eq!(info.display(), Some("some"))
     }
 
     #[test]
     fn wiki_unclosed_with_multiple_links() {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [[file query jfkdlsa fjdkl [[file#^index|some]]";
-        let (parsed, _range, _info) = parse_link_line(line, 71 - 21).unwrap();
-        assert_eq!(parsed.file_query, "file query jfkdlsa")
+        let (parsed, _range, _info) = line_parse_named_query(line, 71 - 21).unwrap();
+        assert_eq!(parsed.data.file_query, "file query jfkdlsa")
     }
 
     #[test]
     fn wiki_unclosed_after_link() {
         let line = "fjlfjdl fjkl lkjfkld [[link]] fklasj   [[file query jfkdlsa fjdkl";
-        let (parsed, _range, _info) = parse_link_line(line, 72 - 21).unwrap();
-        assert_eq!(parsed.file_query, "file query")
+        let (parsed, _range, _info) = line_parse_named_query(line, 72 - 21).unwrap();
+        assert_eq!(parsed.data.file_query, "file query")
     }
 
     #[test]
     fn md_unclosed_before_link() {
         let line = "fjlfjdl fjkl lkjfkld [display](file query f sdklafjdkl  j[another linke](file)";
-        let (parsed, _range, info) = parse_link_line(line, 62 - 21).unwrap();
-        assert_eq!(parsed.file_query, "file query");
+        let (parsed, _range, info) = line_parse_named_query(line, 62 - 21).unwrap();
+        assert_eq!(parsed.data.file_query, "file query");
         assert_eq!(info.display(), Some("display"))
     }
 
     #[test]
     fn md_unclosed_after_link() {
         let line = "fjlfjdl fjkl lkjfkld [display](file) f sdklafjdkl [another](fjsdklf dsjkl fdj asklfsdjklf ";
-        let (parsed, _range, info) = parse_link_line(line, 94 - 21).unwrap();
-        assert_eq!(parsed.file_query, "fjsdklf dsjkl");
+        let (parsed, _range, info) = line_parse_named_query(line, 94 - 21).unwrap();
+        assert_eq!(parsed.data.file_query, "fjsdklf dsjkl");
         assert_eq!(info.display(), Some("another"))
     }
 
     #[test]
     fn wiki_unclosed_with_special_chars() {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [[file query # heading with a # in it and a ^ ajfkl dfkld jlk";
-        let (parsed, _, _) = parse_link_line(line, 102 - 21).unwrap();
-        assert_eq!(parsed.file_query, "file query ");
+        let (parsed, _, _) = line_parse_named_query(line, 102 - 21).unwrap();
+        assert_eq!(parsed.data.file_query, "file query ");
         assert_eq!(
-            parsed.infile_query,
+            parsed.data.infile_query,
             Some(NamedEntityInfileQuery::Heading(
                 " heading with a # in it and a ^ ajfkl"
             ))
