@@ -10,9 +10,9 @@ pub(crate) struct Parser<'a> {
 }
 
 impl Parser<'_> {
-    pub fn parse_named_entity_query(
-        &self,
-        location: Location,
+    pub fn parse_named_entity_query<'a>(
+        &'a self,
+        location: Location<'a>,
     ) -> Option<(EntityQuery<NamedQueryData>, QueryInfo)> {
         let line_string = self.memfs.select_line_str(location.path, location.line)?;
 
@@ -25,13 +25,14 @@ impl Parser<'_> {
                 char_range,
                 line: location.line,
                 query_syntax_info: info,
+                path: location.path,
             },
         ))
     }
 
-    pub fn parse_unnamed_entity_query(
-        &self,
-        location: Location,
+    pub fn parse_unnamed_entity_query<'a>(
+        &'a self,
+        location: Location<'a>,
     ) -> Option<(EntityQuery<UnnamedQueryData>, QueryInfo)> {
         let line_string = self.memfs.select_line_str(location.path, location.line)?;
 
@@ -44,6 +45,7 @@ impl Parser<'_> {
                 char_range,
                 line: location.line,
                 query_syntax_info: info,
+                path: location.path,
             },
         ))
     }
@@ -100,6 +102,7 @@ pub struct QueryInfo<'fs> {
     pub line: usize,
     pub char_range: Range<usize>,
     pub query_syntax_info: QuerySyntaxInfo<'fs>,
+    pub path: &'fs Path,
 }
 
 pub struct QuerySyntaxInfo<'fs> {

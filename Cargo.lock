@@ -164,9 +164,11 @@ version = "0.1.0"
 dependencies = [
  "do-notation",
  "moxide_config",
+ "nanoid",
  "nucleo-matcher",
  "rayon",
  "regex",
+ "serde_json",
  "tower-lsp",
  "ui",
  "vault",

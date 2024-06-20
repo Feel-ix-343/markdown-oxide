@@ -44,7 +44,16 @@ pub fn get_completions(
 }
 
 fn completions(cx: &Context, location: Location) -> Option<CompletionResponse> {
-    if let Some((named_entity_query, query_syntax_info)) =
+    if let Some((unnamed_entity_query, query_syntax_info)) =
+        cx.parser().parse_unnamed_entity_query(location)
+    {
+        let unnamed_entities = cx.querier().unnamed_query(unnamed_entity_query);
+        Some(unnamed_completion_response(
+            cx,
+            &query_syntax_info,
+            unnamed_entities,
+        ))
+    } else if let Some((named_entity_query, query_syntax_info)) =
         cx.parser().parse_named_entity_query(location)
     {
         let named_entities = cx.querier().named_query(named_entity_query);
@@ -52,15 +61,6 @@ fn completions(cx: &Context, location: Location) -> Option<CompletionResponse> {
             cx,
             &query_syntax_info,
             named_entities,
-        ))
-    } else if let Some((named_entity_query, query_syntax_info)) =
-        cx.parser().parse_unnamed_entity_query(location)
-    {
-        let unnamed_entities = cx.querier().unnamed_query(named_entity_query);
-        Some(unnamed_completion_response(
-            cx,
-            &query_syntax_info,
-            unnamed_entities,
         ))
     } else {
         None

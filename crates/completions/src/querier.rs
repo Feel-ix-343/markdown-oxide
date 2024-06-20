@@ -51,7 +51,40 @@ impl<'a> Querier<'a> {
         &self,
         link_query: EntityQuery<UnnamedQueryData>,
     ) -> impl IndexedParallelIterator<Item = Entity<UnnamedEntityData>> {
-        vec![].into_par_iter()
+        let unnamed = self
+            .vault
+            .select_blocks()
+            .into_par_iter()
+            .flat_map(|it| {
+                Entity::from_block(
+                    it.text,
+                    it.range.start.line as usize,
+                    it.range.end.character as usize,
+                    it.file,
+                )
+            })
+            .map(MatchableUnnamedEntity::from);
+
+        let matched = fuzzy_match(
+            link_query.data.grep_string,
+            unnamed.collect::<Vec<_>>().into_iter(),
+        );
+
+        matched.into_par_iter().map(|(it, _)| it.into())
+    }
+
+    pub fn indexed_block_info(&self, block: &Entity<UnnamedEntityData>) -> Option<String> {
+        self.vault
+            .select_referenceable_nodes(Some(block.location_info().2))
+            .into_par_iter()
+            .find_map_any(|it| match it {
+                vault::Referenceable::IndexedBlock(_, indexed)
+                    if indexed.range.start.line as usize == block.location_info().0 =>
+                {
+                    Some(indexed.index.clone())
+                }
+                _ => None,
+            })
     }
 }
 
@@ -72,10 +105,10 @@ fn link_query_string(link_query: EntityQuery<NamedQueryData>) -> String {
     }
 }
 
-struct MatchableNamedEntity<'a>(String, Entity<'a, NamedEntityData<'a>>);
+struct MatchableNamedEntity<'a>(String, Entity<NamedEntityData<'a>>);
 
-impl<'a> From<Entity<'a, NamedEntityData<'a>>> for MatchableNamedEntity<'a> {
-    fn from(value: Entity<'a, NamedEntityData<'a>>) -> Self {
+impl<'a> From<Entity<NamedEntityData<'a>>> for MatchableNamedEntity<'a> {
+    fn from(value: Entity<NamedEntityData<'a>>) -> Self {
         let file_ref = value.info().path.file_name().unwrap().to_str().unwrap();
 
         let match_string = match value.info().type_info {
@@ -88,14 +121,14 @@ impl<'a> From<Entity<'a, NamedEntityData<'a>>> for MatchableNamedEntity<'a> {
     }
 }
 
-impl<'a> From<MatchableNamedEntity<'a>> for Entity<'a, NamedEntityData<'a>> {
+impl<'a> From<MatchableNamedEntity<'a>> for Entity<NamedEntityData<'a>> {
     fn from(value: MatchableNamedEntity<'a>) -> Self {
         value.1
     }
 }
 
 impl<'a> Deref for MatchableNamedEntity<'a> {
-    type Target = Entity<'a, NamedEntityData<'a>>;
+    type Target = Entity<NamedEntityData<'a>>;
     fn deref(&self) -> &Self::Target {
         &self.1
     }
@@ -107,9 +140,30 @@ impl Matchable for MatchableNamedEntity<'_> {
     }
 }
 
-impl<'a> Matchable for (String, &'a PathBuf) {
+struct MatchableUnnamedEntity<'a>(String, Entity<UnnamedEntityData<'a>>);
+
+impl<'a> From<Entity<UnnamedEntityData<'a>>> for MatchableUnnamedEntity<'a> {
+    fn from(value: Entity<UnnamedEntityData<'a>>) -> Self {
+        MatchableUnnamedEntity(value.info().line_text.to_string(), value)
+    }
+}
+
+impl<'a> From<MatchableUnnamedEntity<'a>> for Entity<UnnamedEntityData<'a>> {
+    fn from(value: MatchableUnnamedEntity<'a>) -> Self {
+        value.1
+    }
+}
+
+impl Matchable for MatchableUnnamedEntity<'_> {
     fn match_string(&self) -> &str {
-        self.0.as_str()
+        &self.0
+    }
+}
+
+impl<'a> Deref for MatchableUnnamedEntity<'a> {
+    type Target = Entity<UnnamedEntityData<'a>>;
+    fn deref(&self) -> &Self::Target {
+        &self.1
     }
 }
 
