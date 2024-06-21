@@ -67,14 +67,14 @@ impl<'a> Entity<'a> {
 
 #[derive(Debug)]
 pub struct Block<'a> {
-    pub info: UnnamedEntityInfo<'a>,
+    pub info: BlockInfo<'a>,
     line_nr: usize,
     end_char: usize,
     path: &'a Path,
 }
 
 #[derive(Debug)]
-pub struct UnnamedEntityInfo<'a> {
+pub struct BlockInfo<'a> {
     pub line_text: &'a str,
 }
 
@@ -90,7 +90,7 @@ impl<'a> Block<'a> {
         }
 
         Some(Block {
-            info: UnnamedEntityInfo { line_text: line },
+            info: BlockInfo { line_text: line },
             line_nr,
             path,
             end_char,
