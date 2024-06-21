@@ -1,11 +1,8 @@
-use std::{
-    ops::Deref,
-    path::{Path, PathBuf},
-};
+use std::ops::Deref;
 
 use crate::{
-    entity::{Entity, NamedEntityData, NamedEntityTypeInfo::*, UnnamedEntityData},
-    parser::{EntityQuery, NamedEntityInfileQuery, NamedQueryData, UnnamedQueryData},
+    entity::{Block, Entity, NamedEntityTypeInfo::*},
+    parser::{BlockQuery, EntityInfileQuery, EntityQuery},
 };
 use nucleo_matcher::{
     pattern::{self, Normalization},
@@ -27,8 +24,8 @@ impl<'a> Querier<'a> {
 impl<'a> Querier<'a> {
     pub fn named_query(
         &self,
-        link_query: EntityQuery<NamedQueryData>,
-    ) -> impl IndexedParallelIterator<Item = Entity<NamedEntityData>> {
+        link_query: EntityQuery,
+    ) -> impl IndexedParallelIterator<Item = Entity> {
         let named_entities = self.get_named_entities();
         let matchables = named_entities.map(MatchableNamedEntity::from);
 
@@ -40,40 +37,40 @@ impl<'a> Querier<'a> {
         matched.into_par_iter().map(|(it, _)| it.into())
     }
 
-    fn get_named_entities(&self) -> impl ParallelIterator<Item = Entity<NamedEntityData>> {
+    fn get_named_entities(&self) -> impl ParallelIterator<Item = Entity> {
         self.vault
             .select_referenceable_nodes(None)
             .into_par_iter()
-            .flat_map(|it| Entity::from_referenceable(it))
+            .flat_map(Entity::from_referenceable)
     }
 
     pub fn unnamed_query(
         &self,
-        link_query: EntityQuery<UnnamedQueryData>,
-    ) -> impl IndexedParallelIterator<Item = Entity<UnnamedEntityData>> {
+        link_query: BlockQuery,
+    ) -> impl IndexedParallelIterator<Item = Block> {
         let unnamed = self
             .vault
             .select_blocks()
             .into_par_iter()
             .flat_map(|it| {
-                Entity::from_block(
+                Block::from_block(
                     it.text,
                     it.range.start.line as usize,
                     it.range.end.character as usize,
                     it.file,
                 )
             })
-            .map(MatchableUnnamedEntity::from);
+            .map(MatchableBlock::from);
 
         let matched = fuzzy_match(
-            link_query.data.grep_string,
+            link_query.grep_string,
             unnamed.collect::<Vec<_>>().into_iter(),
         );
 
         matched.into_par_iter().map(|(it, _)| it.into())
     }
 
-    pub fn indexed_block_info(&self, block: &Entity<UnnamedEntityData>) -> Option<String> {
+    pub fn indexed_block_info(&self, block: &Block) -> Option<String> {
         self.vault
             .select_referenceable_nodes(Some(block.location_info().2))
             .into_par_iter()
@@ -88,30 +85,30 @@ impl<'a> Querier<'a> {
     }
 }
 
-fn link_query_string(link_query: EntityQuery<NamedQueryData>) -> String {
-    match link_query.data {
-        NamedQueryData {
+fn link_query_string(link_query: EntityQuery) -> String {
+    match link_query {
+        EntityQuery {
             file_query: file_ref,
             infile_query: None,
         } => file_ref.to_string(),
-        NamedQueryData {
+        EntityQuery {
             file_query: file_ref,
-            infile_query: Some(NamedEntityInfileQuery::Heading(heading_string)),
+            infile_query: Some(EntityInfileQuery::Heading(heading_string)),
         } => format!("{file_ref}#{heading_string}"),
-        NamedQueryData {
+        EntityQuery {
             file_query: file_ref,
-            infile_query: Some(NamedEntityInfileQuery::Index(index)),
+            infile_query: Some(EntityInfileQuery::Index(index)),
         } => format!("{file_ref}#^{index}"),
     }
 }
 
-struct MatchableNamedEntity<'a>(String, Entity<NamedEntityData<'a>>);
+struct MatchableNamedEntity<'a>(String, Entity<'a>);
 
-impl<'a> From<Entity<NamedEntityData<'a>>> for MatchableNamedEntity<'a> {
-    fn from(value: Entity<NamedEntityData<'a>>) -> Self {
-        let file_ref = value.info().path.file_name().unwrap().to_str().unwrap();
+impl<'a> From<Entity<'a>> for MatchableNamedEntity<'a> {
+    fn from(value: Entity<'a>) -> Self {
+        let file_ref = value.info.path.file_name().unwrap().to_str().unwrap();
 
-        let match_string = match value.info().type_info {
+        let match_string = match value.info.type_info {
             Heading(heading) => format!("{file_ref}#{heading}"),
             IndexedBlock(index) => format!("{file_ref}#^{index}"),
             _ => file_ref.to_string(),
@@ -121,14 +118,14 @@ impl<'a> From<Entity<NamedEntityData<'a>>> for MatchableNamedEntity<'a> {
     }
 }
 
-impl<'a> From<MatchableNamedEntity<'a>> for Entity<NamedEntityData<'a>> {
+impl<'a> From<MatchableNamedEntity<'a>> for Entity<'a> {
     fn from(value: MatchableNamedEntity<'a>) -> Self {
         value.1
     }
 }
 
 impl<'a> Deref for MatchableNamedEntity<'a> {
-    type Target = Entity<NamedEntityData<'a>>;
+    type Target = Entity<'a>;
     fn deref(&self) -> &Self::Target {
         &self.1
     }
@@ -140,28 +137,28 @@ impl Matchable for MatchableNamedEntity<'_> {
     }
 }
 
-struct MatchableUnnamedEntity<'a>(String, Entity<UnnamedEntityData<'a>>);
+struct MatchableBlock<'a>(String, Block<'a>);
 
-impl<'a> From<Entity<UnnamedEntityData<'a>>> for MatchableUnnamedEntity<'a> {
-    fn from(value: Entity<UnnamedEntityData<'a>>) -> Self {
-        MatchableUnnamedEntity(value.info().line_text.to_string(), value)
+impl<'a> From<Block<'a>> for MatchableBlock<'a> {
+    fn from(value: Block<'a>) -> Self {
+        MatchableBlock(value.info.line_text.to_string(), value)
     }
 }
 
-impl<'a> From<MatchableUnnamedEntity<'a>> for Entity<UnnamedEntityData<'a>> {
-    fn from(value: MatchableUnnamedEntity<'a>) -> Self {
+impl<'a> From<MatchableBlock<'a>> for Block<'a> {
+    fn from(value: MatchableBlock<'a>) -> Self {
         value.1
     }
 }
 
-impl Matchable for MatchableUnnamedEntity<'_> {
+impl Matchable for MatchableBlock<'_> {
     fn match_string(&self) -> &str {
         &self.0
     }
 }
 
-impl<'a> Deref for MatchableUnnamedEntity<'a> {
-    type Target = Entity<UnnamedEntityData<'a>>;
+impl<'a> Deref for MatchableBlock<'a> {
+    type Target = Block<'a>;
     fn deref(&self) -> &Self::Target {
         &self.1
     }
@@ -186,10 +183,13 @@ impl<T: Matchable> AsRef<str> for NucleoMatchable<T> {
 }
 
 // TODO: parallelize this
-pub fn fuzzy_match<'a, T: Matchable + Send>(
+pub fn fuzzy_match<T>(
     filter_text: &str,
     items: impl Iterator<Item = T>,
-) -> impl IndexedParallelIterator<Item = (T, u32)> {
+) -> impl IndexedParallelIterator<Item = (T, u32)>
+where
+    T: Matchable + Send,
+{
     let items = items.map(NucleoMatchable);
 
     let mut matcher = Matcher::new(nucleo_matcher::Config::DEFAULT);

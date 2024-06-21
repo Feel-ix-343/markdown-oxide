@@ -6,7 +6,7 @@ use tower_lsp::lsp_types::{
 use nanoid::nanoid;
 
 use crate::{
-    entity::{Entity, NamedEntityData, NamedEntityInfo, NamedEntityTypeInfo, UnnamedEntityData},
+    entity::{Block, Entity, EntityInfo, NamedEntityTypeInfo},
     entity_viewer::EntityViewer,
     parser::{QueryInfo, QuerySyntaxInfo, QuerySyntaxTypeInfo},
     settings::SettingsAdapter,
@@ -34,7 +34,7 @@ fn filter_text(info: &QueryInfo, adjusted_label: &str) -> String {
 pub fn named_completion_response(
     cx: &Context,
     info: &QueryInfo,
-    named_entities: impl rayon::iter::IndexedParallelIterator<Item = Entity<NamedEntityData>>,
+    named_entities: impl rayon::iter::IndexedParallelIterator<Item = Entity>,
 ) -> CompletionResponse {
     let items = named_entities
         .take(50)
@@ -63,26 +63,26 @@ pub fn named_completion_response(
     })
 }
 
-fn named_label(entity: &Entity<NamedEntityData>) -> String {
+fn named_label(entity: &Entity) -> String {
     let file_ref = named_entity_file_ref(entity); // TODO: abstract this better; there is possible duplication in querier
-    match entity.info() {
-        NamedEntityInfo {
+    match entity.info {
+        EntityInfo {
             path: _,
             type_info: NamedEntityTypeInfo::File,
         } => file_ref.to_string(),
-        NamedEntityInfo {
+        EntityInfo {
             path: _,
             type_info: NamedEntityTypeInfo::Heading(heading),
         } => format!("{file_ref}#{heading}"),
-        NamedEntityInfo {
+        EntityInfo {
             path: _,
             type_info: NamedEntityTypeInfo::IndexedBlock(index),
         } => format!("{file_ref}#^{index}"),
     }
 }
 
-fn named_icon(named_entity: &Entity<NamedEntityData>) -> CompletionItemKind {
-    match named_entity.info().type_info {
+fn named_icon(named_entity: &Entity) -> CompletionItemKind {
+    match named_entity.info.type_info {
         NamedEntityTypeInfo::File => CompletionItemKind::FILE,
         NamedEntityTypeInfo::Heading(..) | NamedEntityTypeInfo::IndexedBlock(..) => {
             CompletionItemKind::REFERENCE
@@ -90,9 +90,9 @@ fn named_icon(named_entity: &Entity<NamedEntityData>) -> CompletionItemKind {
     }
 }
 
-fn named_entity_file_ref(entity: &Entity<NamedEntityData>) -> String {
+fn named_entity_file_ref(entity: &Entity) -> String {
     entity
-        .info()
+        .info
         .path
         .file_stem()
         .unwrap()
@@ -102,17 +102,13 @@ fn named_entity_file_ref(entity: &Entity<NamedEntityData>) -> String {
 }
 
 /// This is label for now, but when we consider file extensions, this will change
-fn named_entity_ref(named_entity: &Entity<NamedEntityData>) -> String {
+fn named_entity_ref(named_entity: &Entity) -> String {
     named_label(named_entity)
 }
 
-fn named_to_md_link<'a>(
-    entity: &'a Entity<NamedEntityData>,
-) -> impl Fn(MDDisplay, WrappedEntityRef) -> String + 'a {
-    move |display: MDDisplay, wrapped_ref: WrappedEntityRef| match (
-        display,
-        &entity.info().type_info,
-    ) {
+fn named_to_md_link<'a>(entity: &'a Entity) -> impl Fn(MDDisplay, WrappedEntityRef) -> String + 'a {
+    move |display: MDDisplay, wrapped_ref: WrappedEntityRef| match (display, &entity.info.type_info)
+    {
         ("", NamedEntityTypeInfo::File | NamedEntityTypeInfo::IndexedBlock(..)) => {
             format!("[]({wrapped_ref})")
         }
@@ -181,10 +177,7 @@ fn text_edit(
     TextEdit { range, new_text }
 }
 
-fn documentation(
-    viewer: &EntityViewer,
-    named_entity: &Entity<NamedEntityData>,
-) -> Option<Documentation> {
+fn documentation(viewer: &EntityViewer, named_entity: &Entity) -> Option<Documentation> {
     let text = viewer.entity_view(named_entity)?;
 
     Some(Documentation::MarkupContent(
@@ -198,7 +191,7 @@ fn documentation(
 pub fn unnamed_completion_response(
     cx: &Context,
     info: &QueryInfo,
-    unnamed_entities: impl rayon::iter::IndexedParallelIterator<Item = Entity<UnnamedEntityData>>,
+    unnamed_entities: impl rayon::iter::IndexedParallelIterator<Item = Block>,
 ) -> CompletionResponse {
     let items = unnamed_entities
         .take(50)
@@ -278,6 +271,6 @@ pub fn unnamed_completion_response(
     })
 }
 
-fn unnamed_label(entity: &Entity<UnnamedEntityData>) -> String {
-    entity.info().line_text.to_string()
+fn unnamed_label(entity: &Block) -> String {
+    entity.info.line_text.to_string()
 }

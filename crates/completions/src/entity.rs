@@ -1,25 +1,12 @@
-use std::{ops::Range, path::Path};
+use std::path::Path;
 use vault::{MDHeading, MDIndexedBlock, Referenceable};
 
-pub struct Entity<T: EntityData>(T);
-
-pub trait EntityData {
-    type Info;
-    fn info(&self) -> &Self::Info;
-}
-
-impl<T: EntityData> Entity<T> {
-    pub fn info(&self) -> &T::Info {
-        self.0.info()
-    }
-}
-
-pub struct NamedEntityData<'a> {
-    info: NamedEntityInfo<'a>,
+pub struct Entity<'a> {
+    pub info: EntityInfo<'a>,
     referenceable: Referenceable<'a>,
 }
 
-pub struct NamedEntityInfo<'a> {
+pub struct EntityInfo<'a> {
     pub path: &'a Path,
     pub type_info: NamedEntityTypeInfo<'a>,
 }
@@ -31,63 +18,56 @@ pub enum NamedEntityTypeInfo<'a> {
     IndexedBlock(&'a str),
 }
 
-impl<'a> EntityData for NamedEntityData<'a> {
-    type Info = NamedEntityInfo<'a>;
-    fn info(&self) -> &Self::Info {
-        &self.info
-    }
-}
-
-impl<'a> Entity<NamedEntityData<'a>> {
-    pub fn from_referenceable(
-        referenceable: Referenceable<'a>,
-    ) -> Option<Entity<NamedEntityData<'a>>> {
+impl<'a> Entity<'a> {
+    pub fn from_referenceable(referenceable: Referenceable<'a>) -> Option<Entity<'a>> {
         match referenceable {
-            Referenceable::File(path, _) => Some(Entity(NamedEntityData {
-                info: NamedEntityInfo {
+            Referenceable::File(path, _) => Some(Entity {
+                info: EntityInfo {
                     path,
                     type_info: File,
                 },
                 referenceable,
-            })),
+            }),
             Referenceable::Heading(
                 path,
                 MDHeading {
                     heading_text: data,
-                    range,
+                    range: _,
                     ..
                 },
-            ) => Some(Entity(NamedEntityData {
-                info: NamedEntityInfo {
+            ) => Some(Entity {
+                info: EntityInfo {
                     path,
                     type_info: Heading(data),
                 },
                 referenceable,
-            })),
+            }),
             Referenceable::IndexedBlock(
                 path,
                 MDIndexedBlock {
-                    index: data, range, ..
+                    index: data,
+                    range: _,
+                    ..
                 },
-            ) => Some(Entity(NamedEntityData {
-                info: NamedEntityInfo {
+            ) => Some(Entity {
+                info: EntityInfo {
                     path,
                     type_info: IndexedBlock(data),
                 },
                 referenceable,
-            })),
+            }),
             _ => None,
         }
     }
 
     pub fn to_referenceable(&self) -> Referenceable<'a> {
-        self.0.referenceable.clone()
+        self.referenceable.clone()
     }
 }
 
 #[derive(Debug)]
-pub struct UnnamedEntityData<'a> {
-    info: UnnamedEntityInfo<'a>,
+pub struct Block<'a> {
+    pub info: UnnamedEntityInfo<'a>,
     line_nr: usize,
     end_char: usize,
     path: &'a Path,
@@ -98,34 +78,27 @@ pub struct UnnamedEntityInfo<'a> {
     pub line_text: &'a str,
 }
 
-impl<'a> EntityData for UnnamedEntityData<'a> {
-    type Info = UnnamedEntityInfo<'a>;
-    fn info(&self) -> &Self::Info {
-        &self.info
-    }
-}
-
-impl<'a> Entity<UnnamedEntityData<'a>> {
+impl<'a> Block<'a> {
     pub fn from_block(
         line: &'a str,
         line_nr: usize,
         end_char: usize,
         path: &'a Path,
-    ) -> Option<Entity<UnnamedEntityData<'a>>> {
+    ) -> Option<Block<'a>> {
         if line.is_empty() {
             return None;
         }
 
-        Some(Entity(UnnamedEntityData {
+        Some(Block {
             info: UnnamedEntityInfo { line_text: line },
             line_nr,
             path,
             end_char,
-        }))
+        })
     }
 
     pub fn location_info(&self) -> (LineNumber, LastCharacter, &Path) {
-        (self.0.line_nr, self.0.end_char, self.0.path)
+        (self.line_nr, self.end_char, self.path)
     }
 }
 

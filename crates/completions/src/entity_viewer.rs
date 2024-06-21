@@ -1,6 +1,6 @@
-use vault::{Preview, Referenceable, Vault};
+use vault::{Referenceable, Vault};
 
-use crate::entity::{Entity, NamedEntityData};
+use crate::entity::Entity;
 
 pub struct EntityViewer<'a>(&'a Vault);
 
@@ -13,7 +13,7 @@ impl EntityViewer<'_> {
 // TODO implement CompletionResolve
 
 impl EntityViewer<'_> {
-    pub fn entity_view(&self, named_entity: &Entity<NamedEntityData>) -> Option<String> {
+    pub fn entity_view(&self, named_entity: &Entity) -> Option<String> {
         let referenceable: Referenceable = named_entity.to_referenceable();
 
         ui::referenceable_string(self.0, &[referenceable])
