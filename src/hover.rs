@@ -3,11 +3,21 @@ use std::path::Path;
 use tower_lsp::lsp_types::{Hover, HoverContents, HoverParams};
 
 use crate::{
+    config::Settings,
     ui::{preview_reference, preview_referenceable},
     vault::Vault,
 };
 
-pub fn hover(vault: &Vault, params: &HoverParams, path: &Path) -> Option<Hover> {
+pub fn hover(
+    vault: &Vault,
+    params: &HoverParams,
+    path: &Path,
+    settings: &Settings,
+) -> Option<Hover> {
+    if settings.hover == false {
+        return None;
+    }
+
     let cursor_position = params.text_document_position_params.position;
 
     match (

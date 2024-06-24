@@ -602,9 +602,10 @@ impl LanguageServer for Backend {
     }
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
+        let settings = self.bind_settings(|settings| Ok(settings.clone())).await?;
         self.bind_vault(|vault| {
             let path = params_path!(params.text_document_position_params)?;
-            Ok(hover::hover(vault, &params, &path))
+            Ok(hover::hover(vault, &params, &path, &settings))
         })
         .await
     }
