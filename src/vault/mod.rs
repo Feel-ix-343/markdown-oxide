@@ -721,6 +721,7 @@ impl Reference {
     pub fn new(text: &str) -> impl Iterator<Item = Reference> + '_ {
         static WIKI_LINK_RE: Lazy<Regex> = Lazy::new(|| {
             Regex::new(r"\[\[(?<filepath>[^\[\]\|\.\#]+)(\#(?<infileref>[^\[\]\.\|]+))?(?<ending>\.[^\# <>]+)?(\|(?<display>[^\[\]\.\|]+))?\]\]")
+
                 .unwrap()
         }); // A [[link]] that does not have any [ or ] in it
 
