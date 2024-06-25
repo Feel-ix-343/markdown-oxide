@@ -727,6 +727,12 @@ impl Reference {
 
         let wiki_links = WIKI_LINK_RE
             .captures_iter(text)
+            .filter(
+                |captures| match captures.name("ending").map(|ending| ending.as_str()) {
+                    Some(".md") | None => true,
+                    _ => false,
+                },
+            )
             .flat_map(RegexTuple::new)
             .flat_map(|regextuple| {
                 generic_link_constructor::<WikiReferenceConstructor>(text, regextuple)
