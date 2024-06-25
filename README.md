@@ -559,6 +559,10 @@ include_md_extension_md_link = false
 # Whether wikilinks should include an extension or not (needed for Markor compatibility)
 # for example [[File]] or [[File.md]]
 include_md_extension_wikilink = false
+
+# Enable hover; this is relevant for VSCode and Zed where hover could be triggered on mouse hover
+# and could be annoying
+hover = true
 ```
 
 
