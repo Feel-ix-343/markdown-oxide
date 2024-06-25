@@ -1219,8 +1219,9 @@ impl Hash for MDTag {
 
 impl MDTag {
     fn new(text: &str) -> impl Iterator<Item = MDTag> + '_ {
-        static TAG_RE: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"(\n|\A| )(?<full>#(?<tag>[.[^ \n\#]]+))(\n|\z| )").unwrap());
+        static TAG_RE: Lazy<Regex> = Lazy::new(|| {
+            Regex::new(r"(\n|\A| )(?<full>#(?<tag>[a-zA-Z_\-\/][0-9a-zA-Z_\-\/]*))").unwrap()
+        });
 
         let tagged_blocks = TAG_RE
             .captures_iter(text)
@@ -1537,7 +1538,7 @@ mod vault_tests {
     use itertools::Itertools;
     use tower_lsp::lsp_types::{Position, Range};
 
-    use crate::vault::{HeadingLevel, ReferenceData};
+    use crate::vault::{HeadingLevel, MyRange, ReferenceData};
     use crate::vault::{MDLinkReferenceDefinition, Refname};
 
     use super::Reference::*;
@@ -2366,5 +2367,71 @@ Continued
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn tag_in_md_link_display() {
+        let text = "This [Issue #seven](https://github.com/users/Feel-ix-343/projects/3/views/1?pane=issue&itemId=63386256)";
+
+        let parsed = MDTag::new(text).collect_vec();
+
+        let expected = vec![MDTag {
+            tag_ref: "seven".into(),
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 33 - 21,
+                },
+                end: Position {
+                    line: 0,
+                    character: 39 - 21,
+                },
+            }
+            .into(),
+        }];
+
+        assert_eq!(expected, parsed)
+    }
+
+    #[test]
+    fn preceding_char_not_tag() {
+        let text = "This is not a#tag";
+
+        let parsed = MDTag::new(text).collect_vec();
+        let expected: Vec<MDTag> = vec![];
+
+        assert_eq!(expected, parsed)
+    }
+
+    #[test]
+    fn wacky_tag() {
+        let text = "I have my doubts this is useful, but #-/_/tag";
+
+        let parsed = MDTag::new(text).collect_vec();
+        let expected: Vec<MDTag> = vec![MDTag {
+            range: MyRange(Range {
+                start: Position {
+                    line: 0,
+                    character: 58 - 21,
+                },
+                end: Position {
+                    line: 0,
+                    character: 66 - 21,
+                },
+            }),
+            tag_ref: "-/_/tag".into(),
+        }];
+
+        assert_eq!(expected, parsed)
+    }
+
+    #[test]
+    fn tag_starting_with_number_no_tag() {
+        let text = "not a tag #7";
+
+        let parsed = MDTag::new(text).collect_vec();
+        let expected: Vec<MDTag> = vec![];
+
+        assert_eq!(expected, parsed)
     }
 }
