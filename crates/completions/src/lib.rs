@@ -1,22 +1,23 @@
 #![feature(anonymous_lifetime_in_impl_trait)]
 
+mod cmd_displayer;
+mod command;
 mod context;
 mod entity;
 mod entity_viewer;
 mod parser;
 mod querier;
 mod settings;
-mod to_ui;
 
 use std::path::{Path, PathBuf};
 
+use cmd_displayer::cmds_lsp_comp_resp;
 use context::Context;
 use entity_viewer::EntityViewer;
 use moxide_config::Settings;
 use parser::Parser;
-use querier::Querier;
+use querier::{query_block_link_cmds, query_named_ref_cmds, Querier};
 use settings::SettingsAdapter;
-use to_ui::{named_completion_response, unnamed_completion_response};
 use tower_lsp::lsp_types::{CompletionParams, CompletionResponse};
 use vault::Vault;
 
@@ -44,23 +45,15 @@ pub fn get_completions(
 }
 
 fn completions(cx: &Context, location: Location) -> Option<CompletionResponse> {
-    if let Some((unnamed_entity_query, query_syntax_info)) = cx.parser().parse_block_query(location)
+    if let Some((block_link_cmd_query, query_syntax_info)) = cx.parser().parse_block_query(location)
     {
-        let unnamed_entities = cx.querier().unnamed_query(unnamed_entity_query);
-        Some(unnamed_completion_response(
-            cx,
-            &query_syntax_info,
-            unnamed_entities,
-        ))
-    } else if let Some((named_entity_query, query_syntax_info)) =
+        let unnamed_entities = query_block_link_cmds(cx, &query_syntax_info, &block_link_cmd_query);
+        Some(cmds_lsp_comp_resp(cx, &query_syntax_info, unnamed_entities))
+    } else if let Some((ref_cmds_query, query_syntax_info)) =
         cx.parser().parse_entity_query(location)
     {
-        let named_entities = cx.querier().named_query(named_entity_query);
-        Some(named_completion_response(
-            cx,
-            &query_syntax_info,
-            named_entities,
-        ))
+        let named_entities = query_named_ref_cmds(cx, &query_syntax_info, &ref_cmds_query);
+        Some(cmds_lsp_comp_resp(cx, &query_syntax_info, named_entities))
     } else {
         None
     }

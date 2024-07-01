@@ -36,7 +36,8 @@
             alias ls=eza
             alias find=fd
 
-            zsh
+            alacritty &
+            nvim -S
           '';
         };
       }

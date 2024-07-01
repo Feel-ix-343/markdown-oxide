@@ -11,11 +11,17 @@ pub(crate) struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    pub fn parse_entity_query(&self, location: Location<'a>) -> Option<(EntityQuery, QueryInfo)> {
+    pub fn parse_entity_query(
+        &self,
+        location: Location<'a>,
+    ) -> Option<(NamedRefCmdQuery, QueryMetadata)> {
         self.parse_query(location)
     }
 
-    pub fn parse_block_query(&self, location: Location<'a>) -> Option<(BlockQuery, QueryInfo)> {
+    pub fn parse_block_query(
+        &self,
+        location: Location<'a>,
+    ) -> Option<(BlockLinkCmdQuery, QueryMetadata)> {
         self.parse_query(location)
     }
 
@@ -26,14 +32,14 @@ impl<'a> Parser<'a> {
     fn parse_query<T: MDRegexParseable<'a>>(
         &self,
         location: Location<'a>,
-    ) -> Option<(T, QueryInfo<'a>)> {
+    ) -> Option<(T, QueryMetadata<'a>)> {
         let line_string = self.line_string(location)?;
         let (q, char_range, info) = {
             let character = location.character;
             MDLinkParser::new(line_string, character).parse()
         }?;
 
-        Some((q, QueryInfo::new(location, char_range, info)))
+        Some((q, QueryMetadata::new(location, char_range, info)))
     }
 }
 
@@ -58,7 +64,7 @@ impl<'a> Parser<'a> {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct EntityQuery<'a> {
+pub struct NamedRefCmdQuery<'a> {
     pub file_query: &'a str,
     pub infile_query: Option<EntityInfileQuery<'a>>,
 }
@@ -72,18 +78,18 @@ pub enum EntityInfileQuery<'a> {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct BlockQuery<'a> {
+pub struct BlockLinkCmdQuery<'a> {
     pub grep_string: &'a str,
 }
 
-pub struct QueryInfo<'fs> {
+pub struct QueryMetadata<'fs> {
     pub line: usize,
     pub char_range: Range<usize>,
     pub query_syntax_info: QuerySyntaxInfo<'fs>,
     pub path: &'fs Path,
 }
 
-impl<'fs> QueryInfo<'fs> {
+impl<'fs> QueryMetadata<'fs> {
     pub fn new(
         location: Location<'fs>,
         char_range: Range<usize>,
@@ -121,7 +127,7 @@ pub enum QuerySyntaxTypeInfo<'a> {
     Wiki { display: Option<&'a str> },
 }
 
-impl<'a> MDRegexParseable<'a> for EntityQuery<'a> {
+impl<'a> MDRegexParseable<'a> for NamedRefCmdQuery<'a> {
     fn from_captures(captures: Captures<'a>) -> Option<Self> {
         let file_ref = captures.name("file_ref")?.as_str();
         let infile_ref = captures
@@ -133,7 +139,7 @@ impl<'a> MDRegexParseable<'a> for EntityQuery<'a> {
                     .map(|m| EntityInfileQuery::Index(m.as_str()))
             });
 
-        Some(EntityQuery {
+        Some(NamedRefCmdQuery {
             file_query: file_ref,
             infile_query: infile_ref,
         })
@@ -146,9 +152,9 @@ impl<'a> MDRegexParseable<'a> for EntityQuery<'a> {
     }
 }
 
-impl<'a> MDRegexParseable<'a> for BlockQuery<'a> {
+impl<'a> MDRegexParseable<'a> for BlockLinkCmdQuery<'a> {
     fn from_captures(captures: Captures<'a>) -> Option<Self> {
-        Some(BlockQuery {
+        Some(BlockLinkCmdQuery {
             grep_string: captures.name("grep")?.as_str(),
         })
     }
@@ -276,7 +282,7 @@ mod md_regex_parser {
 #[cfg(test)]
 mod named_query_parse_tests {
     use crate::parser::{
-        md_regex_parser::MDLinkParser, EntityInfileQuery, EntityQuery, QuerySyntaxTypeInfo,
+        md_regex_parser::MDLinkParser, EntityInfileQuery, NamedRefCmdQuery, QuerySyntaxTypeInfo,
     };
 
     #[test]
@@ -284,12 +290,12 @@ mod named_query_parse_tests {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [[file]] jfkdlsa fjdkl ";
 
         let (parsed, range, ..) = MDLinkParser::new(line, 55 - 21)
-            .parse::<EntityQuery>()
+            .parse::<NamedRefCmdQuery>()
             .unwrap();
 
         assert_eq!(
             parsed,
-            EntityQuery {
+            NamedRefCmdQuery {
                 file_query: "file",
                 infile_query: None
             }
@@ -303,12 +309,12 @@ mod named_query_parse_tests {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [[file#heading]] jfkdlsa fjdkl ";
 
         let (parsed, ..) = MDLinkParser::new(line, 58 - 19)
-            .parse::<EntityQuery>()
+            .parse::<NamedRefCmdQuery>()
             .unwrap();
 
         assert_eq!(
             parsed,
-            EntityQuery {
+            NamedRefCmdQuery {
                 file_query: "file",
                 infile_query: Some(EntityInfileQuery::Heading("heading"))
             }
@@ -320,12 +326,12 @@ mod named_query_parse_tests {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [[file#^index]] fjdlkf jsdakl";
 
         let (parsed, ..) = MDLinkParser::new(line, 58 - 19)
-            .parse::<EntityQuery>()
+            .parse::<NamedRefCmdQuery>()
             .unwrap();
 
         assert_eq!(
             parsed,
-            EntityQuery {
+            NamedRefCmdQuery {
                 file_query: "file",
                 infile_query: Some(EntityInfileQuery::Index("index"))
             }
@@ -337,12 +343,12 @@ mod named_query_parse_tests {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [[file#^]]";
 
         let (parsed, ..) = MDLinkParser::new(line, 58 - 19)
-            .parse::<EntityQuery>()
+            .parse::<NamedRefCmdQuery>()
             .unwrap();
 
         assert_eq!(
             parsed,
-            EntityQuery {
+            NamedRefCmdQuery {
                 file_query: "file",
                 infile_query: Some(EntityInfileQuery::Index(""))
             }
@@ -354,12 +360,12 @@ mod named_query_parse_tests {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [[file#]]";
 
         let (parsed, ..) = MDLinkParser::new(line, 58 - 22)
-            .parse::<EntityQuery>()
+            .parse::<NamedRefCmdQuery>()
             .unwrap();
 
         assert_eq!(
             parsed,
-            EntityQuery {
+            NamedRefCmdQuery {
                 file_query: "file",
                 infile_query: Some(EntityInfileQuery::Heading(""))
             }
@@ -372,12 +378,12 @@ mod named_query_parse_tests {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [[this is a query jf dkljfa ";
 
         let (parsed, ..) = MDLinkParser::new(line, 68 - 21)
-            .parse::<EntityQuery>()
+            .parse::<NamedRefCmdQuery>()
             .unwrap();
 
         assert_eq!(
             parsed,
-            EntityQuery {
+            NamedRefCmdQuery {
                 file_query: "this is a query",
                 infile_query: None
             }
@@ -388,12 +394,12 @@ mod named_query_parse_tests {
     fn test_markdown_link() {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [this is a query](file) jfkdlsa fjdkl ";
         let (parsed, range, info) = MDLinkParser::new(line, 53 - 21)
-            .parse::<EntityQuery>()
+            .parse::<NamedRefCmdQuery>()
             .unwrap();
 
         assert_eq!(
             parsed,
-            EntityQuery {
+            NamedRefCmdQuery {
                 file_query: "file",
                 infile_query: None
             }
@@ -413,11 +419,11 @@ mod named_query_parse_tests {
         //                                                                      C
         let line = "fjlfjdl fjkl lkjfkld fklasj   [this is a query](file jfkldas fjklsd jfkls";
         let (parsed, range, info) = MDLinkParser::new(line, 81 - 21)
-            .parse::<EntityQuery>()
+            .parse::<NamedRefCmdQuery>()
             .unwrap();
         assert_eq!(
             parsed,
-            EntityQuery {
+            NamedRefCmdQuery {
                 file_query: "file jfkldas",
                 infile_query: None
             }
@@ -435,11 +441,11 @@ mod named_query_parse_tests {
     fn test_markdown_closed_infile_query() {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [this is a query](file#heading) jfkdlsa fjdkl ";
         let (parsed, range, info) = MDLinkParser::new(line, 63 - 21)
-            .parse::<EntityQuery>()
+            .parse::<NamedRefCmdQuery>()
             .unwrap();
         assert_eq!(
             parsed,
-            EntityQuery {
+            NamedRefCmdQuery {
                 file_query: "file",
                 infile_query: Some(EntityInfileQuery::Heading("heading"))
             }
@@ -457,11 +463,11 @@ mod named_query_parse_tests {
     fn test_markdown_closed_infile_query_index() {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [this is a query](file#^index) jfkdlsa fjdkl ";
         let (parsed, range, info) = MDLinkParser::new(line, 63 - 21)
-            .parse::<EntityQuery>()
+            .parse::<NamedRefCmdQuery>()
             .unwrap();
         assert_eq!(
             parsed,
-            EntityQuery {
+            NamedRefCmdQuery {
                 file_query: "file",
                 infile_query: Some(EntityInfileQuery::Index("index"))
             }
@@ -479,7 +485,7 @@ mod named_query_parse_tests {
     fn markdown_syntax_display_text() {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [](file#^index) jfkdlsa fjdkl ";
         let (_parsed, _range, info) = MDLinkParser::new(line, 63 - 21)
-            .parse::<EntityQuery>()
+            .parse::<NamedRefCmdQuery>()
             .unwrap();
         assert_eq!(info.display(), Some(""))
     }
@@ -488,7 +494,7 @@ mod named_query_parse_tests {
     fn wiki_syntax_display_text_none() {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [[file#^index|]] jfkdlsa fjdkl ";
         let (_parsed, _range, info) = MDLinkParser::new(line, 63 - 21)
-            .parse::<EntityQuery>()
+            .parse::<NamedRefCmdQuery>()
             .unwrap();
         assert_eq!(info.display(), Some(""))
     }
@@ -497,7 +503,7 @@ mod named_query_parse_tests {
     fn wiki_syntax_display_text_some() {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [[file#^index|some]] jfkdlsa fjdkl ";
         let (_parsed, _range, info) = MDLinkParser::new(line, 63 - 21)
-            .parse::<EntityQuery>()
+            .parse::<NamedRefCmdQuery>()
             .unwrap();
         assert_eq!(info.display(), Some("some"))
     }
@@ -506,7 +512,7 @@ mod named_query_parse_tests {
     fn wiki_unclosed_with_multiple_links() {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [[file query jfkdlsa fjdkl [[file#^index|some]]";
         let (parsed, _range, _info) = MDLinkParser::new(line, 71 - 21)
-            .parse::<EntityQuery>()
+            .parse::<NamedRefCmdQuery>()
             .unwrap();
         assert_eq!(parsed.file_query, "file query jfkdlsa")
     }
@@ -515,7 +521,7 @@ mod named_query_parse_tests {
     fn wiki_unclosed_after_link() {
         let line = "fjlfjdl fjkl lkjfkld [[link]] fklasj   [[file query jfkdlsa fjdkl";
         let (parsed, _range, _info) = MDLinkParser::new(line, 72 - 21)
-            .parse::<EntityQuery>()
+            .parse::<NamedRefCmdQuery>()
             .unwrap();
         assert_eq!(parsed.file_query, "file query")
     }
@@ -524,7 +530,7 @@ mod named_query_parse_tests {
     fn md_unclosed_before_link() {
         let line = "fjlfjdl fjkl lkjfkld [display](file query f sdklafjdkl  j[another linke](file)";
         let (parsed, _range, info) = MDLinkParser::new(line, 62 - 21)
-            .parse::<EntityQuery>()
+            .parse::<NamedRefCmdQuery>()
             .unwrap();
         assert_eq!(parsed.file_query, "file query");
         assert_eq!(info.display(), Some("display"))
@@ -534,7 +540,7 @@ mod named_query_parse_tests {
     fn md_unclosed_after_link() {
         let line = "fjlfjdl fjkl lkjfkld [display](file) f sdklafjdkl [another](fjsdklf dsjkl fdj asklfsdjklf ";
         let (parsed, _range, info) = MDLinkParser::new(line, 94 - 21)
-            .parse::<EntityQuery>()
+            .parse::<NamedRefCmdQuery>()
             .unwrap();
         assert_eq!(parsed.file_query, "fjsdklf dsjkl");
         assert_eq!(info.display(), Some("another"))
@@ -544,7 +550,7 @@ mod named_query_parse_tests {
     fn wiki_unclosed_with_special_chars() {
         let line = "fjlfjdl fjkl lkjfkld fklasj   [[file query # heading with a # in it and a ^ ajfkl dfkld jlk";
         let (parsed, _, _) = MDLinkParser::new(line, 102 - 21)
-            .parse::<EntityQuery>()
+            .parse::<NamedRefCmdQuery>()
             .unwrap();
         assert_eq!(parsed.file_query, "file query ");
         assert_eq!(
@@ -558,13 +564,13 @@ mod named_query_parse_tests {
 
 #[cfg(test)]
 mod unnamed_query_tests {
-    use crate::parser::{md_regex_parser::MDLinkParser, BlockQuery};
+    use crate::parser::{md_regex_parser::MDLinkParser, BlockLinkCmdQuery};
 
     #[test]
     fn basic_test() {
         let text = "fjkalf kdsjfkd  [[ fjakl fdjk]] fjdl kf j";
         let (d, _, _) = MDLinkParser::new(text, 50 - 21)
-            .parse::<BlockQuery>()
+            .parse::<BlockLinkCmdQuery>()
             .unwrap();
         assert_eq!("fjakl fdjk", d.grep_string)
     }
@@ -573,7 +579,7 @@ mod unnamed_query_tests {
     fn unclosed() {
         let text = "fjkalf kdsjfkd  [[ fjakl fdjk fjdl kf j";
         let (d, _, _) = MDLinkParser::new(text, 50 - 21)
-            .parse::<BlockQuery>()
+            .parse::<BlockLinkCmdQuery>()
             .unwrap();
         assert_eq!("fjakl fdjk", d.grep_string)
     }
@@ -582,7 +588,7 @@ mod unnamed_query_tests {
     fn multiple_closed() {
         let text = "fjka[[thisis ]] [[ fjakl fdjk]][[fjk]]j";
         let (d, _, _) = MDLinkParser::new(text, 50 - 21)
-            .parse::<BlockQuery>()
+            .parse::<BlockLinkCmdQuery>()
             .unwrap();
         assert_eq!("fjakl fdjk", d.grep_string)
     }
@@ -591,7 +597,7 @@ mod unnamed_query_tests {
     fn multiple_unclosed() {
         let text = "fjka[[thisis ]] [[ fjakl fdjk  jklfd slk [[fjk]]j";
         let (d, _, _) = MDLinkParser::new(text, 50 - 21)
-            .parse::<BlockQuery>()
+            .parse::<BlockLinkCmdQuery>()
             .unwrap();
         assert_eq!("fjakl fdjk", d.grep_string)
     }
@@ -600,7 +606,7 @@ mod unnamed_query_tests {
     fn not_unnamed_query() {
         let text = "fjka[[thisis ]] [[fjakl fdjkk]]  jklfd slk [[fjk]]j";
         assert!(MDLinkParser::new(text, 50 - 21)
-            .parse::<BlockQuery>()
+            .parse::<BlockLinkCmdQuery>()
             .is_none())
     }
 }
