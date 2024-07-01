@@ -276,7 +276,8 @@ impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
 
         let link_completions = self.link_completions();
 
-        let matches = fuzzy_match_completions(&filter_text, link_completions);
+        let matches =
+            fuzzy_match_completions(&filter_text, link_completions, &self.settings.case_matching);
 
         matches
     }
@@ -496,8 +497,11 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
 
                 let link_completions = self.link_completions();
 
-                let matches =
-                    fuzzy_match_completions(&String::from_iter(filter_text), link_completions);
+                let matches = fuzzy_match_completions(
+                    &String::from_iter(filter_text),
+                    link_completions,
+                    &self.settings.case_matching,
+                );
 
                 matches
             }

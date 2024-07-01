@@ -6,6 +6,8 @@ use nucleo_matcher::{
 };
 use tower_lsp::lsp_types::CompletionItem;
 
+use crate::config::Case;
+
 use super::{Completable, Completer};
 
 pub trait Matchable {
@@ -64,8 +66,9 @@ impl<'a, C: Completer<'a>, T: Completable<'a, C>> Completable<'a, C>
 pub fn fuzzy_match_completions<'a, 'b, C: Completer<'a>, T: Matchable + Completable<'a, C>>(
     filter_text: &'b str,
     items: impl IntoIterator<Item = T>,
+    case: &Case,
 ) -> Vec<OrderedCompletion<'a, C, T>> {
-    let normal_fuzzy_match = fuzzy_match(filter_text, items);
+    let normal_fuzzy_match = fuzzy_match(filter_text, items, case);
 
     normal_fuzzy_match
         .into_iter()
@@ -76,13 +79,18 @@ pub fn fuzzy_match_completions<'a, 'b, C: Completer<'a>, T: Matchable + Completa
 pub fn fuzzy_match<'a, T: Matchable>(
     filter_text: &str,
     items: impl IntoIterator<Item = T>,
+    case: &Case,
 ) -> Vec<(T, u32)> {
     let items = items.into_iter().map(NucleoMatchable);
 
     let mut matcher = Matcher::new(nucleo_matcher::Config::DEFAULT);
     let matches = pattern::Pattern::parse(
         filter_text,
-        pattern::CaseMatching::Smart,
+        match case {
+            Case::Smart => pattern::CaseMatching::Smart,
+            Case::Ignore => pattern::CaseMatching::Ignore,
+            Case::Respect => pattern::CaseMatching::Respect,
+        },
         Normalization::Smart,
     )
     .match_list(items, &mut matcher);

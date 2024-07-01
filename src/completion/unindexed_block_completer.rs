@@ -86,7 +86,11 @@ impl<'a> Completer<'a> for UnindexedBlockCompleter<'a, MarkdownLinkCompleter<'a>
 
         let grep_match_text = self.grep_match_text();
 
-        let matches = fuzzy_match_completions(&grep_match_text, completables);
+        let matches = fuzzy_match_completions(
+            &grep_match_text,
+            completables,
+            &self.link_completer.settings().case_matching,
+        );
 
         matches
     }
@@ -113,7 +117,11 @@ impl<'a> Completer<'a> for UnindexedBlockCompleter<'a, WikiLinkCompleter<'a>> {
     {
         let completables = self.completables();
         let filter_text = self.grep_match_text();
-        let matches = fuzzy_match_completions(&filter_text, completables);
+        let matches = fuzzy_match_completions(
+            &filter_text,
+            completables,
+            &self.link_completer.settings().case_matching,
+        );
 
         matches
     }

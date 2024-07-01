@@ -16,7 +16,7 @@ use crate::{
 
 use super::{
     matcher::{fuzzy_match_completions, Matchable},
-    Completable, Completer, LineRange,
+    Completable, Completer, Context, LineRange,
 };
 
 use rayon::prelude::*;
@@ -28,6 +28,7 @@ pub struct TagCompleter<'a> {
     vault: &'a Vault,
     line: usize,
     character: usize,
+    context: Context<'a>,
 }
 
 impl<'a> Completer<'a> for TagCompleter<'a> {
@@ -65,6 +66,7 @@ impl<'a> Completer<'a> for TagCompleter<'a> {
                         vault: context.vault,
                         line,
                         character,
+                        context,
                     })
                 } else {
                     None
@@ -98,7 +100,11 @@ impl<'a> Completer<'a> for TagCompleter<'a> {
 
         let filter_text = &self.inputted_tag.0;
 
-        let filtered = fuzzy_match_completions(filter_text, tag_referenceables);
+        let filtered = fuzzy_match_completions(
+            filter_text,
+            tag_referenceables,
+            &self.context.settings.case_matching,
+        );
 
         filtered
     }

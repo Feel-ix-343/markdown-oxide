@@ -23,6 +23,14 @@ pub struct Settings {
     pub include_md_extension_md_link: bool,
     pub include_md_extension_wikilink: bool,
     pub hover: bool,
+    pub case_matching: Case,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub enum Case {
+    Ignore,
+    Smart,
+    Respect,
 }
 
 impl Settings {
@@ -63,6 +71,7 @@ impl Settings {
             .set_default("include_md_extension_md_link", false)?
             .set_default("include_md_extension_wikilink", false)?
             .set_default("hover", true)?
+            .set_default("case_matching", "Smart")?
             .set_override_option(
                 "semantic_tokens",
                 capabilities.text_document.as_ref().and_then(|it| {
