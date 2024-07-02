@@ -99,7 +99,11 @@ Markdown Oxide's features are implemented in the form of a language server aimin
         -- refresh codelens on TextChanged and InsertLeave as well
         vim.api.nvim_create_autocmd({ 'TextChanged', 'InsertLeave', 'CursorHold', 'LspAttach' }, {
             buffer = bufnr,
-            callback = vim.lsp.codelens.refresh,
+            callback = function ()
+              if vim.lsp.codelens.get(bufnr) then -- refresh only if there are servers supporting codelens
+                vim.lsp.codelens.refresh()
+              end
+            end
         })
         
         -- trigger codelens refresh
