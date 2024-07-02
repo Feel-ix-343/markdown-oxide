@@ -1,3 +1,5 @@
+#![feature(async_closure)]
+
 use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
@@ -373,7 +375,27 @@ impl LanguageServer for Backend {
                     resolve_provider: None,
                 }),
                 execute_command_provider: Some(ExecuteCommandOptions {
-                    commands: vec!["apply_edits".into(), "jump".into()],
+                    commands: vec![
+                        "apply_edits".into(),
+                        "jump".into(),
+                        "tomorrow".into(),
+                        "today".into(),
+                        "yesterday".into(),
+                        "last friday".into(),
+                        "last saturday".into(),
+                        "last sunday".into(),
+                        "last monday".into(),
+                        "last tuesday".into(),
+                        "last wednesday".into(),
+                        "last thursday".into(),
+                        "next friday".into(),
+                        "next saturday".into(),
+                        "next sunday".into(),
+                        "next monday".into(),
+                        "next tuesday".into(),
+                        "next wednesday".into(),
+                        "next thursday".into(),
+                    ],
                     ..Default::default()
                 }),
                 semantic_tokens_provider: Some(
@@ -573,6 +595,15 @@ impl LanguageServer for Backend {
     }
 
     async fn execute_command(&self, params: ExecuteCommandParams) -> Result<Option<Value>> {
+        let jump_to_specific = async |day| {
+            let settings = self
+                .bind_settings(|settings| Ok(settings.to_owned()))
+                .await?;
+            let root_dir = self
+                .bind_vault(|vault| Ok(vault.root_dir().to_owned()))
+                .await?;
+            commands::jump(&self.client, &root_dir, &settings, Some(day)).await
+        };
         match params {
             ExecuteCommandParams { command, .. } if *command == *"apply_edits" => {
                 let edits = params
@@ -597,7 +628,8 @@ impl LanguageServer for Backend {
                     .await?;
                 commands::jump(&self.client, &root_dir, &settings, jump_to).await
             }
-            _ => Ok(None),
+            ExecuteCommandParams { command, .. } => jump_to_specific(&command).await,
+            // _ => Ok(None),
         }
     }
 
