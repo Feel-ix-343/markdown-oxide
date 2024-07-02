@@ -441,7 +441,7 @@ impl Vault {
         }
     }
 
-    pub fn select_blocks(&self) -> Vec<Block<'_>> {
+    pub fn select_blocks(&self) -> impl ParallelIterator<Item = Block<'_>> {
         self.ropes
             .par_iter()
             .map(|(path, rope)| {
@@ -469,7 +469,6 @@ impl Vault {
             })
             .flatten()
             .filter(|block| !block.text.is_empty())
-            .collect()
     }
 }
 

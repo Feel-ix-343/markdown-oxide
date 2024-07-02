@@ -13,4 +13,9 @@ impl SettingsAdapter<'_> {
         // TODO
         false
     }
+
+    pub fn num_completions(&self) -> usize {
+        // TODO
+        10
+    }
 }

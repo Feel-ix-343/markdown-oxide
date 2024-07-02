@@ -36,7 +36,7 @@ impl<'a> Parser<'a> {
         let line_string = self.line_string(location)?;
         let (q, char_range, info) = {
             let character = location.character;
-            MDLinkParser::new(line_string, character).parse()
+            MDLinkParser::new(line_string, character as usize).parse()
         }?;
 
         Some((q, QueryMetadata::new(location, char_range, info)))
@@ -46,12 +46,12 @@ impl<'a> Parser<'a> {
 // NOTE: Enables mocking for tests and provides a slight benefit of decoupling Parser from vault as
 // memfs -- which will eventually be replaced by a true MemFS crate.
 trait ParserMemfs: Send + Sync {
-    fn select_line_str(&self, path: &Path, line: usize) -> Option<&str>;
+    fn select_line_str(&self, path: &Path, line: u32) -> Option<&str>;
 }
 
 impl ParserMemfs for Vault {
-    fn select_line_str(&self, path: &Path, line: usize) -> Option<&str> {
-        self.select_line_str(path, line)
+    fn select_line_str(&self, path: &Path, line: u32) -> Option<&str> {
+        self.select_line_str(path, line as usize)
     }
 }
 
@@ -83,10 +83,11 @@ pub struct BlockLinkCmdQuery<'a> {
 }
 
 pub struct QueryMetadata<'fs> {
-    pub line: usize,
+    pub line: u32,
     pub char_range: Range<usize>,
     pub query_syntax_info: QuerySyntaxInfo<'fs>,
     pub path: &'fs Path,
+    pub cursor: u32,
 }
 
 impl<'fs> QueryMetadata<'fs> {
@@ -100,6 +101,7 @@ impl<'fs> QueryMetadata<'fs> {
             char_range,
             query_syntax_info: info,
             path: location.path,
+            cursor: location.character,
         }
     }
 }

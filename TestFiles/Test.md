@@ -2,6 +2,63 @@
 
 [[]]
 
+
+[[Test]]
+
+[[Test]]
+
+[[Test]]
+
+[[]]
+
+[[Test]]
+
+[[Another Test#This is a test heading]]
+
+[[Fiile]]
+
+[](<Test#Here is a nested>)
+
+[](Fiile)
+
+[](<Another Test#This is a test heading>)
+
+[](<Test#Here is a nested>)
+
+[](<Test#Here is a nested>)
+
+[](<Test#Here is a nested>)
+
+[[Test#Here is a nested]]
+
+[[Test#Here is a nested third]]
+
+[[Test]]
+
+[[Test#Here is a nested third]]
+
+[[Another Test#This is a test heading|This is a test heading]]
+
+[[Another Test 2#^24183]]
+
+[[2024-03-28]]
+
+[[Another Test 2#Here is a heading|Here is a heading]]
+
+[](<Another Test 2#^24183>)
+
+[Resolved Heading](<Resolved File#Resolved Heading>)
+
+[Here is a heading](<Another Test 2#Here is a heading>)
+
+[[Random File#this is a heading]]
+
+[[Random File|fjklsdafj kasdlfj klsdf jsd]]
+
+
+fjdkslafjdl ^index
+
+[[Random File#this is a heading.md]]
 #tag
 
 # Heading 1

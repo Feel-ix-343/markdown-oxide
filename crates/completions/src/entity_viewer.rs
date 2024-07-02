@@ -13,9 +13,7 @@ impl EntityViewer<'_> {
 // TODO implement CompletionResolve
 
 impl EntityViewer<'_> {
-    pub fn entity_view(&self, named_entity: &Entity) -> Option<String> {
-        let referenceable: Referenceable = named_entity.to_referenceable();
-
+    pub fn entity_view(&self, referenceable: Referenceable) -> Option<String> {
         ui::referenceable_string(self.0, &[referenceable])
     }
 }

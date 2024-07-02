@@ -1,4 +1,5 @@
 #![feature(anonymous_lifetime_in_impl_trait)]
+#![feature(try_blocks)]
 
 mod cmd_displayer;
 mod command;
@@ -11,7 +12,7 @@ mod settings;
 
 use std::path::{Path, PathBuf};
 
-use cmd_displayer::cmds_lsp_comp_resp;
+use cmd_displayer::{cmds_lsp_comp_resp, CmdDisplayer};
 use context::Context;
 use entity_viewer::EntityViewer;
 use moxide_config::Settings;
@@ -33,12 +34,13 @@ pub fn get_completions(
         Querier::new(vault),
         SettingsAdapter::new(settings),
         EntityViewer::new(vault),
+        CmdDisplayer::new(vault),
     );
 
     let location = Location {
         path,
-        line: params.text_document_position.position.line as usize,
-        character: params.text_document_position.position.character as usize,
+        line: params.text_document_position.position.line,
+        character: params.text_document_position.position.character,
     };
 
     completions(&cx, location)
@@ -62,6 +64,6 @@ fn completions(cx: &Context, location: Location) -> Option<CompletionResponse> {
 #[derive(Debug, Clone, Copy)]
 struct Location<'fs> {
     path: &'fs Path,
-    line: usize,
-    character: usize,
+    line: u32,
+    character: u32,
 }

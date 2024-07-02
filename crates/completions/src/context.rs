@@ -1,5 +1,6 @@
 use crate::{
-    entity_viewer::EntityViewer, parser::Parser, querier::Querier, settings::SettingsAdapter,
+    cmd_displayer::CmdDisplayer, entity_viewer::EntityViewer, parser::Parser, querier::Querier,
+    settings::SettingsAdapter,
 };
 
 pub struct Context<'a> {
@@ -7,6 +8,7 @@ pub struct Context<'a> {
     querier: Querier<'a>,
     settings: SettingsAdapter<'a>,
     entity_viewer: EntityViewer<'a>,
+    cmd_displayer: CmdDisplayer<'a>,
 }
 
 impl<'a> Context<'a> {
@@ -15,12 +17,14 @@ impl<'a> Context<'a> {
         querier: Querier<'a>,
         settings: SettingsAdapter<'a>,
         entity_viewer: EntityViewer<'a>,
+        cmd_displayer: CmdDisplayer<'a>,
     ) -> Self {
         Self {
             parser,
             querier,
             settings,
             entity_viewer,
+            cmd_displayer,
         }
     }
 
@@ -35,5 +39,9 @@ impl<'a> Context<'a> {
     }
     pub fn entity_viewer(&self) -> &EntityViewer {
         &self.entity_viewer
+    }
+
+    pub fn cmd_displayer(&self) -> &CmdDisplayer<'a> {
+        &self.cmd_displayer
     }
 }
