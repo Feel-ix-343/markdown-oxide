@@ -22,6 +22,7 @@
             openssl
             pkg-config
             rust-bin.nightly."2024-05-20".default
+            nodejs_22
           ];
 
           shellHook = ''

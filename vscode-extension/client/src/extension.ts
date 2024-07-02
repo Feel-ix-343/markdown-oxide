@@ -23,7 +23,7 @@ import {
 let client: LanguageClient;
 
 const extId = "moxide"
-const versionTag = "v0.0.21"
+const versionTag = "v0.22.0"
 
 const releaseBaseUrl = "https://github.com/Feel-ix-343/markdown-oxide/releases/download"
 export async function activate(context: ExtensionContext) {
