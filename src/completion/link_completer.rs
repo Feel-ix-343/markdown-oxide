@@ -367,7 +367,7 @@ impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
                 },
                 end: Position {
                     line: self.line,
-                    character: (self.chars_in_line).min(self.character + 2_u32),
+                    character: (self.chars_in_line - 1).min(self.character + 2_u32), // TODO: in zed, you cannot zed end to be out of the line count index
                 },
             },
 
@@ -404,7 +404,7 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
         let line_chars = vault.select_line(path, line as isize)?;
 
         let index = line_chars
-            .get(0..=character)? // select only the characters up to the cursor
+            .get(0..=(character.min(line_chars.len() - 1)))? // select only the characters up to the cursor
             .iter()
             .enumerate() // attach indexes
             .tuple_windows() // window into pairs of characters
