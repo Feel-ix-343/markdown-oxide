@@ -1,4 +1,3 @@
-#![allow(clippy::map_flatten)]
 use std::path::Path;
 
 use itertools::Itertools;
