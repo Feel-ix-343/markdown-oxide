@@ -96,7 +96,7 @@ impl<'a> Querier<'a> {
                     };
                     UpsertEntityReference {
                         to,
-                        in_location: upsert_reference_location,
+                        in_location: upsert_reference_location.clone(),
                         metadata: ReferenceDisplayMetadata {
                             include_md_extension: cx.settings().include_md_extension(),
                             type_info,
@@ -105,44 +105,103 @@ impl<'a> Querier<'a> {
                 };
 
                 let cmd =
-                    |label: String, kind: CompletionItemKind, actions| ReferenceNamedSectionCmd {
-                        label,
-                        kind,
-                        cmd_ui_info: cx.entity_viewer().entity_view(it.clone()),
-                        actions,
+                    |label: String, kind: CompletionItemKind, actions, detail: Option<String>| {
+                        ReferenceNamedSectionCmd {
+                            label,
+                            kind,
+                            label_detail: detail,
+                            cmd_ui_info: cx.entity_viewer().entity_view(it.clone()),
+                            actions,
+                        }
                     };
 
                 let file_name =
                     |path: &Path| path.file_stem().unwrap().to_str().unwrap().to_string();
 
                 match it {
-                    Referenceable::File(path, data) => Some(cmd(
-                        file_name(path),
-                        CompletionItemKind::FILE,
-                        action(EntityReference {
+                    Referenceable::File(path, data) => {
+                        let file_entity_ref = EntityReference {
                             file: path,
                             infile: None,
-                        }),
-                    )),
-                    Referenceable::Heading(path, data) => Some(cmd(
+                        };
+                        Some(
+                            [cmd(
+                                file_name(path),
+                                CompletionItemKind::FILE,
+                                action(file_entity_ref.clone()),
+                                None,
+                            )]
+                            .into_iter()
+                            .chain(data.metadata.iter().map(|it| it.aliases()).flatten().map(
+                                |it| {
+                                    cmd(
+                                        it.to_string(),
+                                        CompletionItemKind::ENUM_MEMBER,
+                                        UpsertEntityReference {
+                                            metadata: ReferenceDisplayMetadata {
+                                                include_md_extension: cx
+                                                    .settings()
+                                                    .include_md_extension(),
+                                                type_info: match query_metadata
+                                                    .query_syntax_info
+                                                    .syntax_type_info
+                                                {
+                                                    QuerySyntaxTypeInfo::Wiki { display: None } => {
+                                                        ReferenceDisplayMetadataTypeInfo::WikiLink {
+                                                            display: Some(it),
+                                                        }
+                                                    }
+                                                    QuerySyntaxTypeInfo::Wiki {
+                                                        display: Some(display),
+                                                    } => {
+                                                        ReferenceDisplayMetadataTypeInfo::WikiLink {
+                                                            display: Some(display),
+                                                        }
+                                                    }
+                                                    QuerySyntaxTypeInfo::Markdown {
+                                                        display: "",
+                                                    } => ReferenceDisplayMetadataTypeInfo::MDLink {
+                                                        display: it,
+                                                    },
+                                                    QuerySyntaxTypeInfo::Markdown { display } => {
+                                                        ReferenceDisplayMetadataTypeInfo::MDLink {
+                                                            display,
+                                                        }
+                                                    }
+                                                },
+                                            },
+                                            to: file_entity_ref.clone(),
+                                            in_location: upsert_reference_location.clone(),
+                                        },
+                                        Some(format!("Alias for {}.md", file_name(path))),
+                                    )
+                                },
+                            ))
+                            .collect::<Vec<_>>(),
+                        )
+                    }
+                    Referenceable::Heading(path, data) => Some(vec![cmd(
                         format!("{}#{}", file_name(path), data.heading_text),
                         CompletionItemKind::REFERENCE,
                         action(EntityReference {
                             file: path,
                             infile: Some(EntityInfileReference::Heading(&data.heading_text)),
                         }),
-                    )),
-                    Referenceable::IndexedBlock(path, data) => Some(cmd(
+                        None,
+                    )]),
+                    Referenceable::IndexedBlock(path, data) => Some(vec![cmd(
                         format!("{}#^{}", file_name(path), data.index),
                         CompletionItemKind::REFERENCE,
                         action(EntityReference {
                             file: path,
                             infile: Some(EntityInfileReference::Index(&data.index)),
                         }),
-                    )),
+                        None,
+                    )]),
                     _ => None,
                 }
             })
+            .flatten()
     }
 
     // fn construct_block_link_cmds(

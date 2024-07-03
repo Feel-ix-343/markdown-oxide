@@ -1,8 +1,9 @@
 use std::path::Path;
 
 use tower_lsp::lsp_types::{
-    Command as LspCommand, CompletionItem, CompletionItemKind, CompletionList, CompletionResponse,
-    CompletionTextEdit, Documentation, MarkupContent, TextEdit, Url,
+    Command as LspCommand, CompletionItem, CompletionItemKind, CompletionItemLabelDetails,
+    CompletionList, CompletionResponse, CompletionTextEdit, Documentation, MarkupContent, TextEdit,
+    Url,
 };
 
 use nanoid::nanoid;
@@ -36,6 +37,7 @@ pub fn cmds_lsp_comp_resp<A: Actions>(
                 kind,
                 cmd_ui_info,
                 actions,
+                label_detail,
             } = cmd;
 
             let binding = actions.actions().first().unwrap().edits();
@@ -81,6 +83,13 @@ pub fn cmds_lsp_comp_resp<A: Actions>(
                 text_edit: Some(CompletionTextEdit::Edit(text_edit)),
                 filter_text: Some(filter_text),
                 sort_text: Some(i.to_string()),
+                label_details: try {
+                    let label_detail = label_detail?;
+                    CompletionItemLabelDetails {
+                        detail: Some(label_detail),
+                        description: None,
+                    }
+                },
                 ..Default::default()
             }
         })

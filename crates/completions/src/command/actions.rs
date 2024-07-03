@@ -22,29 +22,35 @@ pub struct Position {
 }
 
 /// Data
+#[derive(Clone)]
 pub struct UpsertEntityReference<'a> {
     pub to: EntityReference<'a>,
     pub in_location: UpsertReferenceLocation<'a>,
     pub metadata: ReferenceDisplayMetadata<'a>,
 }
+#[derive(Clone)]
 pub struct EntityReference<'a> {
     pub file: &'a Path,
     pub infile: Option<EntityInfileReference<'a>>,
 }
+#[derive(Clone)]
 pub struct UpsertReferenceLocation<'a> {
     pub file: &'a Path,
     pub line: u32,
     pub range: std::ops::Range<u32>,
 }
+#[derive(Clone)]
 pub enum EntityInfileReference<'a> {
     Heading(&'a str),
     Index(&'a str),
 }
+#[derive(Clone)]
 pub struct ReferenceDisplayMetadata<'a> {
     pub include_md_extension: bool,
     pub type_info: ReferenceDisplayMetadataTypeInfo<'a>,
 }
 use ReferenceDisplayMetadataTypeInfo::*;
+#[derive(Clone)]
 pub enum ReferenceDisplayMetadataTypeInfo<'a> {
     MDLink { display: &'a str },
     WikiLink { display: Option<&'a str> },
