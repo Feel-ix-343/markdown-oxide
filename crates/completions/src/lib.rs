@@ -1,5 +1,6 @@
 #![feature(anonymous_lifetime_in_impl_trait)]
 #![feature(try_blocks)]
+#![allow(clippy::map_flatten)]
 
 mod cmd_displayer;
 mod command;
