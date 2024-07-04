@@ -21,6 +21,6 @@ impl SettingsAdapter<'_> {
 
     pub fn block_compeltions_display_text(&self) -> bool {
         // TODO
-        false
+        true
     }
 }

@@ -8,6 +8,10 @@ aliases:
 
 here is some test text         ^da7ea
 
+[[Test#^da7ea]]
+
+[[Test#^da7ea|here is some ]]
+
 
 [[Test#^da7ea|here is some]]
 
