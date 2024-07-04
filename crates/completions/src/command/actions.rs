@@ -161,3 +161,13 @@ impl<A: Action, B: Action, C: Action, D: Action> Actions for (A, B, C, D) {
         vec![&self.0, &self.1, &self.2, &self.3]
     }
 }
+
+impl<A: Action> ActionSealed for Option<A> {}
+impl<A: Action> Action for Option<A> {
+    fn edits(&self) -> Edits {
+        match self {
+            None => HashMap::new(),
+            Some(a) => a.edits(),
+        }
+    }
+}

@@ -3,58 +3,22 @@ aliases:
     - Test Alias
 ---
 
-here is some test text     ^agf58
-
-[[2024-03-22#^6113g|here is some]]
-
-[[Random File#^51b8e|here is some]]
-
-[[Test|Test Alias]]
-
-[Test Alias](Test)
-
-[[Another Test 2#Here is a heading]]
-
-[Here is a heading](<Another Test 2#Here is a heading>)
-
-[[Test]]
-
-[[Test]]
-
-[[Test|Test Alias]]
-
-[Test Alias](Test)
-
-[fjkasdlfjdk](Test)
+here is some test text         ^da7ea
 
 
+[[Test#^da7ea|here is some]]
+
+[here is some test](Test#^da7ea)
+
+[[Test#^ga6c6|- This is some ]]
+
+[This is more](Test#^4e7b6)
+
+[[2024-03-22#^b33f6|in another file]]
 
 
-[[Test File#First Heading|Display]]
-
-[[Test#Heading 1 2]]
-
-[[Th |fj kld
-
-[[Test File#First Heading]]
-
-[](Test File#First Heading)
-
-[](Test#Heading 1 2)
-
-[next Tuesday](2024-04-02)
-
-[tomorrow](2024-03-28)
-
-[yesterday](2024-03-26)
-
-[last Sunday](2024-03-24)
-
-
-
-
-- This is some text 1
-- This is more text 2
+- This is some text 1     ^ga6c6
+- This is more text 2     ^4e7b6
 - This is more text 3 
 - [[This is another link]]
 - [[This is another link]]
@@ -65,7 +29,7 @@ here is some test text     ^agf58
 ## Here is a nested
 
 
-### Here is a nested third
+### Here is a nested third     ^5c21c
 
 
 ### Here is a nested third
