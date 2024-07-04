@@ -18,4 +18,9 @@ impl SettingsAdapter<'_> {
         // TODO
         10
     }
+
+    pub fn block_compeltions_display_text(&self) -> bool {
+        // TODO
+        false
+    }
 }

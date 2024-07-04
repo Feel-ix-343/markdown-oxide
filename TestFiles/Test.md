@@ -3,23 +3,24 @@ aliases:
     - Test Alias
 ---
 
+
+[[Test|Test Alias]]
+
 here is some test text         ^da7ea
 
 
 [[Test#^da7ea|here is some]]
 
-[here is some test](Test#^da7ea)
+[[Test#^da7ea]]
 
-[[Test#^ga6c6|- This is some ]]
+[](Test#^da7ea)
 
-[This is more](Test#^4e7b6)
-
-[[2024-03-22#^b33f6|in another file]]
+![](Test#^4436a)
 
 
 - This is some text 1     ^ga6c6
 - This is more text 2     ^4e7b6
-- This is more text 3 
+- This is more text 3      ^6efa5
 - [[This is another link]]
 - [[This is another link]]
 - [[This is another link]]

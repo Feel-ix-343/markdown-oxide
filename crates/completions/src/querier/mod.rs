@@ -260,34 +260,39 @@ impl<'a> Querier<'a> {
                     match (
                         &query_metadata.query_syntax_info.syntax_type_info,
                         query.grep_string,
+                        cx.settings().block_compeltions_display_text(),
                     ) {
-                        (QuerySyntaxTypeInfo::Wiki { display: None }, "") => {
+                        (QuerySyntaxTypeInfo::Wiki { display: None }, "", _) => {
                             ReferenceDisplayMetadataTypeInfo::WikiLink { display: None }
                         }
-                        (QuerySyntaxTypeInfo::Wiki { display: None }, grep_string) => {
+                        (QuerySyntaxTypeInfo::Wiki { display: None }, grep_string, true) => {
                             ReferenceDisplayMetadataTypeInfo::WikiLink {
                                 display: Some(grep_string.to_owned()),
                             }
+                        }
+                        (QuerySyntaxTypeInfo::Wiki { display: None }, _, false) => {
+                            ReferenceDisplayMetadataTypeInfo::WikiLink { display: None }
                         }
                         (
                             QuerySyntaxTypeInfo::Wiki {
                                 display: Some(display),
                             },
                             _,
+                            _,
                         ) => ReferenceDisplayMetadataTypeInfo::WikiLink {
                             display: Some(display.to_string()),
                         },
-                        (QuerySyntaxTypeInfo::Markdown { display: "" }, "") => {
+                        (QuerySyntaxTypeInfo::Markdown { display: "" }, "", _) => {
                             ReferenceDisplayMetadataTypeInfo::MDLink {
                                 display: "".to_owned(),
                             }
                         }
-                        (QuerySyntaxTypeInfo::Markdown { display: "" }, grep_string) => {
+                        (QuerySyntaxTypeInfo::Markdown { display: "" }, grep_string, true) => {
                             ReferenceDisplayMetadataTypeInfo::MDLink {
                                 display: grep_string.to_owned(),
                             }
                         }
-                        (QuerySyntaxTypeInfo::Markdown { display }, _) => {
+                        (QuerySyntaxTypeInfo::Markdown { display }, _, _) => {
                             ReferenceDisplayMetadataTypeInfo::MDLink {
                                 display: display.to_string(),
                             }
