@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, iter, path::Path};
 
 pub trait Actions {
     fn actions(&self) -> Vec<&dyn Action>;
@@ -12,9 +12,15 @@ pub trait Action: ActionSealed {
 
 type Edits<'a> = HashMap<&'a Path, Vec<Edit>>;
 pub struct Edit {
-    pub new_text: String,
-    pub start: Position,
-    pub end: Position,
+    pub insert_text: String,
+    pub to_area: EditArea,
+}
+
+type Line = u32;
+type Character = u32;
+pub enum EditArea {
+    Range { start: Position, end: Position },
+    EndOfLine(Line),
 }
 pub struct Position {
     pub line: u32,
@@ -26,12 +32,12 @@ pub struct Position {
 pub struct UpsertEntityReference<'a> {
     pub to: EntityReference<'a>,
     pub in_location: UpsertReferenceLocation<'a>,
-    pub metadata: ReferenceDisplayMetadata<'a>,
+    pub metadata: ReferenceDisplayMetadata,
 }
 #[derive(Clone)]
 pub struct EntityReference<'a> {
     pub file: &'a Path,
-    pub infile: Option<EntityInfileReference<'a>>,
+    pub infile: Option<EntityInfileReference>,
 }
 #[derive(Clone)]
 pub struct UpsertReferenceLocation<'a> {
@@ -40,20 +46,21 @@ pub struct UpsertReferenceLocation<'a> {
     pub range: std::ops::Range<u32>,
 }
 #[derive(Clone)]
-pub enum EntityInfileReference<'a> {
-    Heading(&'a str),
-    Index(&'a str),
+pub enum EntityInfileReference {
+    Heading(String),
+    Index(String),
 }
 #[derive(Clone)]
-pub struct ReferenceDisplayMetadata<'a> {
+pub struct ReferenceDisplayMetadata {
     pub include_md_extension: bool,
-    pub type_info: ReferenceDisplayMetadataTypeInfo<'a>,
+    pub type_info: ReferenceDisplayMetadataTypeInfo,
 }
+use tower_lsp::lsp_types::TextEdit;
 use ReferenceDisplayMetadataTypeInfo::*;
 #[derive(Clone)]
-pub enum ReferenceDisplayMetadataTypeInfo<'a> {
-    MDLink { display: &'a str },
-    WikiLink { display: Option<&'a str> },
+pub enum ReferenceDisplayMetadataTypeInfo {
+    MDLink { display: String },
+    WikiLink { display: Option<String> },
 }
 
 impl ActionSealed for UpsertEntityReference<'_> {}
@@ -67,7 +74,7 @@ impl Action for UpsertEntityReference<'_> {
             .to_str()
             .unwrap()
             .to_string();
-        let ref_ = match self.to.infile {
+        let ref_ = match &self.to.infile {
             None => file_refname,
             Some(EntityInfileReference::Heading(heading)) => format!("{file_refname}#{heading}"),
             Some(EntityInfileReference::Index(index)) => format!("{file_refname}#^{index}"),
@@ -93,14 +100,16 @@ impl Action for UpsertEntityReference<'_> {
         [(
             self.in_location.file,
             vec![Edit {
-                new_text: link_text,
-                start: Position {
-                    line: self.in_location.line,
-                    character: self.in_location.range.start,
-                },
-                end: Position {
-                    line: self.in_location.line,
-                    character: self.in_location.range.end,
+                insert_text: link_text,
+                to_area: EditArea::Range {
+                    start: Position {
+                        line: self.in_location.line,
+                        character: self.in_location.range.start,
+                    },
+                    end: Position {
+                        line: self.in_location.line,
+                        character: self.in_location.range.end,
+                    },
                 },
             }],
         )]
@@ -118,7 +127,14 @@ pub struct AppendBlockIndex<'a> {
 impl ActionSealed for AppendBlockIndex<'_> {}
 impl Action for AppendBlockIndex<'_> {
     fn edits(&self) -> Edits {
-        todo!()
+        iter::once((
+            self.in_file,
+            vec![Edit {
+                insert_text: format!("     ^{}", self.index),
+                to_area: EditArea::EndOfLine(self.to_line),
+            }],
+        ))
+        .collect()
     }
 }
 

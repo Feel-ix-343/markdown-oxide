@@ -163,6 +163,7 @@ name = "completions"
 version = "0.1.0"
 dependencies = [
  "do-notation",
+ "itertools",
  "moxide_config",
  "nanoid",
  "nucleo-matcher",
