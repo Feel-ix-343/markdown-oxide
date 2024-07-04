@@ -5,6 +5,10 @@ aliases:
 
 here is some test text     ^agf58
 
+[[2024-03-22#^6113g|here is some]]
+
+[[Random File#^51b8e|here is some]]
+
 [[Test|Test Alias]]
 
 [Test Alias](Test)

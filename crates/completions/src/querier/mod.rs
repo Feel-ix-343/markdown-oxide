@@ -224,7 +224,9 @@ impl<'a> Querier<'a> {
     ) -> impl ParallelIterator<Item = LinkBlockCmd<'a>> {
         let blocks = self.vault.select_blocks();
 
-        let filtered = blocks.filter(|it| !it.text.is_empty());
+        let filtered = blocks
+            .filter(|it| !it.text.is_empty())
+            .filter(|it| it.range.end.line != query_metadata.line);
 
         let cmds = filtered.map(|it| {
             let indexed_info =
