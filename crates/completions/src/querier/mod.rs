@@ -255,8 +255,9 @@ impl<'a> Querier<'a> {
                     file: it.file,
                     infile: Some(EntityInfileReference::Index(index.clone())),
                 },
-                metadata: ReferenceDisplayMetadata {
-                    type_info: match (
+                metadata: reference_display_metadata_with_type_info(
+                    cx,
+                    match (
                         &query_metadata.query_syntax_info.syntax_type_info,
                         query.grep_string,
                     ) {
@@ -292,8 +293,7 @@ impl<'a> Querier<'a> {
                             }
                         }
                     },
-                    include_md_extension: cx.settings().include_md_extension(),
-                },
+                ),
                 in_location: UpsertReferenceLocation {
                     file: query_metadata.path,
                     line: query_metadata.line,
