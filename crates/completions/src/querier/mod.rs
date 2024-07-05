@@ -14,6 +14,7 @@ use crate::{
     parser::{
         BlockLinkCmdQuery, EntityInfileQuery, NamedRefCmdQuery, QueryMetadata, QuerySyntaxTypeInfo,
     },
+    settings::DailyNoteDisplay,
 };
 use matcher::{run_query, Query, Queryable};
 use nanoid::nanoid;
@@ -29,7 +30,16 @@ pub fn query_named_ref_cmds<'a, 'b: 'a>(
     cmd_query: &'b NamedRefCmdQuery, // TODO: I think this is a rust bug; lifetime is not needed
 ) -> impl IndexedParallelIterator<Item = ReferenceNamedSectionCmd<'a>> {
     let all_cmds = cx.querier().construct_named_ref_cmds(cx, query_metadata);
-    let binding = all_cmds.collect::<Vec<_>>();
+    let unresolved_cmds =
+        cx.querier()
+            .construct_unresolved_reference_cmds(cx, query_metadata, cmd_query);
+    let daily_notes = cx
+        .querier()
+        .construct_two_week_daily_note_cmds(cx, query_metadata);
+    let binding = all_cmds
+        .chain(unresolved_cmds)
+        .chain(daily_notes)
+        .collect::<Vec<_>>();
     let iterator = binding.into_iter();
     let matched = run_query(cmd_query, iterator);
 
@@ -61,13 +71,60 @@ impl<'a> Querier<'a> {
     }
 }
 
-fn reference_display_metadata_with_type_info(
+fn generated_upsert_entity_ref<'a>(
     cx: &Context,
-    type_info: ReferenceDisplayMetadataTypeInfo,
-) -> ReferenceDisplayMetadata {
-    ReferenceDisplayMetadata {
-        include_md_extension: cx.settings().include_md_extension(),
-        type_info,
+    query_metadata: &QueryMetadata,
+    to: EntityReference,
+    in_location: UpsertReferenceLocation<'a>,
+    generated_display: Option<String>,
+) -> UpsertEntityReference<'a> {
+    let type_info = match (
+        &query_metadata.query_syntax_info.syntax_type_info,
+        &to.infile,
+        generated_display,
+    ) {
+        (
+            QuerySyntaxTypeInfo::Wiki {
+                display: Some(display),
+            },
+            _,
+            _,
+        ) => ReferenceDisplayMetadataTypeInfo::WikiLink {
+            display: Some(display.to_string()),
+        },
+        (QuerySyntaxTypeInfo::Wiki { display: None }, _, Some(generated)) => {
+            ReferenceDisplayMetadataTypeInfo::WikiLink {
+                display: Some(generated),
+            }
+        }
+        (QuerySyntaxTypeInfo::Wiki { display: None }, _, None) => {
+            ReferenceDisplayMetadataTypeInfo::WikiLink { display: None }
+        }
+        (
+            QuerySyntaxTypeInfo::Markdown { display: "" },
+            Some(EntityInfileReference::Heading(heading)),
+            None,
+        ) => ReferenceDisplayMetadataTypeInfo::MDLink {
+            display: heading.to_string(),
+        },
+        // Generated takes preference over a heading
+        (QuerySyntaxTypeInfo::Markdown { display: "" }, _, Some(generated)) => {
+            ReferenceDisplayMetadataTypeInfo::MDLink { display: generated }
+        }
+        (QuerySyntaxTypeInfo::Markdown { display }, _, _) => {
+            ReferenceDisplayMetadataTypeInfo::MDLink {
+                display: display.to_string(),
+            }
+        }
+    };
+
+    UpsertEntityReference {
+        to,
+        metadata: ReferenceDisplayMetadata {
+            include_md_extension: cx.settings().include_md_extension(),
+            type_info,
+        },
+        in_location: in_location.clone(),
     }
 }
 
@@ -81,47 +138,17 @@ impl<'a> Querier<'a> {
             .select_referenceable_nodes(None)
             .into_par_iter()
             .flat_map(move |it| {
-                let upsert_reference_location = UpsertReferenceLocation {
-                    file: query_metadata.path,
-                    line: query_metadata.line,
-                    range: query_metadata.char_range.start as u32
-                        ..query_metadata.char_range.end as u32,
-                };
+                let upsert_reference_location = query_metadata_ref_location(query_metadata);
 
-                let action_with_default_type_info =
-                    |to: EntityReference<'a>| -> UpsertEntityReference<'a> {
-                        let type_info = match (
-                            &query_metadata.query_syntax_info.syntax_type_info,
-                            &to.infile,
-                        ) {
-                            (
-                                QuerySyntaxTypeInfo::Wiki {
-                                    display: Some(display),
-                                },
-                                _,
-                            ) => ReferenceDisplayMetadataTypeInfo::WikiLink {
-                                display: Some(display.to_string()),
-                            },
-                            (QuerySyntaxTypeInfo::Wiki { display: None }, _) => {
-                                ReferenceDisplayMetadataTypeInfo::WikiLink { display: None }
-                            }
-                            (
-                                QuerySyntaxTypeInfo::Markdown { display: "" },
-                                Some(EntityInfileReference::Heading(heading)),
-                            ) => ReferenceDisplayMetadataTypeInfo::MDLink {
-                                display: heading.to_string(),
-                            },
-                            (QuerySyntaxTypeInfo::Markdown { display }, _) => {
-                                ReferenceDisplayMetadataTypeInfo::MDLink {
-                                    display: display.to_string(),
-                                }
-                            }
-                        };
-                        UpsertEntityReference {
+                let action =
+                    |to: EntityReference, display: Option<String>| -> UpsertEntityReference<'a> {
+                        generated_upsert_entity_ref(
+                            cx,
+                            query_metadata,
                             to,
-                            in_location: upsert_reference_location.clone(),
-                            metadata: reference_display_metadata_with_type_info(cx, type_info),
-                        }
+                            upsert_reference_location.clone(),
+                            display,
+                        )
                     };
 
                 let cmd =
@@ -138,17 +165,19 @@ impl<'a> Querier<'a> {
                 let file_name =
                     |path: &Path| path.file_stem().unwrap().to_str().unwrap().to_string();
 
+                let today = chrono::Local::now().date_naive();
+
                 match it {
                     Referenceable::File(path, data) => {
                         let file_entity_ref = EntityReference {
-                            file: path,
+                            file: path.to_path_buf(),
                             infile: None,
                         };
                         Some(
                             [cmd(
                                 file_name(path),
                                 CompletionItemKind::FILE,
-                                action_with_default_type_info(file_entity_ref.clone()),
+                                action(file_entity_ref.clone(), None),
                                 None,
                             )]
                             .into_iter()
@@ -158,40 +187,14 @@ impl<'a> Querier<'a> {
                                     cmd(
                                         it.to_string(),
                                         CompletionItemKind::ENUM_MEMBER,
-                                        UpsertEntityReference {
-                                            metadata: reference_display_metadata_with_type_info(
-                                                cx,
-                                                match query_metadata
-                                                    .query_syntax_info
-                                                    .syntax_type_info
-                                                {
-                                                    QuerySyntaxTypeInfo::Wiki { display: None } => {
-                                                        ReferenceDisplayMetadataTypeInfo::WikiLink {
-                                                            display: Some(it.to_string()),
-                                                        }
-                                                    }
-                                                    QuerySyntaxTypeInfo::Wiki {
-                                                        display: Some(display),
-                                                    } => {
-                                                        ReferenceDisplayMetadataTypeInfo::WikiLink {
-                                                            display: Some(display.to_string()),
-                                                        }
-                                                    }
-                                                    QuerySyntaxTypeInfo::Markdown {
-                                                        display: "",
-                                                    } => ReferenceDisplayMetadataTypeInfo::MDLink {
-                                                        display: it.to_string(),
-                                                    },
-                                                    QuerySyntaxTypeInfo::Markdown { display } => {
-                                                        ReferenceDisplayMetadataTypeInfo::MDLink {
-                                                            display: display.to_string(),
-                                                        }
-                                                    }
-                                                },
-                                            ),
-                                            to: file_entity_ref.clone(),
-                                            in_location: upsert_reference_location.clone(),
-                                        },
+                                        action(
+                                            file_entity_ref.clone(),
+                                            if cx.settings().alias_display_text() {
+                                                Some(it.to_string())
+                                            } else {
+                                                None
+                                            },
+                                        ),
                                         Some(format!("Alias for {}.md", file_name(path))),
                                     )
                                 },
@@ -202,25 +205,167 @@ impl<'a> Querier<'a> {
                     Referenceable::Heading(path, data) => Some(vec![cmd(
                         format!("{}#{}", file_name(path), data.heading_text),
                         CompletionItemKind::REFERENCE,
-                        action_with_default_type_info(EntityReference {
-                            file: path,
-                            infile: Some(EntityInfileReference::Heading(data.heading_text.clone())),
-                        }),
+                        action(
+                            EntityReference {
+                                file: path.to_path_buf(),
+                                infile: Some(EntityInfileReference::Heading(
+                                    data.heading_text.clone(),
+                                )),
+                            },
+                            None,
+                        ),
                         None,
                     )]),
                     Referenceable::IndexedBlock(path, data) => Some(vec![cmd(
                         format!("{}#^{}", file_name(path), data.index),
                         CompletionItemKind::REFERENCE,
-                        action_with_default_type_info(EntityReference {
-                            file: path,
-                            infile: Some(EntityInfileReference::Index(data.index.clone())),
-                        }),
+                        action(
+                            EntityReference {
+                                file: path.to_owned(),
+                                infile: Some(EntityInfileReference::Index(data.index.clone())),
+                            },
+                            None,
+                        ),
                         None,
                     )]),
                     _ => None,
                 }
             })
             .flatten()
+    }
+
+    fn construct_two_week_daily_note_cmds(
+        &'a self,
+        cx: &'a Context<'a>,
+        query_metadata: &'a QueryMetadata<'a>,
+    ) -> impl ParallelIterator<Item = ReferenceNamedSectionCmd<'a>> {
+        let today = chrono::Local::now();
+        let path = cx.settings().daily_note_folder_path().to_path_buf();
+        (-7..7)
+            .into_par_iter()
+            .map(move |offset| today + chrono::Duration::days(offset))
+            .flat_map(move |day| {
+                let file_name = day.format(cx.settings().daily_note_format()).to_string();
+                let daily_note_path = path.join(file_name.clone()).with_extension("md");
+                let maybe_file = self.vault.md_files.get(&daily_note_path);
+
+                let date_rel_name = match (day - today).num_days() {
+                    0 => Some("today".to_string()),
+                    1 => Some("tomorrow".to_string()),
+                    2..=7 => Some(format!(
+                        "next {}",
+                        day.format("%A").to_string().to_lowercase()
+                    )),
+                    -1 => Some("yesterday".to_string()),
+                    -7..=-1 => Some(format!(
+                        "last {}",
+                        day.format("%A").to_string().to_lowercase()
+                    )),
+                    _ => None,
+                }?;
+
+                Some(ReferenceNamedSectionCmd {
+                    label: date_rel_name.clone(),
+                    kind: CompletionItemKind::EVENT,
+                    label_detail: if maybe_file.is_some() {
+                        Some(format!("{file_name}.md"))
+                    } else {
+                        Some("Unresolved".to_string())
+                    },
+                    cmd_ui_info: if let Some(file) = maybe_file {
+                        cx.entity_viewer()
+                            .entity_view(&Referenceable::File(&daily_note_path.clone(), file))
+                    } else {
+                        cx.entity_viewer()
+                            .entity_view(&Referenceable::UnresovledFile(
+                                daily_note_path.clone(),
+                                &file_name,
+                            ))
+                    },
+                    actions: generated_upsert_entity_ref(
+                        cx,
+                        query_metadata,
+                        EntityReference {
+                            file: daily_note_path.clone(),
+                            infile: None,
+                        },
+                        query_metadata_ref_location(query_metadata),
+                        match cx.settings().daily_note_display_text() {
+                            DailyNoteDisplay::WikiAndMD => Some(date_rel_name),
+                            DailyNoteDisplay::MD
+                                if matches!(
+                                    query_metadata.query_syntax_info.syntax_type_info,
+                                    QuerySyntaxTypeInfo::Markdown { .. }
+                                ) =>
+                            {
+                                Some(date_rel_name)
+                            }
+                            DailyNoteDisplay::Wiki
+                                if matches!(
+                                    query_metadata.query_syntax_info.syntax_type_info,
+                                    QuerySyntaxTypeInfo::Wiki { .. }
+                                ) =>
+                            {
+                                Some(date_rel_name)
+                            }
+                            _ => None,
+                        },
+                    ),
+                })
+            })
+    }
+
+    fn construct_unresolved_reference_cmds(
+        &'a self,
+        cx: &'a Context<'a>,
+        query_metadata: &'a QueryMetadata<'a>,
+        cmd_query: &'a NamedRefCmdQuery<'a>,
+    ) -> impl ParallelIterator<Item = ReferenceNamedSectionCmd<'a>> {
+        let query_string = cmd_query.to_query_string(); // from the Query implementation in this module
+        self.vault
+            .select_referenceable_nodes(None)
+            .into_par_iter() // TODO: we shuoldn't have to do this
+            .flat_map(move |it| match it {
+                Referenceable::UnresovledFile(ref path, file_ref) if file_ref != &query_string => {
+                    Some(ReferenceNamedSectionCmd {
+                        label: file_ref.to_string(),
+                        kind: CompletionItemKind::KEYWORD,
+                        cmd_ui_info: cx.entity_viewer().entity_view(&it),
+                        label_detail: Some("Unresolved File".to_string()),
+                        actions: generated_upsert_entity_ref(
+                            cx,
+                            query_metadata,
+                            EntityReference {
+                                file: path.to_path_buf(),
+                                infile: None,
+                            },
+                            query_metadata_ref_location(query_metadata),
+                            None,
+                        ),
+                    })
+                }
+                Referenceable::UnresolvedHeading(ref path, file, heading)
+                    if format!("{file}#{heading}") != query_string =>
+                {
+                    Some(ReferenceNamedSectionCmd {
+                        label: format!("{file}#{heading}"),
+                        kind: CompletionItemKind::KEYWORD,
+                        cmd_ui_info: cx.entity_viewer().entity_view(&it),
+                        label_detail: Some("Unresolved Heading".to_string()),
+                        actions: generated_upsert_entity_ref(
+                            cx,
+                            query_metadata,
+                            EntityReference {
+                                file: path.to_path_buf(),
+                                infile: Some(EntityInfileReference::Heading(heading.clone())),
+                            },
+                            query_metadata_ref_location(query_metadata),
+                            None,
+                        ),
+                    })
+                }
+                _ => None,
+            })
     }
 
     fn construct_block_link_cmds(
@@ -250,62 +395,20 @@ impl<'a> Querier<'a> {
                 ),
             };
 
-            let upsert_entity_reference = UpsertEntityReference {
-                to: EntityReference {
-                    file: it.file,
+            let upsert_entity_reference = generated_upsert_entity_ref(
+                cx,
+                query_metadata,
+                EntityReference {
+                    file: it.file.to_path_buf(),
                     infile: Some(EntityInfileReference::Index(index.clone())),
                 },
-                metadata: reference_display_metadata_with_type_info(
-                    cx,
-                    match (
-                        &query_metadata.query_syntax_info.syntax_type_info,
-                        query.grep_string,
-                        cx.settings().block_compeltions_display_text(),
-                    ) {
-                        (QuerySyntaxTypeInfo::Wiki { display: None }, "", _) => {
-                            ReferenceDisplayMetadataTypeInfo::WikiLink { display: None }
-                        }
-                        (QuerySyntaxTypeInfo::Wiki { display: None }, grep_string, true) => {
-                            ReferenceDisplayMetadataTypeInfo::WikiLink {
-                                display: Some(grep_string.to_owned()),
-                            }
-                        }
-                        (QuerySyntaxTypeInfo::Wiki { display: None }, _, false) => {
-                            ReferenceDisplayMetadataTypeInfo::WikiLink { display: None }
-                        }
-                        (
-                            QuerySyntaxTypeInfo::Wiki {
-                                display: Some(display),
-                            },
-                            _,
-                            _,
-                        ) => ReferenceDisplayMetadataTypeInfo::WikiLink {
-                            display: Some(display.to_string()),
-                        },
-                        (QuerySyntaxTypeInfo::Markdown { display: "" }, "", _) => {
-                            ReferenceDisplayMetadataTypeInfo::MDLink {
-                                display: "".to_owned(),
-                            }
-                        }
-                        (QuerySyntaxTypeInfo::Markdown { display: "" }, grep_string, true) => {
-                            ReferenceDisplayMetadataTypeInfo::MDLink {
-                                display: grep_string.to_owned(),
-                            }
-                        }
-                        (QuerySyntaxTypeInfo::Markdown { display }, _, _) => {
-                            ReferenceDisplayMetadataTypeInfo::MDLink {
-                                display: display.to_string(),
-                            }
-                        }
-                    },
-                ),
-                in_location: UpsertReferenceLocation {
-                    file: query_metadata.path,
-                    line: query_metadata.line,
-                    range: query_metadata.char_range.start as u32
-                        ..query_metadata.char_range.end as u32,
+                query_metadata_ref_location(query_metadata),
+                if cx.settings().block_compeltions_display_text() {
+                    Some(query.grep_string.to_string())
+                } else {
+                    None
                 },
-            };
+            );
             let cmd = LinkBlockCmd {
                 label: it.text.to_string(),
                 kind: match &indexed_info {
@@ -351,6 +454,16 @@ impl<'a> Querier<'a> {
                 }
                 _ => None,
             })
+    }
+}
+
+fn query_metadata_ref_location<'a>(
+    query_metadata: &'a QueryMetadata<'a>,
+) -> UpsertReferenceLocation<'a> {
+    UpsertReferenceLocation {
+        file: query_metadata.path,
+        line: query_metadata.line,
+        range: query_metadata.char_range.start as u32..query_metadata.char_range.end as u32,
     }
 }
 

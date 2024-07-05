@@ -33,7 +33,7 @@ pub fn get_completions(
     let cx = Context::new(
         Parser::new(vault),
         Querier::new(vault),
-        SettingsAdapter::new(settings),
+        SettingsAdapter::new(settings, vault),
         EntityViewer::new(vault),
         CmdDisplayer::new(vault),
     );

@@ -1,11 +1,31 @@
-use moxide_config::Settings;
+use std::path::{Path, PathBuf};
 
-pub struct SettingsAdapter<'a>(&'a Settings);
+use moxide_config::Settings;
+use vault::Vault;
+
+pub struct SettingsAdapter<'a>(&'a Settings, &'a Vault);
 
 impl SettingsAdapter<'_> {
-    pub fn new(settings: &Settings) -> SettingsAdapter {
-        SettingsAdapter(settings)
+    pub fn new<'a>(settings: &'a Settings, vault: &'a Vault) -> SettingsAdapter<'a> {
+        SettingsAdapter(settings, vault)
     }
+
+    pub(crate) fn daily_note_folder_path(&self) -> &Path {
+        // TODO
+        self.1.root_dir()
+    }
+
+    pub(crate) fn daily_note_display_text(&self) -> DailyNoteDisplay {
+        // TODO
+        DailyNoteDisplay::MD
+    }
+}
+
+pub enum DailyNoteDisplay {
+    WikiAndMD,
+    Wiki,
+    MD,
+    Neither,
 }
 
 impl SettingsAdapter<'_> {
@@ -20,6 +40,15 @@ impl SettingsAdapter<'_> {
     }
 
     pub fn block_compeltions_display_text(&self) -> bool {
+        // TODO
+        true
+    }
+
+    pub fn daily_note_format(&self) -> &str {
+        &self.0.dailynote
+    }
+
+    pub fn alias_display_text(&self) -> bool {
         // TODO
         true
     }

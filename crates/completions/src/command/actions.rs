@@ -1,4 +1,8 @@
-use std::{collections::HashMap, iter, path::Path};
+use std::{
+    collections::HashMap,
+    iter,
+    path::{Path, PathBuf},
+};
 
 pub trait Actions {
     fn actions(&self) -> Vec<&dyn Action>;
@@ -30,13 +34,13 @@ pub struct Position {
 /// Data
 #[derive(Clone)]
 pub struct UpsertEntityReference<'a> {
-    pub to: EntityReference<'a>,
+    pub to: EntityReference,
     pub in_location: UpsertReferenceLocation<'a>,
     pub metadata: ReferenceDisplayMetadata,
 }
 #[derive(Clone)]
-pub struct EntityReference<'a> {
-    pub file: &'a Path,
+pub struct EntityReference {
+    pub file: PathBuf,
     pub infile: Option<EntityInfileReference>,
 }
 #[derive(Clone)]
@@ -55,7 +59,6 @@ pub struct ReferenceDisplayMetadata {
     pub include_md_extension: bool,
     pub type_info: ReferenceDisplayMetadataTypeInfo,
 }
-use tower_lsp::lsp_types::TextEdit;
 use ReferenceDisplayMetadataTypeInfo::*;
 #[derive(Clone)]
 pub enum ReferenceDisplayMetadataTypeInfo {
