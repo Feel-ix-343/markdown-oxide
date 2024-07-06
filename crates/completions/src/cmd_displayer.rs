@@ -24,22 +24,27 @@ use crate::{
 
 use rayon::prelude::*;
 
+pub trait Input: Sync {
+    fn grep_filter(&self) -> String;
+}
+
 pub fn cmds_lsp_comp_resp<A: Actions>(
     cx: &Context,
     info: &QueryMetadata,
     cmds: impl IndexedParallelIterator<Item = Command<A>>,
+    input: &impl Input,
 ) -> CompletionResponse {
     let cmd_displayer = cx.cmd_displayer();
     let items: Vec<CompletionItem> = cmds
         .enumerate()
-        .map(|(i, cmd)| {
+        .map(|(i, it)| {
             let Command {
                 label,
                 kind,
                 cmd_ui_info,
                 actions,
                 label_detail,
-            } = cmd;
+            } = it;
 
             let (text_edits_iter, workspace_edit_hmap_iter) = actions
                 .actions()
@@ -141,6 +146,13 @@ pub fn cmds_lsp_comp_resp<A: Actions>(
                 let label = label.to_string();
                 format!("{text_to_cursor}{label}")
             });
+
+            let preselect = if cx.settings().completion_preselect() {
+                Some(input.grep_filter().to_lowercase() == label.to_lowercase())
+            } else {
+                None
+            };
+
             CompletionItem {
                 label,
                 kind: Some(kind),
@@ -171,6 +183,7 @@ pub fn cmds_lsp_comp_resp<A: Actions>(
                     arguments: Some(vec![serde_json::to_value(it).unwrap()]),
                     title: "Edit file".to_string(),
                 }),
+                preselect,
                 ..Default::default()
             }
         })

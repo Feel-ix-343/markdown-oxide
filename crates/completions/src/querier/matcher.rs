@@ -24,7 +24,7 @@ pub(crate) fn run_query<'a, 'b, B: Queryable + Send + 'a>(
 }
 
 // TODO: Why is this not working???????? in the funcntiosn
-pub(crate) trait Query {
+pub trait Query {
     fn to_query_string(&self) -> String;
 }
 

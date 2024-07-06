@@ -13,11 +13,11 @@ mod settings;
 
 use std::path::{Path, PathBuf};
 
-use cmd_displayer::{cmds_lsp_comp_resp, CmdDisplayer};
+use cmd_displayer::{cmds_lsp_comp_resp, CmdDisplayer, Input};
 use context::Context;
 use entity_viewer::EntityViewer;
 use moxide_config::Settings;
-use parser::Parser;
+use parser::{BlockLinkCmdQuery, NamedRefCmdQuery, Parser};
 use querier::{query_block_link_cmds, query_named_ref_cmds, Querier};
 use settings::SettingsAdapter;
 use tower_lsp::lsp_types::{CompletionParams, CompletionResponse};
@@ -51,12 +51,22 @@ fn completions(cx: &Context, location: Location) -> Option<CompletionResponse> {
     if let Some((block_link_cmd_query, query_syntax_info)) = cx.parser().parse_block_query(location)
     {
         let unnamed_entities = query_block_link_cmds(cx, &query_syntax_info, &block_link_cmd_query);
-        Some(cmds_lsp_comp_resp(cx, &query_syntax_info, unnamed_entities))
+        Some(cmds_lsp_comp_resp(
+            cx,
+            &query_syntax_info,
+            unnamed_entities,
+            &block_link_cmd_query,
+        ))
     } else if let Some((ref_cmds_query, query_syntax_info)) =
         cx.parser().parse_entity_query(location)
     {
         let named_entities = query_named_ref_cmds(cx, &query_syntax_info, &ref_cmds_query);
-        Some(cmds_lsp_comp_resp(cx, &query_syntax_info, named_entities))
+        Some(cmds_lsp_comp_resp(
+            cx,
+            &query_syntax_info,
+            named_entities,
+            &ref_cmds_query,
+        ))
     } else {
         None
     }
@@ -67,4 +77,16 @@ struct Location<'fs> {
     path: &'fs Path,
     line: u32,
     character: u32,
+}
+
+impl Input for BlockLinkCmdQuery<'_> {
+    fn grep_filter(&self) -> std::string::String {
+        self.grep_string.to_string()
+    }
+}
+
+impl Input for NamedRefCmdQuery<'_> {
+    fn grep_filter(&self) -> std::string::String {
+        self.grep_string()
+    }
 }

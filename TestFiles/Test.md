@@ -44,6 +44,12 @@ here is some test text         ^da7ea
 
 [[Test]]
 
+[[2024-07-07]]
+
+[[Test|Test Alias]]
+
+
+
 [[Test]]
 
 [](Test)

@@ -52,4 +52,9 @@ impl SettingsAdapter<'_> {
         // TODO
         true
     }
+
+    pub fn completion_preselect(&self) -> bool {
+        // TODO
+        true
+    }
 }

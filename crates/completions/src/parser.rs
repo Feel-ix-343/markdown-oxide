@@ -69,6 +69,18 @@ pub struct NamedRefCmdQuery<'a> {
     pub infile_query: Option<EntityInfileQuery<'a>>,
 }
 
+impl NamedRefCmdQuery<'_> {
+    // NOTE: this is sort or re-implemented by multiple traits with methods meaning the same thing, but centralizing the implementation here
+    // prevents duplication
+    pub fn grep_string(&self) -> String {
+        match &self.infile_query {
+            Some(EntityInfileQuery::Heading(h)) => format!("{}#{}", self.file_query, h),
+            Some(EntityInfileQuery::Index(i)) => format!("{}#^{}", self.file_query, i),
+            None => self.file_query.to_string(),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum EntityInfileQuery<'a> {
     /// Can be empty excludes the #
@@ -78,6 +90,7 @@ pub enum EntityInfileQuery<'a> {
 }
 
 #[derive(Debug, PartialEq)]
+/// DATA
 pub struct BlockLinkCmdQuery<'a> {
     pub grep_string: &'a str,
 }
