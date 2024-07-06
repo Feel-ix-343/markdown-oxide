@@ -36,7 +36,7 @@ impl SettingsAdapter<'_> {
 
     pub fn num_completions(&self) -> usize {
         // TODO
-        10
+        50
     }
 
     pub fn block_compeltions_display_text(&self) -> bool {

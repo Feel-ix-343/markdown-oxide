@@ -18,7 +18,7 @@ use crate::{
 };
 use matcher::{run_query, Query, Queryable};
 use nanoid::nanoid;
-use rayon::prelude::*;
+use rayon::{iter, prelude::*};
 use tower_lsp::lsp_types::CompletionItemKind;
 use vault::{Referenceable, Vault};
 
@@ -29,16 +29,15 @@ pub fn query_named_ref_cmds<'a, 'b: 'a>(
     query_metadata: &'b QueryMetadata,
     cmd_query: &'b NamedRefCmdQuery, // TODO: I think this is a rust bug; lifetime is not needed
 ) -> impl IndexedParallelIterator<Item = ReferenceNamedSectionCmd<'a>> {
-    let all_cmds = cx.querier().construct_named_ref_cmds(cx, query_metadata);
-    let unresolved_cmds =
+    let all_cmds =
         cx.querier()
-            .construct_unresolved_reference_cmds(cx, query_metadata, cmd_query);
+            .construct_fundamental_section_ref_cmds(cx, query_metadata, cmd_query);
     let daily_notes = cx
         .querier()
         .construct_two_week_daily_note_cmds(cx, query_metadata);
-    let binding = all_cmds
-        .chain(unresolved_cmds)
+    let binding = iter::empty()
         .chain(daily_notes)
+        .chain(all_cmds)
         .collect::<Vec<_>>();
     let iterator = binding.into_iter();
     let matched = run_query(cmd_query, iterator);
@@ -129,14 +128,34 @@ fn generated_upsert_entity_ref<'a>(
 }
 
 impl<'a> Querier<'a> {
-    fn construct_named_ref_cmds(
+    fn construct_fundamental_section_ref_cmds(
         &self,
         cx: &'a Context, // has lifetime a or greater
         query_metadata: &'a QueryMetadata,
+        query: &'a NamedRefCmdQuery,
     ) -> impl ParallelIterator<Item = ReferenceNamedSectionCmd<'a>> {
-        self.vault
+        let query_string = query.to_query_string(); // from the Query implementation in this module
+        let data = self
+            .vault
             .select_referenceable_nodes(None)
-            .into_par_iter()
+            .into_iter()
+            .filter(|it| {
+                matches!(
+                    it,
+                    Referenceable::File(..)
+                        | Referenceable::Heading(..)
+                        | Referenceable::IndexedBlock(..)
+                        | Referenceable::UnresovledFile(..)
+                        | Referenceable::UnresolvedHeading(..)
+                        | Referenceable::UnresovledIndexedBlock(..)
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let queried = run_query(query, data.into_iter());
+
+        queried
+            .take(cx.settings().num_completions())
             .flat_map(move |it| {
                 let upsert_reference_location = query_metadata_ref_location(query_metadata);
 
@@ -165,44 +184,20 @@ impl<'a> Querier<'a> {
                 let file_name =
                     |path: &Path| path.file_stem().unwrap().to_str().unwrap().to_string();
 
-                let today = chrono::Local::now().date_naive();
-
                 match it {
-                    Referenceable::File(path, data) => {
+                    Referenceable::File(path, _data) => {
                         let file_entity_ref = EntityReference {
                             file: path.to_path_buf(),
                             infile: None,
                         };
-                        Some(
-                            [cmd(
-                                file_name(path),
-                                CompletionItemKind::FILE,
-                                action(file_entity_ref.clone(), None),
-                                None,
-                            )]
-                            .into_iter()
-                            // add the aliases as commands
-                            .chain(data.metadata.iter().map(|it| it.aliases()).flatten().map(
-                                |it| {
-                                    cmd(
-                                        it.to_string(),
-                                        CompletionItemKind::ENUM_MEMBER,
-                                        action(
-                                            file_entity_ref.clone(),
-                                            if cx.settings().alias_display_text() {
-                                                Some(it.to_string())
-                                            } else {
-                                                None
-                                            },
-                                        ),
-                                        Some(format!("Alias for {}.md", file_name(path))),
-                                    )
-                                },
-                            ))
-                            .collect::<Vec<_>>(),
-                        )
+                        Some(cmd(
+                            file_name(path),
+                            CompletionItemKind::FILE,
+                            action(file_entity_ref.clone(), None),
+                            None,
+                        ))
                     }
-                    Referenceable::Heading(path, data) => Some(vec![cmd(
+                    Referenceable::Heading(path, data) => Some(cmd(
                         format!("{}#{}", file_name(path), data.heading_text),
                         CompletionItemKind::REFERENCE,
                         action(
@@ -215,8 +210,8 @@ impl<'a> Querier<'a> {
                             None,
                         ),
                         None,
-                    )]),
-                    Referenceable::IndexedBlock(path, data) => Some(vec![cmd(
+                    )),
+                    Referenceable::IndexedBlock(path, data) => Some(cmd(
                         format!("{}#^{}", file_name(path), data.index),
                         CompletionItemKind::REFERENCE,
                         action(
@@ -227,11 +222,50 @@ impl<'a> Querier<'a> {
                             None,
                         ),
                         None,
-                    )]),
+                    )),
+                    Referenceable::UnresovledFile(ref path, file_ref)
+                        if file_ref != &query_string =>
+                    {
+                        Some(ReferenceNamedSectionCmd {
+                            label: file_ref.to_string(),
+                            kind: CompletionItemKind::KEYWORD,
+                            cmd_ui_info: cx.entity_viewer().entity_view(&it),
+                            label_detail: Some("Unresolved File".to_string()),
+                            actions: generated_upsert_entity_ref(
+                                cx,
+                                query_metadata,
+                                EntityReference {
+                                    file: path.to_path_buf(),
+                                    infile: None,
+                                },
+                                query_metadata_ref_location(query_metadata),
+                                None,
+                            ),
+                        })
+                    }
+                    Referenceable::UnresolvedHeading(ref path, file, heading)
+                        if format!("{file}#{heading}") != query_string =>
+                    {
+                        Some(ReferenceNamedSectionCmd {
+                            label: format!("{file}#{heading}"),
+                            kind: CompletionItemKind::KEYWORD,
+                            cmd_ui_info: cx.entity_viewer().entity_view(&it),
+                            label_detail: Some("Unresolved Heading".to_string()),
+                            actions: generated_upsert_entity_ref(
+                                cx,
+                                query_metadata,
+                                EntityReference {
+                                    file: path.to_path_buf(),
+                                    infile: Some(EntityInfileReference::Heading(heading.clone())),
+                                },
+                                query_metadata_ref_location(query_metadata),
+                                None,
+                            ),
+                        })
+                    }
                     _ => None,
                 }
             })
-            .flatten()
     }
 
     fn construct_two_week_daily_note_cmds(
@@ -312,59 +346,6 @@ impl<'a> Querier<'a> {
                         },
                     ),
                 })
-            })
-    }
-
-    fn construct_unresolved_reference_cmds(
-        &'a self,
-        cx: &'a Context<'a>,
-        query_metadata: &'a QueryMetadata<'a>,
-        cmd_query: &'a NamedRefCmdQuery<'a>,
-    ) -> impl ParallelIterator<Item = ReferenceNamedSectionCmd<'a>> {
-        let query_string = cmd_query.to_query_string(); // from the Query implementation in this module
-        self.vault
-            .select_referenceable_nodes(None)
-            .into_par_iter() // TODO: we shuoldn't have to do this
-            .flat_map(move |it| match it {
-                Referenceable::UnresovledFile(ref path, file_ref) if file_ref != &query_string => {
-                    Some(ReferenceNamedSectionCmd {
-                        label: file_ref.to_string(),
-                        kind: CompletionItemKind::KEYWORD,
-                        cmd_ui_info: cx.entity_viewer().entity_view(&it),
-                        label_detail: Some("Unresolved File".to_string()),
-                        actions: generated_upsert_entity_ref(
-                            cx,
-                            query_metadata,
-                            EntityReference {
-                                file: path.to_path_buf(),
-                                infile: None,
-                            },
-                            query_metadata_ref_location(query_metadata),
-                            None,
-                        ),
-                    })
-                }
-                Referenceable::UnresolvedHeading(ref path, file, heading)
-                    if format!("{file}#{heading}") != query_string =>
-                {
-                    Some(ReferenceNamedSectionCmd {
-                        label: format!("{file}#{heading}"),
-                        kind: CompletionItemKind::KEYWORD,
-                        cmd_ui_info: cx.entity_viewer().entity_view(&it),
-                        label_detail: Some("Unresolved Heading".to_string()),
-                        actions: generated_upsert_entity_ref(
-                            cx,
-                            query_metadata,
-                            EntityReference {
-                                file: path.to_path_buf(),
-                                infile: Some(EntityInfileReference::Heading(heading.clone())),
-                            },
-                            query_metadata_ref_location(query_metadata),
-                            None,
-                        ),
-                    })
-                }
-                _ => None,
             })
     }
 
@@ -517,5 +498,28 @@ impl Queryable for Block<'_> {
 impl<A: Actions> Queryable for Command<A> {
     fn match_string(&self) -> String {
         self.label.to_string()
+    }
+}
+
+impl Queryable for Referenceable<'_> {
+    fn match_string(&self) -> String {
+        let file_name = |path: &Path| path.file_stem().unwrap().to_str().unwrap().to_string();
+        match self {
+            Referenceable::File(path, _) => file_name(path),
+            Referenceable::Heading(path, heading) => {
+                format!("{}#{}", file_name(path), heading.heading_text)
+            }
+            Referenceable::IndexedBlock(path, index_data) => {
+                format!("{}#^{}", file_name(path), index_data.index)
+            }
+            Referenceable::UnresovledFile(_path, string) => string.to_string(),
+            Referenceable::UnresolvedHeading(_path, file_ref, heading) => {
+                format!("{file_ref}#{heading}")
+            }
+            Referenceable::UnresovledIndexedBlock(_path, file_ref, index) => {
+                format!("{}#^{}", file_ref, index)
+            }
+            _ => unimplemented!("Matching on unimplemented referenceable"),
+        }
     }
 }

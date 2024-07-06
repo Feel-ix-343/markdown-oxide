@@ -206,6 +206,80 @@ impl Vault {
         Some(reference)
     }
 
+    pub fn select_all_referenceables(&self) -> impl ParallelIterator<Item = Referenceable<'_>> {
+        let resolved_referenceables = self
+            .md_files
+            .values()
+            .par_bridge()
+            .into_par_iter()
+            .flat_map(|file| file.get_referenceables());
+
+        // let resolved_referenceables_refnames: HashSet<String> = resolved_referenceables
+        //     .flat_map(|resolved| {
+        //         resolved.get_refname(self.root_dir()).and_then(|refname| {
+        //             vec![
+        //                 refname.to_string(),
+        //                 format!(
+        //                     "{}{}",
+        //                     refname.link_file_key()?,
+        //                     refname
+        //                         .infile_ref
+        //                         .map(|refe| format!("#{}", refe))
+        //                         .unwrap_or("".to_string())
+        //                 ),
+        //             ]
+        //             .into()
+        //         })
+        //     })
+        //     .flatten()
+        //     .collect();
+
+        // let unresolved = self.select_references(None).map(|references| {
+        //     references
+        //         .iter()
+        //         .unique_by(|(_, reference)| &reference.data().reference_text)
+        //         .par_bridge()
+        //         .into_par_iter()
+        //         .filter(|(_, reference)| {
+        //             !resolved_referenceables_refnames.contains(&reference.data().reference_text)
+        //         })
+        //         .flat_map(|(_, reference)| match reference {
+        //             Reference::WikiFileLink(data) | Reference::MDFileLink(data) => {
+        //                 let mut path = self.root_dir().clone();
+        //                 path.push(&reference.data().reference_text);
+        //
+        //                 Some(Referenceable::UnresovledFile(path, &data.reference_text))
+        //
+        //                 // match data.reference_text.chars().collect_vec().as_slice() {
+        //
+        //                 //     [..,'.','m','d'] =>
+        //                 //     ['.', '/', rest @ ..]
+        //                 //     | ['/', rest @ ..]
+        //                 //     | rest if !rest.contains(&'.') => Some(Referenceable::UnresovledFile(path, &data.reference_text)),
+        //                 //     _ => None
+        //                 // }
+        //             }
+        //             Reference::WikiHeadingLink(_data, end_path, heading)
+        //             | Reference::MDHeadingLink(_data, end_path, heading) => {
+        //                 let mut path = self.root_dir().clone();
+        //                 path.push(end_path);
+        //
+        //                 Some(Referenceable::UnresolvedHeading(path, end_path, heading))
+        //             }
+        //             Reference::WikiIndexedBlockLink(_data, end_path, index)
+        //             | Reference::MDIndexedBlockLink(_data, end_path, index) => {
+        //                 let mut path = self.root_dir().clone();
+        //                 path.push(end_path);
+        //
+        //                 Some(Referenceable::UnresovledIndexedBlock(path, end_path, index))
+        //             }
+        //             Reference::Tag(..) | Reference::Footnote(..) | Reference::LinkRef(..) => None,
+        //         });
+        // });
+
+        resolved_referenceables
+    }
+
     /// Select all linkable positions in the vault
     pub fn select_referenceable_nodes<'a>(
         &'a self,

@@ -170,7 +170,11 @@ pub fn cmds_lsp_comp_resp<A: Actions>(
                     Some(addtl_edits)
                 },
                 filter_text,
-                sort_text: Some(i.to_string()),
+                sort_text: Some(format!(
+                    "{}{}",
+                    "0".repeat((i as u8).leading_zeros() as usize),
+                    i
+                )),
                 label_details: try {
                     let label_detail = label_detail?;
                     CompletionItemLabelDetails {
