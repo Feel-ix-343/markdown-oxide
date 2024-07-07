@@ -53,11 +53,12 @@ pub fn query_block_link_cmds<'a, 'b: 'a>(
     let all_cmds = cx
         .querier()
         .construct_block_link_cmds(cx, query_metadata, cmd_query);
-    let binding = all_cmds.collect::<Vec<_>>();
-    let iterator = binding.into_iter();
-    let matched = run_query(cmd_query, iterator);
-
-    matched.take(cx.settings().num_completions())
+    // let binding = all_cmds.collect::<Vec<_>>();
+    // let iterator = binding.into_iter();
+    // let matched = run_query(cmd_query, iterator);
+    //
+    // matched.take(cx.settings().num_completions())
+    all_cmds
 }
 
 pub struct Querier<'a> {
@@ -354,7 +355,7 @@ impl<'a> Querier<'a> {
         cx: &'a Context,
         query_metadata: &'a QueryMetadata,
         query: &'a BlockLinkCmdQuery,
-    ) -> impl ParallelIterator<Item = LinkBlockCmd<'a>> {
+    ) -> impl IndexedParallelIterator<Item = LinkBlockCmd<'a>> {
         let blocks = self.vault.select_blocks();
 
         let filtered = blocks
