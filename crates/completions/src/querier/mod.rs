@@ -364,55 +364,42 @@ impl<'a> Querier<'a> {
 
         let matched = run_query_on_par_iter(query, filtered);
 
-        let cmds = matched.take(cx.settings().num_completions()).map(|it| {
-            let indexed_info =
-                self.indexed_block_info((it.range.end.line, it.range.end.character, it.file));
+        let cmds = matched
+            .take(cx.settings().num_block_completions())
+            .map(|it| {
+                let indexed_info =
+                    self.indexed_block_info((it.range.end.line, it.range.end.character, it.file));
 
-            let index = match &indexed_info {
-                Some((index, _)) => index.to_string(),
-                None => nanoid!(
-                    5,
-                    &[
-                        'a', 'b', 'c', 'd', 'e', 'f', 'g', '1', '2', '3', '4', '5', '6', '7', '8',
-                        '9'
-                    ]
-                ),
-            };
+                let index = match &indexed_info {
+                    Some((index, _)) => index.to_string(),
+                    None => nanoid!(
+                        5,
+                        &[
+                            'a', 'b', 'c', 'd', 'e', 'f', 'g', '1', '2', '3', '4', '5', '6', '7',
+                            '8', '9'
+                        ]
+                    ),
+                };
 
-            let upsert_entity_reference = generated_upsert_entity_ref(
-                cx,
-                query_metadata,
-                EntityReference {
-                    file: it.file.to_path_buf(),
-                    infile: Some(EntityInfileReference::Index(index.clone())),
-                },
-                query_metadata_ref_location(query_metadata),
-                if cx.settings().block_compeltions_display_text() {
-                    Some(query.display_grep_string().to_string())
-                } else {
-                    None
-                },
-            );
-            let cmd = LinkBlockCmd {
-                label: it.text.to_string(),
-                kind: match &indexed_info {
-                    Some(_) => CompletionItemKind::REFERENCE,
-                    None => CompletionItemKind::TEXT,
-                },
-                label_detail: Some(it.file.file_name().unwrap().to_str().unwrap().to_string()),
-                cmd_ui_info: match indexed_info {
-                    Some((_, ref referenceable)) => cx.entity_viewer().entity_view(referenceable),
-                    None => cx.entity_viewer().unindexed_block_entity_view(&it),
-                },
-                actions: (
-                    upsert_entity_reference,
-                    match indexed_info {
-                        None => Some(AppendBlockIndex {
-                            index: index.to_string(),
-                            in_file: it.file,
-                            to_line: it.range.start.line,
-                        }),
-                        Some(_) => None,
+                let upsert_entity_reference = generated_upsert_entity_ref(
+                    cx,
+                    query_metadata,
+                    EntityReference {
+                        file: it.file.to_path_buf(),
+                        infile: Some(EntityInfileReference::Index(index.clone())),
+                    },
+                    query_metadata_ref_location(query_metadata),
+                    if cx.settings().block_compeltions_display_text() {
+                        Some(query.display_grep_string().to_string())
+                    } else {
+                        None
+                    },
+                );
+                let cmd = LinkBlockCmd {
+                    label: it.text.to_string(),
+                    kind: match &indexed_info {
+                        Some(_) => CompletionItemKind::REFERENCE,
+                        None => CompletionItemKind::TEXT,
                     },
                 ),
             };
