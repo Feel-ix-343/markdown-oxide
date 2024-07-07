@@ -9,16 +9,6 @@ impl SettingsAdapter<'_> {
     pub fn new<'a>(settings: &'a Settings, vault: &'a Vault) -> SettingsAdapter<'a> {
         SettingsAdapter(settings, vault)
     }
-
-    pub(crate) fn daily_note_folder_path(&self) -> &Path {
-        // TODO
-        self.1.root_dir()
-    }
-
-    pub(crate) fn daily_note_display_text(&self) -> DailyNoteDisplay {
-        // TODO
-        DailyNoteDisplay::MD
-    }
 }
 
 pub enum DailyNoteDisplay {
@@ -56,5 +46,20 @@ impl SettingsAdapter<'_> {
     pub fn completion_preselect(&self) -> bool {
         // TODO
         true
+    }
+
+    pub(crate) fn daily_note_folder_path(&self) -> &Path {
+        // TODO
+        self.1.root_dir()
+    }
+
+    pub(crate) fn daily_note_display_text(&self) -> DailyNoteDisplay {
+        // TODO
+        DailyNoteDisplay::MD
+    }
+
+    pub(crate) fn num_block_completions(&self) -> usize {
+        // TODO
+        20
     }
 }

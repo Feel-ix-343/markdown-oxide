@@ -401,11 +401,28 @@ impl<'a> Querier<'a> {
                         Some(_) => CompletionItemKind::REFERENCE,
                         None => CompletionItemKind::TEXT,
                     },
-                ),
-            };
+                    label_detail: Some(it.file.file_name().unwrap().to_str().unwrap().to_string()),
+                    cmd_ui_info: match indexed_info {
+                        Some((_, ref referenceable)) => {
+                            cx.entity_viewer().entity_view(referenceable)
+                        }
+                        None => cx.entity_viewer().unindexed_block_entity_view(&it),
+                    },
+                    actions: (
+                        upsert_entity_reference,
+                        match indexed_info {
+                            None => Some(AppendBlockIndex {
+                                index: index.to_string(),
+                                in_file: it.file,
+                                to_line: it.range.start.line,
+                            }),
+                            Some(_) => None,
+                        },
+                    ),
+                };
 
-            cmd
-        });
+                cmd
+            });
 
         cmds
     }
