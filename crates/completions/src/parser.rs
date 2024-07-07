@@ -91,8 +91,23 @@ pub enum EntityInfileQuery<'a> {
 
 #[derive(Debug, PartialEq)]
 /// DATA
-pub struct BlockLinkCmdQuery<'a> {
-    pub grep_string: &'a str,
+pub struct BlockLinkCmdQuery {
+    grep_string: String,
+}
+
+impl BlockLinkCmdQuery {
+    pub fn grep_string(&self) -> String {
+        self.grep_string
+            .to_string()
+            .replace(r"\[", "[")
+            .replace(r"\]", "]")
+    }
+    pub fn display_grep_string(&self) -> String {
+        self.grep_string
+            .to_string()
+            .replace(r"\[", "")
+            .replace(r"\]", "")
+    }
 }
 
 pub struct QueryMetadata<'fs> {
@@ -167,10 +182,10 @@ impl<'a> MDRegexParseable<'a> for NamedRefCmdQuery<'a> {
     }
 }
 
-impl<'a> MDRegexParseable<'a> for BlockLinkCmdQuery<'a> {
+impl<'a> MDRegexParseable<'a> for BlockLinkCmdQuery {
     fn from_captures(captures: Captures<'a>) -> Option<Self> {
         Some(BlockLinkCmdQuery {
-            grep_string: captures.name("grep")?.as_str(),
+            grep_string: captures.name("grep")?.as_str().to_string(),
         })
     }
 
@@ -207,7 +222,7 @@ mod md_regex_parser {
         pub fn parse<T: MDRegexParseable<'a>>(
             &self,
         ) -> Option<(T, Range<usize>, QuerySyntaxInfo<'a>)> {
-            let link_char = r"[^\[\]\(\)]";
+            let link_char = r"(([^\[\]\(\)]|\\)[\[\]]?)"; // Excludes [,],(,), except for when it is escaped
 
             let query_re = T::associated_regex_constructor(link_char);
 
@@ -579,7 +594,7 @@ mod named_query_parse_tests {
 
 #[cfg(test)]
 mod unnamed_query_tests {
-    use crate::parser::{md_regex_parser::MDLinkParser, BlockLinkCmdQuery};
+    use crate::parser::{md_regex_parser::MDLinkParser, BlockLinkCmdQuery, NamedRefCmdQuery};
 
     #[test]
     fn basic_test() {
@@ -623,5 +638,31 @@ mod unnamed_query_tests {
         assert!(MDLinkParser::new(text, 50 - 21)
             .parse::<BlockLinkCmdQuery>()
             .is_none())
+    }
+
+    #[test]
+    fn test_escaped_brackets() {
+        let text = r"fjka    [[ \[\[LATER\]\]]]";
+        assert_eq!(
+            MDLinkParser::new(text, 40 - 22)
+                .parse::<BlockLinkCmdQuery>()
+                .map(|it| it.0.grep_string()),
+            Some(r"[[LATER]]".to_string())
+        )
+    }
+
+    #[test]
+    fn link_with_escaped_braket_display() {
+        let text = r"fjka    [[file|\[\[HELLO\]\]]]";
+
+        assert!(MDLinkParser::new(text, 40 - 22)
+            .parse::<NamedRefCmdQuery>()
+            .map(|it| matches!(
+                it.2.syntax_type_info,
+                crate::parser::QuerySyntaxTypeInfo::Wiki {
+                    display: Some(r"\[\[HELLO\]\]"),
+                }
+            ))
+            .is_some_and(|it| it))
     }
 }

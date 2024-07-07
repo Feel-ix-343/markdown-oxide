@@ -387,7 +387,7 @@ impl<'a> Querier<'a> {
                 },
                 query_metadata_ref_location(query_metadata),
                 if cx.settings().block_compeltions_display_text() {
-                    Some(query.grep_string.to_string())
+                    Some(query.display_grep_string().to_string())
                 } else {
                     None
                 },
@@ -454,9 +454,9 @@ type LineNumber = u32;
 type LastCharacter = u32;
 type Index = String;
 
-impl Query for BlockLinkCmdQuery<'_> {
+impl Query for BlockLinkCmdQuery {
     fn to_query_string(&self) -> String {
-        self.grep_string.to_string()
+        self.grep_string().to_string()
     }
 }
 

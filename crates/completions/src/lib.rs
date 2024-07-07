@@ -79,9 +79,9 @@ struct Location<'fs> {
     character: u32,
 }
 
-impl Input for BlockLinkCmdQuery<'_> {
+impl Input for BlockLinkCmdQuery {
     fn grep_filter(&self) -> std::string::String {
-        self.grep_string.to_string()
+        self.grep_string().to_string()
     }
 }
 
