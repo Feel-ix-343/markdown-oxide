@@ -4,6 +4,13 @@ use nucleo_matcher::pattern::Normalization;
 use nucleo_matcher::Matcher;
 use rayon::prelude::*;
 
+pub fn run_query_on_par_iter<'a, T: Queryable + Send + 'a>(
+    query: &'a impl Query,
+    items: impl ParallelIterator<Item = T>,
+) -> impl IndexedParallelIterator<Item = T> + 'a {
+    run_query(query, items.collect::<Vec<_>>().into_iter())
+}
+
 pub(crate) fn run_query<'a, 'b, B: Queryable + Send + 'a>(
     query: &'b impl Query,
     items: impl Iterator<Item = B> + 'a,

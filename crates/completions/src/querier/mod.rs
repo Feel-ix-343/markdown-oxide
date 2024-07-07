@@ -16,7 +16,7 @@ use crate::{
     },
     settings::DailyNoteDisplay,
 };
-use matcher::{run_query, Query, Queryable};
+use matcher::{run_query, run_query_on_par_iter, Query, Queryable};
 use nanoid::nanoid;
 use rayon::{iter, prelude::*};
 use tower_lsp::lsp_types::CompletionItemKind;
@@ -361,7 +361,9 @@ impl<'a> Querier<'a> {
             .filter(|it| !it.text.is_empty())
             .filter(|it| it.range.end.line != query_metadata.line);
 
-        let cmds = filtered.map(|it| {
+        let matched = run_query_on_par_iter(query, filtered);
+
+        let cmds = matched.take(cx.settings().num_completions()).map(|it| {
             let indexed_info =
                 self.indexed_block_info((it.range.end.line, it.range.end.character, it.file));
 
@@ -521,5 +523,11 @@ impl Queryable for Referenceable<'_> {
             }
             _ => unimplemented!("Matching on unimplemented referenceable"),
         }
+    }
+}
+
+impl Queryable for vault::Block<'_> {
+    fn match_string(&self) -> String {
+        self.text.to_string()
     }
 }
