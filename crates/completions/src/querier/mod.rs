@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::{
     command::{
@@ -20,7 +20,7 @@ use matcher::{run_query, run_query_on_par_iter, Query, Queryable};
 use nanoid::nanoid;
 use rayon::{iter, prelude::*};
 use tower_lsp::lsp_types::CompletionItemKind;
-use vault::{Referenceable, Vault};
+use vault::{MDFile, Referenceable, Vault};
 
 mod matcher;
 
@@ -35,7 +35,9 @@ pub fn query_named_ref_cmds<'a, 'b: 'a>(
     let daily_notes = cx
         .querier()
         .construct_two_week_daily_note_cmds(cx, query_metadata);
-    let alias_cmds = cx.querier().construct_alias_cmds(cx, query_metadata);
+    let alias_cmds = cx
+        .querier()
+        .construct_alias_cmds(cx, query_metadata, cmd_query);
     let binding = iter::empty()
         .chain(daily_notes)
         .chain(all_cmds)
@@ -289,9 +291,11 @@ impl<'a> Querier<'a> {
         &'a self,
         cx: &'a Context,
         query_metadata: &'a QueryMetadata<'a>,
+        query: &'a NamedRefCmdQuery,
     ) -> impl ParallelIterator<Item = ReferenceNamedSectionCmd<'a>> {
         let file_name = |path: &Path| path.file_stem().unwrap().to_str().unwrap().to_string();
-        self.vault
+        let data = self
+            .vault
             .select_referenceable_nodes(None)
             .into_par_iter()
             .flat_map(|it| match it {
@@ -300,32 +304,37 @@ impl<'a> Querier<'a> {
             })
             .flat_map(|(path, mdfile)| {
                 let aliases = mdfile.metadata.as_ref()?.aliases();
-                Some((path, mdfile, aliases))
+                Some(
+                    aliases
+                        .into_par_iter()
+                        .map(move |alias| (path, mdfile, alias)),
+                )
             })
-            .map(move |(path, mdfile, aliases)| {
-                aliases.par_iter().map(move |alias| {
-                    let action = generated_upsert_entity_ref(
-                        cx,
-                        query_metadata,
-                        EntityReference {
-                            file: path.to_path_buf(),
-                            infile: None,
-                        },
-                        query_metadata_ref_location(query_metadata),
-                        Some(alias.to_string()),
-                    );
-                    ReferenceNamedSectionCmd {
-                        label: alias.to_string(),
-                        kind: CompletionItemKind::ENUM_MEMBER,
-                        label_detail: Some(format!("Alias to {}.md", file_name(path))),
-                        cmd_ui_info: cx
-                            .entity_viewer()
-                            .entity_view(&Referenceable::File(path, mdfile)),
-                        actions: action,
-                    }
-                })
-            })
-            .flatten()
+            .flatten();
+
+        let matched = run_query_on_par_iter(query, data.into_par_iter());
+
+        matched.into_par_iter().map(move |(path, mdfile, alias)| {
+            let action = generated_upsert_entity_ref(
+                cx,
+                query_metadata,
+                EntityReference {
+                    file: path.to_path_buf(),
+                    infile: None,
+                },
+                query_metadata_ref_location(query_metadata),
+                Some(alias.to_string()),
+            );
+            ReferenceNamedSectionCmd {
+                label: alias.to_string(),
+                kind: CompletionItemKind::ENUM_MEMBER,
+                label_detail: Some(format!("Alias to {}.md", file_name(path))),
+                cmd_ui_info: cx
+                    .entity_viewer()
+                    .entity_view(&Referenceable::File(path, mdfile)),
+                actions: action,
+            }
+        })
     }
 
     fn construct_two_week_daily_note_cmds(
@@ -594,5 +603,11 @@ impl Queryable for Referenceable<'_> {
 impl Queryable for vault::Block<'_> {
     fn match_string(&self) -> String {
         self.text.to_string()
+    }
+}
+
+impl Queryable for (&PathBuf, &MDFile, &String) {
+    fn match_string(&self) -> String {
+        self.2.to_string()
     }
 }
