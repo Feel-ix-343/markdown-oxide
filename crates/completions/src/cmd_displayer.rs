@@ -19,7 +19,7 @@ use crate::{
     entity_viewer::EntityViewer,
     parser::{QueryMetadata, QuerySyntaxInfo, QuerySyntaxTypeInfo},
     settings::SettingsAdapter,
-    Context,
+    QueryContext,
 };
 
 use rayon::prelude::*;
@@ -28,14 +28,15 @@ pub trait Input: Sync {
     fn grep_filter(&self) -> String;
 }
 
-pub fn cmds_lsp_comp_resp<A: Actions>(
-    cx: &Context,
+pub fn cmds_lsp_comp_resp<A: Actions + Sized + Send + Sync>(
+    cx: &QueryContext,
     info: &QueryMetadata,
-    cmds: impl IndexedParallelIterator<Item = Command<A>>,
+    cmds: Vec<Command<A>>,
     input: &impl Input,
 ) -> CompletionResponse {
     let cmd_displayer = cx.cmd_displayer();
     let items: Vec<CompletionItem> = cmds
+        .into_par_iter()
         .enumerate()
         .map(|(i, it)| {
             let Command {
@@ -81,7 +82,7 @@ pub fn cmds_lsp_comp_resp<A: Actions>(
                                     to_area: EditArea::EndOfLine(line),
                                 } => {
                                     let last_character =
-                                        cx.cmd_displayer().get_chars_in_line(path, *line) - 1;
+                                        cx.cmd_displayer().get_chars_in_line(&path, *line) - 1;
                                     TextEdit {
                                         new_text: insert_text.to_string(),
                                         range: tower_lsp::lsp_types::Range {
@@ -99,7 +100,7 @@ pub fn cmds_lsp_comp_resp<A: Actions>(
                             })
                             .collect();
 
-                        if path == info.path {
+                        if *path == info.path {
                             let text_edit_acc = text_edit_acc.chain(text_edits);
                             (Box::new(text_edit_acc), workspace_edit_acc)
                         } else {
@@ -138,7 +139,7 @@ pub fn cmds_lsp_comp_resp<A: Actions>(
 
             let filter_text: Option<String> = text_edit.as_ref().map(|it| {
                 let text_to_cursor = cmd_displayer.range_to_cursor(
-                    info.path,
+                    &info.path,
                     info.line,
                     it.range.start.character,
                     info.cursor,
@@ -199,6 +200,7 @@ pub fn cmds_lsp_comp_resp<A: Actions>(
     })
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct CmdDisplayer<'a> {
     vault: &'a Vault,
 }

@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use moxide_config::Settings;
 use vault::Vault;
 
+#[derive(Debug, Clone, Copy)]
 pub struct SettingsAdapter<'a>(&'a Settings, &'a Vault);
 
 impl SettingsAdapter<'_> {

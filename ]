@@ -7,32 +7,39 @@ use md_regex_parser::{MDLinkParser, MDRegexParseable};
 use regex::Captures;
 use vault::Vault;
 
-use crate::Location;
+use crate::{Location, QueryContext};
 
-pub(crate) struct Parser<'a> {
-    memfs: &'a dyn ParserMemfs,
+pub(crate) struct Parser<'fs> {
+    memfs: &'fs dyn ParserMemfs,
 }
 
-impl<'a> Parser<'a> {
+impl<'fs> Parser<'fs> {
+    pub(crate) fn new(memfs: &'fs dyn ParserMemfs) -> Self {
+        Self { memfs }
+    }
+
     pub fn parse_entity_query(
         &self,
-        location: Location<'a>,
+        location: Location<'fs>,
     ) -> Option<(NamedRefCmdQuery, QueryMetadata)> {
         self.parse_query(location)
     }
 
     pub fn parse_block_query(
         &self,
-        location: Location<'a>,
+        location: Location<'fs>,
     ) -> Option<(BlockLinkCmdQuery, QueryMetadata)> {
         self.parse_query(location)
     }
 
-    fn line_string(&self, location: Location) -> Option<&'a str> {
+    fn line_string(&self, location: Location) -> Option<&'fs str> {
         self.memfs.select_line_str(location.path, location.line)
     }
 
-    fn parse_query<T: MDRegexParseable<'a>>(&self, location: Location<'a>) -> ParseQueryResult<T> {
+    fn parse_query<T: MDRegexParseable<'fs>>(
+        &self,
+        location: Location<'fs>,
+    ) -> ParseQueryResult<T> {
         let line_string = self.line_string(location)?;
         let (q, char_range, info) = {
             let character = location.character;
@@ -42,6 +49,46 @@ impl<'a> Parser<'a> {
         let new_query_metadata = QueryMetadata::new(location, char_range, info);
 
         Some((q, new_query_metadata))
+    }
+}
+
+pub struct CacheParser<'fs, 'cache> {
+    lst_metadata_cache: &'cache mut Option<QueryMetadata>,
+    parser: Parser<'fs>,
+}
+
+impl<'fs, 'cache> CacheParser<'fs, 'cache> {
+    pub fn parse_entity_query_cached(
+        &'cache mut self,
+        location: Location<'fs>,
+    ) -> Option<(NamedRefCmdQuery, QueryMetadata)> {
+        self.parse_query_cached(location)
+    }
+
+    pub fn parse_block_query_cached(
+        &'cache mut self,
+        location: Location<'fs>,
+    ) -> Option<(BlockLinkCmdQuery, QueryMetadata)> {
+        self.parse_query_cached(location)
+    }
+
+    fn parse_query_cached<T: MDRegexParseable<'fs>, 'a>(
+        &'cache mut self,
+        location: Location<'fs>,
+    ) -> ParseQueryResult<T> {
+        let (t, meta) = self.parser.parse_query::<T>(location)?;
+        *self.lst_metadata_cache = Some(meta);
+
+        |cx: &QueryContext|
+    }
+}
+
+impl<'a, 'b> CacheParser<'a, 'b> {
+    pub(crate) fn new(vault: &'a Vault, lst_metadata_cache: &'b mut Option<QueryMetadata>) -> Self {
+        Self {
+            parser: Parser::new(vault),
+            lst_metadata_cache,
+        }
     }
 }
 
@@ -56,14 +103,6 @@ trait ParserMemfs: Send + Sync {
 impl ParserMemfs for Vault {
     fn select_line_str(&self, path: &Path, line: u32) -> Option<&str> {
         self.select_line_str(path, line as usize)
-    }
-}
-
-impl<'a> Parser<'a> {
-    pub(crate) fn new(vault: &'a Vault) -> Self {
-        Self {
-            memfs: vault as &dyn ParserMemfs,
-        }
     }
 }
 

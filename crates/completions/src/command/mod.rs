@@ -13,5 +13,5 @@ pub struct Command<A: Actions> {
     pub actions: A,
 }
 
-pub type LinkBlockCmd<'a> = Command<(UpsertEntityReference<'a>, Option<AppendBlockIndex<'a>>)>;
-pub type ReferenceNamedSectionCmd<'a> = Command<UpsertEntityReference<'a>>;
+pub type LinkBlockCmd = Command<(UpsertEntityReference, Option<AppendBlockIndex>)>;
+pub type ReferenceNamedSectionCmd = Command<UpsertEntityReference>;

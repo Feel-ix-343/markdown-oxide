@@ -16,3 +16,4 @@ serde_json.workspace = true
 nanoid.workspace = true
 itertools.workspace = true
 chrono.workspace = true
+anyhow.workspace = true

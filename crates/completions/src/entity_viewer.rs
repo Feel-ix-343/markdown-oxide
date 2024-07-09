@@ -3,6 +3,7 @@ use vault::{Referenceable, Vault};
 use crate::entity::Entity;
 use itertools::Itertools;
 
+#[derive(Debug, Clone, Copy)]
 pub struct EntityViewer<'a>(&'a Vault);
 
 impl EntityViewer<'_> {
@@ -12,7 +13,7 @@ impl EntityViewer<'_> {
 
     pub(crate) fn unindexed_block_entity_view(&self, it: &vault::Block) -> Option<String> {
         self.0
-            .select_line_str(it.file, it.range.start.line as usize)
+            .select_line_str(&it.file, it.range.start.line as usize)
             .map(|it| it.to_string())
     }
 }
@@ -20,7 +21,7 @@ impl EntityViewer<'_> {
 // TODO implement CompletionResolve
 
 impl EntityViewer<'_> {
-    pub fn entity_view(&self, referenceable: &Referenceable) -> Option<String> {
-        ui::referenceable_string(self.0, &[referenceable.clone()])
+    pub fn entity_view(&self, referenceable: Referenceable) -> Option<String> {
+        ui::referenceable_string(self.0, &[referenceable])
     }
 }

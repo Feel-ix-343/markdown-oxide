@@ -1,4 +1,7 @@
-use std::path::Path;
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use crate::{
     command::{
@@ -9,7 +12,7 @@ use crate::{
         },
         Command, LinkBlockCmd, ReferenceNamedSectionCmd,
     },
-    context::Context,
+    context::QueryContext,
     entity::{Block, Entity, NamedEntityTypeInfo::*},
     parser::{
         BlockLinkCmdQuery, EntityInfileQuery, NamedRefCmdQuery, QueryMetadata, QuerySyntaxTypeInfo,
@@ -20,21 +23,21 @@ use matcher::{run_query, run_query_on_par_iter, Query, Queryable};
 use nanoid::nanoid;
 use rayon::{iter, prelude::*};
 use tower_lsp::lsp_types::CompletionItemKind;
-use vault::{Referenceable, Vault};
+use vault::{Block as VaultBlock, MDFile, MDHeading, MDIndexedBlock, Referenceable, Vault};
 
 mod matcher;
 
-pub fn query_named_ref_cmds<'a, 'b: 'a>(
-    cx: &'a Context<'a>,
-    query_metadata: &'b QueryMetadata,
-    cmd_query: &'b NamedRefCmdQuery, // TODO: I think this is a rust bug; lifetime is not needed
-) -> impl IndexedParallelIterator<Item = ReferenceNamedSectionCmd<'a>> {
+pub fn query_named_ref_cmds(
+    cx: &QueryContext,
+    query_metadata: &QueryMetadata,
+    cmd_query: &NamedRefCmdQuery, // TODO: I think this is a rust bug; lifetime is not needed
+    data: &Vec<NamedSection>,
+) -> Vec<ReferenceNamedSectionCmd> {
+    let binding = cx.querier();
     let all_cmds =
-        cx.querier()
-            .construct_fundamental_section_ref_cmds(cx, query_metadata, cmd_query);
-    let daily_notes = cx
-        .querier()
-        .construct_two_week_daily_note_cmds(cx, query_metadata);
+        binding.construct_fundamental_section_ref_cmds(cx, query_metadata, cmd_query, data);
+    let binding = cx.querier();
+    let daily_notes = binding.construct_two_week_daily_note_cmds(cx, query_metadata);
     let binding = iter::empty()
         .chain(daily_notes)
         .chain(all_cmds)
@@ -42,27 +45,90 @@ pub fn query_named_ref_cmds<'a, 'b: 'a>(
     let iterator = binding.into_iter();
     let matched = run_query(cmd_query, iterator);
 
-    matched.take(cx.settings().num_completions())
+    matched.take(cx.settings().num_completions()).collect()
 }
 
-pub fn query_block_link_cmds<'a, 'b: 'a>(
-    cx: &'a Context<'a>,
-    query_metadata: &'b QueryMetadata,
-    cmd_query: &'b BlockLinkCmdQuery,
-) -> impl IndexedParallelIterator<Item = LinkBlockCmd<'a>> {
-    let all_cmds = cx
-        .querier()
-        .construct_block_link_cmds(cx, query_metadata, cmd_query);
+pub fn query_block_link_cmds<'a>(
+    cx: &'a QueryContext<'a, 'a>,
+    query_metadata: &'a QueryMetadata,
+    cmd_query: &'a BlockLinkCmdQuery,
+    data: &Vec<VaultBlock>,
+) -> Vec<LinkBlockCmd> {
+    let binding = cx.querier();
+    let all_cmds = binding.construct_block_link_cmds(cx, query_metadata, cmd_query, data);
     // let binding = all_cmds.collect::<Vec<_>>();
     // let iterator = binding.into_iter();
     // let matched = run_query(cmd_query, iterator);
     //
     // matched.take(cx.settings().num_completions())
-    all_cmds
+    all_cmds.collect()
 }
 
+#[derive(Clone, Copy)]
 pub struct Querier<'a> {
     vault: &'a Vault,
+}
+
+#[derive(Debug, Default, Clone)]
+pub(crate) struct QuerierCache {
+    pub blocks: Option<Arc<Vec<VaultBlock>>>,
+    pub named_sections: Option<Arc<Vec<NamedSection>>>,
+}
+impl QuerierCache {
+    // pub(crate) fn named_sections(&mut self, cx: &QueryContext) -> Arc<Vec<NamedSection>> {
+    //     match &self.named_sections {
+    //         None => {
+    //             let named_sections = Arc::new(cx.querier().get_named_sections());
+    //             self.named_sections = Some(named_sections.clone());
+    //             named_sections
+    //         }
+    //         Some(named_sections) => named_sections.clone(),
+    //     }
+    // }
+    // pub(crate) fn blocks(&mut self, cx: &QueryContext) -> Arc<Vec<VaultBlock>> {
+    //     match &self.blocks {
+    //         None => {
+    //             let blocks = Arc::new(cx.querier().get_blocks());
+    //             self.blocks = Some(blocks.clone());
+    //             blocks
+    //         }
+    //         Some(blocks) => blocks.clone(),
+    //     }
+    // }
+
+    pub(crate) fn clear(&mut self) {
+        self.blocks = None;
+        self.named_sections = None;
+    }
+}
+
+/// Also cachable
+#[derive(Debug, Clone)]
+pub enum NamedSection {
+    File(PathBuf, Arc<MDFile>),
+    Heading(PathBuf, Arc<MDHeading>),
+    IndexedBlock(PathBuf, Arc<MDIndexedBlock>),
+    UnresovledFile(PathBuf, String),
+    UnresolvedHeading(PathBuf, String, String),
+    UnresovledIndexedBlock(PathBuf, String, String),
+}
+impl NamedSection {
+    fn to_referenceable(&self) -> Referenceable {
+        match &self {
+            Self::File(path, mdfile) => Referenceable::File(path, mdfile),
+            Self::Heading(path, heading) => Referenceable::Heading(path, heading),
+            Self::IndexedBlock(path, data) => Referenceable::IndexedBlock(path, data),
+            Self::UnresovledFile(path, string) => {
+                Referenceable::UnresovledFile(path.to_path_buf(), string)
+            }
+            Self::UnresolvedHeading(path, file, heading) => {
+                Referenceable::UnresolvedHeading(path.to_path_buf(), file, heading)
+            }
+            Self::UnresovledIndexedBlock(path, file, index) => {
+                Referenceable::UnresovledIndexedBlock(path.to_path_buf(), file, index)
+            }
+        }
+    }
 }
 
 impl<'a> Querier<'a> {
@@ -71,13 +137,13 @@ impl<'a> Querier<'a> {
     }
 }
 
-fn generated_upsert_entity_ref<'a>(
-    cx: &Context,
+fn generated_upsert_entity_ref(
+    cx: &QueryContext,
     query_metadata: &QueryMetadata,
     to: EntityReference,
-    in_location: UpsertReferenceLocation<'a>,
+    in_location: UpsertReferenceLocation,
     generated_display: Option<String>,
-) -> UpsertEntityReference<'a> {
+) -> UpsertEntityReference {
     let type_info = match (
         &query_metadata.query_syntax_info.syntax_type_info,
         &to.infile,
@@ -101,14 +167,14 @@ fn generated_upsert_entity_ref<'a>(
             ReferenceDisplayMetadataTypeInfo::WikiLink { display: None }
         }
         (
-            QuerySyntaxTypeInfo::Markdown { display: "" },
+            QuerySyntaxTypeInfo::Markdown { display },
             Some(EntityInfileReference::Heading(heading)),
             None,
-        ) => ReferenceDisplayMetadataTypeInfo::MDLink {
+        ) if display == "" => ReferenceDisplayMetadataTypeInfo::MDLink {
             display: heading.to_string(),
         },
         // Generated takes preference over a heading
-        (QuerySyntaxTypeInfo::Markdown { display: "" }, _, Some(generated)) => {
+        (QuerySyntaxTypeInfo::Markdown { display }, _, Some(generated)) if display == "" => {
             ReferenceDisplayMetadataTypeInfo::MDLink { display: generated }
         }
         (QuerySyntaxTypeInfo::Markdown { display }, _, _) => {
@@ -129,15 +195,8 @@ fn generated_upsert_entity_ref<'a>(
 }
 
 impl<'a> Querier<'a> {
-    fn construct_fundamental_section_ref_cmds(
-        &self,
-        cx: &'a Context, // has lifetime a or greater
-        query_metadata: &'a QueryMetadata,
-        query: &'a NamedRefCmdQuery,
-    ) -> impl ParallelIterator<Item = ReferenceNamedSectionCmd<'a>> {
-        let query_string = query.to_query_string(); // from the Query implementation in this module
-        let data = self
-            .vault
+    pub fn get_named_sections(&self) -> Vec<NamedSection> {
+        self.vault
             .select_referenceable_nodes(None)
             .into_iter()
             .filter(|it| {
@@ -151,9 +210,51 @@ impl<'a> Querier<'a> {
                         | Referenceable::UnresovledIndexedBlock(..)
                 )
             })
-            .collect::<Vec<_>>();
+            .flat_map(|it| match it {
+                Referenceable::File(path, file) => Some(NamedSection::File(
+                    path.as_path().into(),
+                    Arc::new(file.clone()),
+                )),
+                Referenceable::Heading(path, heading) => Some(NamedSection::Heading(
+                    path.as_path().into(),
+                    Arc::new(heading.clone()),
+                )),
+                Referenceable::IndexedBlock(path, data) => Some(NamedSection::IndexedBlock(
+                    path.as_path().into(),
+                    Arc::new(data.clone()),
+                )),
+                Referenceable::UnresovledFile(path, string) => Some(NamedSection::UnresovledFile(
+                    path.as_path().into(),
+                    string.to_string(),
+                )),
+                Referenceable::UnresolvedHeading(path, file, heading) => {
+                    Some(NamedSection::UnresolvedHeading(
+                        path.as_path().into(),
+                        file.to_string(),
+                        heading.to_string(),
+                    ))
+                }
+                Referenceable::UnresovledIndexedBlock(path, file, index) => {
+                    Some(NamedSection::UnresovledIndexedBlock(
+                        path.as_path().into(),
+                        file.to_string(),
+                        index.to_string(),
+                    ))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    }
 
-        let queried = run_query(query, data.into_iter());
+    fn construct_fundamental_section_ref_cmds(
+        &self,
+        cx: &'a QueryContext, // has lifetime a or greater
+        query_metadata: &'a QueryMetadata,
+        query: &'a NamedRefCmdQuery,
+        data: &'a Vec<NamedSection>,
+    ) -> impl ParallelIterator<Item = ReferenceNamedSectionCmd> + '_ {
+        let query_string = query.to_query_string(); // from the Query implementation in this module
+        let queried = run_query(query, data.iter());
 
         queried
             .take(cx.settings().num_completions())
@@ -161,7 +262,7 @@ impl<'a> Querier<'a> {
                 let upsert_reference_location = query_metadata_ref_location(query_metadata);
 
                 let action =
-                    |to: EntityReference, display: Option<String>| -> UpsertEntityReference<'a> {
+                    |to: EntityReference, display: Option<String>| -> UpsertEntityReference {
                         generated_upsert_entity_ref(
                             cx,
                             query_metadata,
@@ -177,7 +278,7 @@ impl<'a> Querier<'a> {
                             label,
                             kind,
                             label_detail: detail,
-                            cmd_ui_info: cx.entity_viewer().entity_view(&it),
+                            cmd_ui_info: cx.entity_viewer().entity_view(it.to_referenceable()),
                             actions,
                         }
                     };
@@ -185,25 +286,25 @@ impl<'a> Querier<'a> {
                 let file_name =
                     |path: &Path| path.file_stem().unwrap().to_str().unwrap().to_string();
 
-                match it {
-                    Referenceable::File(path, _data) => {
+                match &it {
+                    NamedSection::File(path, _data) => {
                         let file_entity_ref = EntityReference {
-                            file: path.to_path_buf(),
+                            file: path.to_path_buf().into(),
                             infile: None,
                         };
                         Some(cmd(
-                            file_name(path),
+                            file_name(&path),
                             CompletionItemKind::FILE,
                             action(file_entity_ref.clone(), None),
                             None,
                         ))
                     }
-                    Referenceable::Heading(path, data) => Some(cmd(
-                        format!("{}#{}", file_name(path), data.heading_text),
+                    NamedSection::Heading(path, data) => Some(cmd(
+                        format!("{}#{}", file_name(&path), data.heading_text),
                         CompletionItemKind::REFERENCE,
                         action(
                             EntityReference {
-                                file: path.to_path_buf(),
+                                file: path.to_path_buf().into(),
                                 infile: Some(EntityInfileReference::Heading(
                                     data.heading_text.clone(),
                                 )),
@@ -212,31 +313,31 @@ impl<'a> Querier<'a> {
                         ),
                         None,
                     )),
-                    Referenceable::IndexedBlock(path, data) => Some(cmd(
-                        format!("{}#^{}", file_name(path), data.index),
+                    NamedSection::IndexedBlock(path, data) => Some(cmd(
+                        format!("{}#^{}", file_name(&path), data.index),
                         CompletionItemKind::REFERENCE,
                         action(
                             EntityReference {
-                                file: path.to_owned(),
+                                file: path.to_path_buf().into(),
                                 infile: Some(EntityInfileReference::Index(data.index.clone())),
                             },
                             None,
                         ),
                         None,
                     )),
-                    Referenceable::UnresovledFile(ref path, file_ref)
-                        if file_ref != &query_string =>
+                    NamedSection::UnresovledFile(ref path, file_ref)
+                        if *file_ref != query_string =>
                     {
                         Some(ReferenceNamedSectionCmd {
                             label: file_ref.to_string(),
                             kind: CompletionItemKind::KEYWORD,
-                            cmd_ui_info: cx.entity_viewer().entity_view(&it),
+                            cmd_ui_info: cx.entity_viewer().entity_view(it.to_referenceable()),
                             label_detail: Some("Unresolved File".to_string()),
                             actions: generated_upsert_entity_ref(
                                 cx,
                                 query_metadata,
                                 EntityReference {
-                                    file: path.to_path_buf(),
+                                    file: path.clone().into(),
                                     infile: None,
                                 },
                                 query_metadata_ref_location(query_metadata),
@@ -244,19 +345,19 @@ impl<'a> Querier<'a> {
                             ),
                         })
                     }
-                    Referenceable::UnresolvedHeading(ref path, file, heading)
+                    NamedSection::UnresolvedHeading(ref path, file, heading)
                         if format!("{file}#{heading}") != query_string =>
                     {
                         Some(ReferenceNamedSectionCmd {
                             label: format!("{file}#{heading}"),
                             kind: CompletionItemKind::KEYWORD,
-                            cmd_ui_info: cx.entity_viewer().entity_view(&it),
+                            cmd_ui_info: cx.entity_viewer().entity_view(it.to_referenceable()),
                             label_detail: Some("Unresolved Heading".to_string()),
                             actions: generated_upsert_entity_ref(
                                 cx,
                                 query_metadata,
                                 EntityReference {
-                                    file: path.to_path_buf(),
+                                    file: path.clone().into(),
                                     infile: Some(EntityInfileReference::Heading(heading.clone())),
                                 },
                                 query_metadata_ref_location(query_metadata),
@@ -270,10 +371,10 @@ impl<'a> Querier<'a> {
     }
 
     fn construct_two_week_daily_note_cmds(
-        &'a self,
-        cx: &'a Context<'a>,
-        query_metadata: &'a QueryMetadata<'a>,
-    ) -> impl ParallelIterator<Item = ReferenceNamedSectionCmd<'a>> {
+        self,
+        cx: &'a QueryContext,
+        query_metadata: &'a QueryMetadata,
+    ) -> impl ParallelIterator<Item = ReferenceNamedSectionCmd> + 'a {
         let today = chrono::Local::now();
         let path = cx.settings().daily_note_folder_path().to_path_buf();
         (-7..7)
@@ -309,10 +410,10 @@ impl<'a> Querier<'a> {
                     },
                     cmd_ui_info: if let Some(file) = maybe_file {
                         cx.entity_viewer()
-                            .entity_view(&Referenceable::File(&daily_note_path.clone(), file))
+                            .entity_view(Referenceable::File(&daily_note_path.clone(), file))
                     } else {
                         cx.entity_viewer()
-                            .entity_view(&Referenceable::UnresovledFile(
+                            .entity_view(Referenceable::UnresovledFile(
                                 daily_note_path.clone(),
                                 &file_name,
                             ))
@@ -321,7 +422,7 @@ impl<'a> Querier<'a> {
                         cx,
                         query_metadata,
                         EntityReference {
-                            file: daily_note_path.clone(),
+                            file: daily_note_path.clone().into(),
                             infile: None,
                         },
                         query_metadata_ref_location(query_metadata),
@@ -350,25 +451,30 @@ impl<'a> Querier<'a> {
             })
     }
 
+    pub fn get_blocks(&self, query_metadata: &QueryMetadata) -> Vec<VaultBlock> {
+        self.vault
+            .select_blocks()
+            .filter(|it| !it.text.trim().is_empty())
+            .filter(|it| it.range.end.line != query_metadata.line)
+            .collect()
+    }
+
     fn construct_block_link_cmds(
-        &'a self,
-        cx: &'a Context,
+        self,
+        cx: &'a QueryContext,
         query_metadata: &'a QueryMetadata,
         query: &'a BlockLinkCmdQuery,
-    ) -> impl IndexedParallelIterator<Item = LinkBlockCmd<'a>> {
-        let blocks = self.vault.select_blocks();
+        data: &'a Vec<VaultBlock>,
+    ) -> impl IndexedParallelIterator<Item = LinkBlockCmd> + 'a {
+        let blocks = data;
 
-        let filtered = blocks
-            .filter(|it| !it.text.is_empty())
-            .filter(|it| it.range.end.line != query_metadata.line);
-
-        let matched = run_query_on_par_iter(query, filtered);
+        let matched = run_query(query, blocks.into_iter());
 
         let cmds = matched
             .take(cx.settings().num_block_completions())
-            .map(|it| {
+            .map(move |it| {
                 let indexed_info =
-                    self.indexed_block_info((it.range.end.line, it.range.end.character, it.file));
+                    self.indexed_block_info((it.range.end.line, it.range.end.character, &it.file));
 
                 let index = match &indexed_info {
                     Some((index, _)) => index.to_string(),
@@ -385,7 +491,7 @@ impl<'a> Querier<'a> {
                     cx,
                     query_metadata,
                     EntityReference {
-                        file: it.file.to_path_buf(),
+                        file: it.file.clone(),
                         infile: Some(EntityInfileReference::Index(index.clone())),
                     },
                     query_metadata_ref_location(query_metadata),
@@ -404,7 +510,7 @@ impl<'a> Querier<'a> {
                     label_detail: Some(it.file.file_name().unwrap().to_str().unwrap().to_string()),
                     cmd_ui_info: match indexed_info {
                         Some((_, ref referenceable)) => {
-                            cx.entity_viewer().entity_view(referenceable)
+                            cx.entity_viewer().entity_view(referenceable.clone())
                         }
                         None => cx.entity_viewer().unindexed_block_entity_view(&it),
                     },
@@ -413,7 +519,7 @@ impl<'a> Querier<'a> {
                         match indexed_info {
                             None => Some(AppendBlockIndex {
                                 index: index.to_string(),
-                                in_file: it.file,
+                                in_file: it.file.clone(),
                                 to_line: it.range.start.line,
                             }),
                             Some(_) => None,
@@ -445,11 +551,9 @@ impl<'a> Querier<'a> {
     }
 }
 
-fn query_metadata_ref_location<'a>(
-    query_metadata: &'a QueryMetadata<'a>,
-) -> UpsertReferenceLocation<'a> {
+fn query_metadata_ref_location<'a>(query_metadata: &'a QueryMetadata) -> UpsertReferenceLocation {
     UpsertReferenceLocation {
-        file: query_metadata.path,
+        file: query_metadata.path.as_path().into(),
         line: query_metadata.line,
         range: query_metadata.char_range.start as u32..query_metadata.char_range.end as u32,
     }
@@ -508,30 +612,29 @@ impl<A: Actions> Queryable for Command<A> {
     }
 }
 
-impl Queryable for Referenceable<'_> {
+impl Queryable for &NamedSection {
     fn match_string(&self) -> String {
         let file_name = |path: &Path| path.file_stem().unwrap().to_str().unwrap().to_string();
         match self {
-            Referenceable::File(path, _) => file_name(path),
-            Referenceable::Heading(path, heading) => {
+            NamedSection::File(path, _) => file_name(path),
+            NamedSection::Heading(path, heading) => {
                 format!("{}#{}", file_name(path), heading.heading_text)
             }
-            Referenceable::IndexedBlock(path, index_data) => {
+            NamedSection::IndexedBlock(path, index_data) => {
                 format!("{}#^{}", file_name(path), index_data.index)
             }
-            Referenceable::UnresovledFile(_path, string) => string.to_string(),
-            Referenceable::UnresolvedHeading(_path, file_ref, heading) => {
+            NamedSection::UnresovledFile(_path, string) => string.to_string(),
+            NamedSection::UnresolvedHeading(_path, file_ref, heading) => {
                 format!("{file_ref}#{heading}")
             }
-            Referenceable::UnresovledIndexedBlock(_path, file_ref, index) => {
+            NamedSection::UnresovledIndexedBlock(_path, file_ref, index) => {
                 format!("{}#^{}", file_ref, index)
             }
-            _ => unimplemented!("Matching on unimplemented referenceable"),
         }
     }
 }
 
-impl Queryable for vault::Block<'_> {
+impl Queryable for &vault::Block {
     fn match_string(&self) -> String {
         self.text.to_string()
     }

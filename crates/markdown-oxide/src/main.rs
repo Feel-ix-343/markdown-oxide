@@ -3,6 +3,7 @@ use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use completions::QueryContext;
 use diagnostics::diagnostics;
 use itertools::Itertools;
 use moxide_config::Settings;
@@ -36,14 +37,20 @@ mod ui;
 #[derive(Debug)]
 struct Backend {
     client: Client,
-    vault: Arc<RwLock<Option<Vault>>>,
-    opened_files: Arc<RwLock<HashSet<PathBuf>>>,
-    settings: Arc<RwLock<Option<Settings>>>,
+    vault: RwLock<Option<Vault>>,
+    opened_files: RwLock<HashSet<PathBuf>>,
+    settings: RwLock<Option<Settings>>,
+    cache: Cache,
+}
+#[derive(Debug, Default)]
+struct Cache {
+    query_cache: RwLock<completions::QueryCache>,
 }
 
 struct TextDocumentItem {
     uri: Url,
-    text: String,
+    new_text: String,
+    range: Option<Range>,
 }
 
 impl Backend {
@@ -65,8 +72,8 @@ impl Backend {
 
         let guard = self
             .bind_vault_mut(|vault| {
-                let text = &params.text;
-                Vault::update_vault(&settings, vault, (&path, text));
+                let text = &params.new_text;
+                Vault::update_vault(&settings, vault, (&path, text, params.range));
 
                 Ok(())
             })
@@ -246,6 +253,22 @@ impl Backend {
         callback(vault)
     }
 
+    async fn bind_query_cx<T>(
+        &self,
+        callback: impl FnOnce(completions::QueryContext) -> Result<T>,
+    ) -> Result<T> {
+        let mut cache = self.cache.query_cache.write().await;
+        let v_g = self.vault.read().await;
+        let s_g = self.settings.read().await;
+        let (cache, Some(vault), Some(settings)) = (cache.deref_mut(), v_g.deref(), s_g.deref())
+        else {
+            return Err(Error::new(ErrorCode::ServerError(0)));
+        };
+        let cx = QueryContext::new(vault, settings, cache);
+
+        callback(cx)
+    }
+
     async fn bind_settings<T>(&self, callback: impl FnOnce(&Settings) -> Result<T>) -> Result<T> {
         let guard = self.settings.read().await;
         let Some(settings) = guard.deref() else {
@@ -333,7 +356,7 @@ impl LanguageServer for Backend {
             server_info: None,
             capabilities: ServerCapabilities {
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
-                    TextDocumentSyncKind::FULL,
+                    TextDocumentSyncKind::INCREMENTAL,
                 )),
                 completion_provider: Some(CompletionOptions {
                     resolve_provider: Some(false),
@@ -464,7 +487,8 @@ impl LanguageServer for Backend {
 
             self.update_vault(TextDocumentItem {
                 uri: params.text_document.uri,
-                text: params.text_document.text,
+                new_text: params.text_document.text,
+                range: None,
             })
             .await; // usually, this is not necesary; however some may start the LS without saving a changed file, so it is necessary
         } // drop the lock
@@ -498,12 +522,25 @@ impl LanguageServer for Backend {
         }
     }
 
-    async fn did_change(&self, mut params: DidChangeTextDocumentParams) {
-        self.update_vault(TextDocumentItem {
-            uri: params.text_document.uri,
-            text: params.content_changes.remove(0).text,
-        })
-        .await;
+    async fn did_change(&self, params: DidChangeTextDocumentParams) {
+        for change in &params.content_changes {
+            self.update_vault(TextDocumentItem {
+                uri: params.text_document.uri.clone(),
+                new_text: change.text.clone(),
+                range: change.range,
+            })
+            .await;
+        }
+
+        let cache_result = self
+            .bind_query_cx(|cx| Ok(completions::lsp_sync(cx, params)))
+            .await;
+        self.client
+            .log_message(
+                MessageType::INFO,
+                format!("Cache Result: {:?}", cache_result),
+            )
+            .await;
     }
 
     async fn did_change_watched_files(&self, _params: DidChangeWatchedFilesParams) {
@@ -553,11 +590,7 @@ impl LanguageServer for Backend {
         }; // TODO: this is bad
 
         let res = self
-            .bind_vault(|vault| {
-                Ok(completions::get_completions(
-                    vault, &files, &params, &path, &settings,
-                ))
-            })
+            .bind_query_cx(|cx| Ok(completions::get_completions(&params, &path, cx)))
             .await;
 
         let elapsed = timer.elapsed();
@@ -683,9 +716,10 @@ async fn main() {
 
     let (service, socket) = LspService::new(|client| Backend {
         client,
-        vault: Arc::new(None.into()),
-        opened_files: Arc::new(HashSet::new().into()),
-        settings: Arc::new(None.into()),
+        vault: None.into(),
+        opened_files: HashSet::new().into(),
+        settings: None.into(),
+        cache: Cache::default(),
     });
     Server::new(stdin, stdout, socket).serve(service).await;
 }

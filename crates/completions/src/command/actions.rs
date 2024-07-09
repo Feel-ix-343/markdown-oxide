@@ -2,6 +2,7 @@ use std::{
     collections::HashMap,
     iter,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 pub trait Actions {
@@ -14,7 +15,7 @@ pub trait Action: ActionSealed {
     fn edits(&self) -> Edits;
 }
 
-type Edits<'a> = HashMap<&'a Path, Vec<Edit>>;
+type Edits = HashMap<Arc<Path>, Vec<Edit>>;
 pub struct Edit {
     pub insert_text: String,
     pub to_area: EditArea,
@@ -33,19 +34,19 @@ pub struct Position {
 
 /// Data
 #[derive(Clone)]
-pub struct UpsertEntityReference<'a> {
+pub struct UpsertEntityReference {
     pub to: EntityReference,
-    pub in_location: UpsertReferenceLocation<'a>,
+    pub in_location: UpsertReferenceLocation,
     pub metadata: ReferenceDisplayMetadata,
 }
 #[derive(Clone)]
 pub struct EntityReference {
-    pub file: PathBuf,
+    pub file: Arc<Path>,
     pub infile: Option<EntityInfileReference>,
 }
 #[derive(Clone)]
-pub struct UpsertReferenceLocation<'a> {
-    pub file: &'a Path,
+pub struct UpsertReferenceLocation {
+    pub file: Arc<Path>,
     pub line: u32,
     pub range: std::ops::Range<u32>,
 }
@@ -66,8 +67,8 @@ pub enum ReferenceDisplayMetadataTypeInfo {
     WikiLink { display: Option<String> },
 }
 
-impl ActionSealed for UpsertEntityReference<'_> {}
-impl Action for UpsertEntityReference<'_> {
+impl ActionSealed for UpsertEntityReference {}
+impl Action for UpsertEntityReference {
     fn edits(&self) -> Edits {
         let file_refname = self
             .to
@@ -101,7 +102,7 @@ impl Action for UpsertEntityReference<'_> {
         };
 
         [(
-            self.in_location.file,
+            self.in_location.file.clone().into(),
             vec![Edit {
                 insert_text: link_text,
                 to_area: EditArea::Range {
@@ -121,17 +122,17 @@ impl Action for UpsertEntityReference<'_> {
     }
 }
 
-pub struct AppendBlockIndex<'a> {
+pub struct AppendBlockIndex {
     pub index: String,
     pub to_line: u32,
-    pub in_file: &'a Path,
+    pub in_file: Arc<Path>,
 }
 
-impl ActionSealed for AppendBlockIndex<'_> {}
-impl Action for AppendBlockIndex<'_> {
+impl ActionSealed for AppendBlockIndex {}
+impl Action for AppendBlockIndex {
     fn edits(&self) -> Edits {
         iter::once((
-            self.in_file,
+            self.in_file.clone(),
             vec![Edit {
                 insert_text: format!("     ^{}", self.index),
                 to_area: EditArea::EndOfLine(self.to_line),

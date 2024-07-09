@@ -8,6 +8,7 @@ use std::{
     iter,
     ops::{Deref, DerefMut, Not, Range},
     path::{Path, PathBuf},
+    sync::Arc,
     time::SystemTime,
 };
 
@@ -62,27 +63,52 @@ impl Vault {
         })
     }
 
-    pub fn update_vault(context: &Settings, old: &mut Vault, new_file: (&PathBuf, &str)) {
-        let new_md_file = MDFile::new(context, new_file.1, new_file.0.clone());
-        let new = old.md_files.get_mut(new_file.0);
+    pub fn update_vault(
+        context: &Settings,
+        old: &mut Vault,
+        (path, new_text, range): (&PathBuf, &str, Option<tower_lsp::lsp_types::Range>),
+    ) {
+        let new_text = match range {
+            None => Rope::from_str(new_text), // not incremental
+            Some(range) => {
+                let mut rope = old
+                    .ropes
+                    .get(path)
+                    .expect("We shuold have this rope")
+                    .clone();
+                // TODO
+
+                let start_offset =
+                    rope.line_to_char(range.start.line as usize) + range.start.character as usize;
+                let end_offset =
+                    rope.line_to_char(range.end.line as usize) + range.end.character as usize;
+
+                rope.remove(start_offset..end_offset);
+                rope.insert(start_offset, new_text);
+
+                rope
+            }
+        };
+
+        let new_md_file = MDFile::new(context, &new_text.to_string(), path.clone());
+        let new = old.md_files.get_mut(path);
         match new {
             Some(file) => {
                 *file = new_md_file;
             }
             None => {
-                old.md_files.insert(new_file.0.into(), new_md_file);
+                old.md_files.insert(path.into(), new_md_file);
             }
         };
 
-        let new_rope = Rope::from_str(new_file.1);
-        let rope_entry = old.ropes.get_mut(new_file.0);
+        let rope_entry = old.ropes.get_mut(path);
 
         match rope_entry {
             Some(rope) => {
-                *rope = new_rope;
+                *rope = new_text;
             }
             None => {
-                old.ropes.insert(new_file.0.into(), new_rope);
+                old.ropes.insert(path.into(), new_text);
             }
         }
     }
@@ -515,7 +541,7 @@ impl Vault {
         }
     }
 
-    pub fn select_blocks(&self) -> impl ParallelIterator<Item = Block<'_>> {
+    pub fn select_blocks(&self) -> impl ParallelIterator<Item = Block> + '_ {
         self.ropes
             .par_iter()
             .map(|(path, rope)| {
@@ -525,7 +551,7 @@ impl Vault {
                         let string = line.as_str()?;
 
                         Some(Block {
-                            text: string.trim(),
+                            text: string.into(),
                             range: MyRange(tower_lsp::lsp_types::Range {
                                 start: Position {
                                     line: i as u32,
@@ -536,26 +562,25 @@ impl Vault {
                                     character: string.len() as u32,
                                 },
                             }),
-                            file: path,
+                            file: path.clone().into(),
                         })
                     })
                     .collect::<Vec<_>>()
             })
             .flatten()
-            .filter(|block| !block.text.is_empty())
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Copy)]
-pub struct Block<'a> {
-    pub text: &'a str,
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Block {
+    pub text: Arc<str>,
     pub range: MyRange,
-    pub file: &'a Path,
+    pub file: Arc<Path>,
 }
 
-impl AsRef<str> for Block<'_> {
+impl AsRef<str> for Block {
     fn as_ref(&self) -> &str {
-        self.text
+        &self.text
     }
 }
 
