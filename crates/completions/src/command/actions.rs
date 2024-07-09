@@ -57,6 +57,7 @@ pub enum EntityInfileReference {
 #[derive(Clone)]
 pub struct ReferenceDisplayMetadata {
     pub include_md_extension: bool,
+    pub snippet: bool,
     pub type_info: ReferenceDisplayMetadataTypeInfo,
 }
 use ReferenceDisplayMetadataTypeInfo::*;
@@ -87,17 +88,33 @@ impl Action for UpsertEntityReference<'_> {
             false => ref_,
         };
 
-        let link_text: String = match &self.metadata.type_info {
-            MDLink { display } if wrapped_ref.contains(" ") => {
+        let link_text: String = match (&self.metadata.type_info, self.metadata.snippet) {
+            (MDLink { display }, false) if wrapped_ref.contains(" ") => {
                 format!("[{display}](<{wrapped_ref}>)")
             }
-            MDLink { display } => {
+            (MDLink { display }, true) if wrapped_ref.contains(" ") => {
+                format!("[${{1:{display}}}](<{wrapped_ref}>)${{2:}}")
+            }
+            (MDLink { display }, false) => {
                 format!("[{display}]({wrapped_ref})")
             }
-            WikiLink { display: None } => format!("[[{wrapped_ref}]]"),
-            WikiLink {
-                display: Some(display),
-            } => format!("[[{wrapped_ref}|{display}]]"),
+            (MDLink { display }, true) => {
+                format!("[${{1:{display}}}]({wrapped_ref})${{2:}}")
+            }
+            (WikiLink { display: None }, false) => format!("[[{wrapped_ref}]]"),
+            (WikiLink { display: None }, true) => format!("[[{wrapped_ref}]]${{1:}}"),
+            (
+                WikiLink {
+                    display: Some(display),
+                },
+                false,
+            ) => format!("[[{wrapped_ref}|{display}]]"),
+            (
+                WikiLink {
+                    display: Some(display),
+                },
+                true,
+            ) => format!("[[{wrapped_ref}|${{1:{display}}}]]${{2:}}"),
         };
 
         [(

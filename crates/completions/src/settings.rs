@@ -9,6 +9,11 @@ impl SettingsAdapter<'_> {
     pub fn new<'a>(settings: &'a Settings, vault: &'a Vault) -> SettingsAdapter<'a> {
         SettingsAdapter(settings, vault)
     }
+
+    pub(crate) fn link_snippets(&self) -> bool {
+        // TODO
+        true
+    }
 }
 
 pub enum DailyNoteDisplay {

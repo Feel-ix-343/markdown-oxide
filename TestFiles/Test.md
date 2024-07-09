@@ -8,19 +8,9 @@ aliases:
 
 here is some test text         ^da7ea
 
+[[Test|Test Alias]]
 
-[[unresolved]]
-
-
-[[unresolved]]
-
-
-[[unresolved]]
-
-
-[[unresolved]]
-
-[[Test#Heading 1]]
+[[Test|Test Alias]]
 
 
 - This is some text 1     ^ga6c6

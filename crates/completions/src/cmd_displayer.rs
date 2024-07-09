@@ -2,8 +2,8 @@ use std::{collections::HashMap, iter, path::Path};
 
 use tower_lsp::lsp_types::{
     Command as LspCommand, CompletionItem, CompletionItemKind, CompletionItemLabelDetails,
-    CompletionList, CompletionResponse, CompletionTextEdit, Documentation, MarkupContent, TextEdit,
-    Url, WorkspaceEdit,
+    CompletionList, CompletionResponse, CompletionTextEdit, Documentation, InsertTextFormat,
+    InsertTextMode, MarkupContent, TextEdit, Url, WorkspaceEdit,
 };
 
 use itertools::Itertools;
@@ -186,6 +186,11 @@ pub fn cmds_lsp_comp_resp<A: Actions>(
                     command: "apply_edits".to_string(),
                     arguments: Some(vec![serde_json::to_value(it).unwrap()]),
                     title: "Edit file".to_string(),
+                }),
+                insert_text_format: Some(if cx.settings().link_snippets() {
+                    InsertTextFormat::SNIPPET
+                } else {
+                    InsertTextFormat::PLAIN_TEXT
                 }),
                 preselect,
                 ..Default::default()

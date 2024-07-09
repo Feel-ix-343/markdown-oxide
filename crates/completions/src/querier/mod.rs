@@ -35,9 +35,11 @@ pub fn query_named_ref_cmds<'a, 'b: 'a>(
     let daily_notes = cx
         .querier()
         .construct_two_week_daily_note_cmds(cx, query_metadata);
+    let alias_cmds = cx.querier().construct_alias_cmds(cx, query_metadata);
     let binding = iter::empty()
         .chain(daily_notes)
         .chain(all_cmds)
+        .chain(alias_cmds)
         .collect::<Vec<_>>();
     let iterator = binding.into_iter();
     let matched = run_query(cmd_query, iterator);
@@ -122,6 +124,7 @@ fn generated_upsert_entity_ref<'a>(
         to,
         metadata: ReferenceDisplayMetadata {
             include_md_extension: cx.settings().include_md_extension(),
+            snippet: cx.settings().link_snippets(),
             type_info,
         },
         in_location: in_location.clone(),
@@ -280,6 +283,49 @@ impl<'a> Querier<'a> {
                     _ => None,
                 }
             })
+    }
+
+    fn construct_alias_cmds(
+        &'a self,
+        cx: &'a Context,
+        query_metadata: &'a QueryMetadata<'a>,
+    ) -> impl ParallelIterator<Item = ReferenceNamedSectionCmd<'a>> {
+        let file_name = |path: &Path| path.file_stem().unwrap().to_str().unwrap().to_string();
+        self.vault
+            .select_referenceable_nodes(None)
+            .into_par_iter()
+            .flat_map(|it| match it {
+                Referenceable::File(path, md_file) => Some((path, md_file)),
+                _ => None,
+            })
+            .flat_map(|(path, mdfile)| {
+                let aliases = mdfile.metadata.as_ref()?.aliases();
+                Some((path, mdfile, aliases))
+            })
+            .map(move |(path, mdfile, aliases)| {
+                aliases.par_iter().map(move |alias| {
+                    let action = generated_upsert_entity_ref(
+                        cx,
+                        query_metadata,
+                        EntityReference {
+                            file: path.to_path_buf(),
+                            infile: None,
+                        },
+                        query_metadata_ref_location(query_metadata),
+                        Some(alias.to_string()),
+                    );
+                    ReferenceNamedSectionCmd {
+                        label: alias.to_string(),
+                        kind: CompletionItemKind::ENUM_MEMBER,
+                        label_detail: Some(format!("Alias to {}.md", file_name(path))),
+                        cmd_ui_info: cx
+                            .entity_viewer()
+                            .entity_view(&Referenceable::File(path, mdfile)),
+                        actions: action,
+                    }
+                })
+            })
+            .flatten()
     }
 
     fn construct_two_week_daily_note_cmds(
