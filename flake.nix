@@ -21,7 +21,8 @@
           buildInputs = [
             openssl
             pkg-config
-            rust-bin.nightly."2024-05-20".default
+            # rust-bin.nightly."2024-05-20".default
+            rust-bin.stable.latest.default
             nodejs_22
             vsce
           ];

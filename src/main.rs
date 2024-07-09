@@ -1,5 +1,3 @@
-#![feature(async_closure)]
-
 use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
@@ -595,15 +593,11 @@ impl LanguageServer for Backend {
     }
 
     async fn execute_command(&self, params: ExecuteCommandParams) -> Result<Option<Value>> {
-        let jump_to_specific = async |day| {
-            let settings = self
-                .bind_settings(|settings| Ok(settings.to_owned()))
-                .await?;
-            let root_dir = self
-                .bind_vault(|vault| Ok(vault.root_dir().to_owned()))
-                .await?;
-            commands::jump(&self.client, &root_dir, &settings, Some(day)).await
-        };
+        let settings = self.bind_settings(|settings| Ok(settings.clone())).await?;
+        let root_dir = self
+            .bind_vault(|vault| Ok(vault.root_dir().to_owned()))
+            .await?;
+
         match params {
             ExecuteCommandParams { command, .. } if *command == *"apply_edits" => {
                 let edits = params
@@ -628,8 +622,9 @@ impl LanguageServer for Backend {
                     .await?;
                 commands::jump(&self.client, &root_dir, &settings, jump_to).await
             }
-            ExecuteCommandParams { command, .. } => jump_to_specific(&command).await,
-            // _ => Ok(None),
+            ExecuteCommandParams { command, .. } => {
+                jump_to_specific(&command, &self.client, &root_dir, &settings).await
+            } // _ => Ok(None),
         }
     }
 
@@ -707,6 +702,15 @@ impl LanguageServer for Backend {
 
         return res;
     }
+}
+
+async fn jump_to_specific(
+    day: &str,
+    client: &Client,
+    root_dir: &PathBuf,
+    settings: &Settings,
+) -> Result<Option<Value>> {
+    commands::jump(client, root_dir, settings, Some(day)).await
 }
 
 #[tokio::main]
