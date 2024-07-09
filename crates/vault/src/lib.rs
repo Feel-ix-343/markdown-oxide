@@ -329,20 +329,24 @@ impl Vault {
 
                 let unresolved = self.select_references(None).map(|references| {
                     references
-                        .iter()
-                        .unique_by(|(_, reference)| &reference.data().reference_text)
-                        .par_bridge()
-                        .into_par_iter()
-                        .filter(|(_, reference)| {
-                            !resolved_referenceables_refnames
-                                .contains(&reference.data().reference_text)
+                        .into_iter()
+                        .into_group_map_by(|(_, reference)| {
+                            reference.data().reference_text.as_str()
                         })
-                        .flat_map(|(_, reference)| match reference {
+                        .into_par_iter()
+                        .filter(|(ref_text, _)| {
+                            !resolved_referenceables_refnames.contains(*ref_text)
+                        })
+                        .flat_map(|(ref_text, refs)| match refs[0].1 {
                             Reference::WikiFileLink(data) | Reference::MDFileLink(data) => {
                                 let mut path = self.root_dir().clone();
-                                path.push(&reference.data().reference_text);
+                                path.push(ref_text);
 
-                                Some(Referenceable::UnresovledFile(path, &data.reference_text))
+                                Some(Referenceable::UnresovledFile(
+                                    path,
+                                    &data.reference_text,
+                                    refs,
+                                ))
 
                                 // match data.reference_text.chars().collect_vec().as_slice() {
 
@@ -358,14 +362,18 @@ impl Vault {
                                 let mut path = self.root_dir().clone();
                                 path.push(end_path);
 
-                                Some(Referenceable::UnresolvedHeading(path, end_path, heading))
+                                Some(Referenceable::UnresolvedHeading(
+                                    path, end_path, heading, refs,
+                                ))
                             }
                             Reference::WikiIndexedBlockLink(_data, end_path, index)
                             | Reference::MDIndexedBlockLink(_data, end_path, index) => {
                                 let mut path = self.root_dir().clone();
                                 path.push(end_path);
 
-                                Some(Referenceable::UnresovledIndexedBlock(path, end_path, index))
+                                Some(Referenceable::UnresovledIndexedBlock(
+                                    path, end_path, index, refs,
+                                ))
                             }
                             Reference::Tag(..)
                             | Reference::Footnote(..)
@@ -509,9 +517,9 @@ impl Vault {
                 )
             }
             Referenceable::Tag(_, _) => None,
-            Referenceable::UnresovledFile(_, _) => None,
-            Referenceable::UnresolvedHeading(_, _, _) => None,
-            Referenceable::UnresovledIndexedBlock(_, _, _) => None,
+            Referenceable::UnresovledFile(..) => None,
+            Referenceable::UnresolvedHeading(..) => None,
+            Referenceable::UnresovledIndexedBlock(..) => None,
         }
     }
 
@@ -960,14 +968,14 @@ impl Reference {
                     ..
                 },
             )
-            | &Referenceable::UnresolvedHeading(.., infile_ref)
+            | &Referenceable::UnresolvedHeading(.., infile_ref, _)
             | &Referenceable::IndexedBlock(
                 ..,
                 MDIndexedBlock {
                     index: infile_ref, ..
                 },
             )
-            | &Referenceable::UnresovledIndexedBlock(.., infile_ref) => match self {
+            | &Referenceable::UnresovledIndexedBlock(.., infile_ref, _) => match self {
                 WikiHeadingLink(.., file_ref_text, link_infile_ref)
                 | WikiIndexedBlockLink(.., file_ref_text, link_infile_ref)
                 | MDHeadingLink(.., file_ref_text, link_infile_ref)
@@ -1359,10 +1367,20 @@ pub enum Referenceable<'a> {
     Tag(&'a PathBuf, &'a MDTag),
     Footnote(&'a PathBuf, &'a MDFootnote),
     // TODO: Get rid of useless path here
-    UnresovledFile(PathBuf, &'a String),
-    UnresolvedHeading(PathBuf, &'a String, &'a String),
+    UnresovledFile(PathBuf, &'a String, Vec<(&'a Path, &'a Reference)>),
+    UnresolvedHeading(
+        PathBuf,
+        &'a String,
+        &'a String,
+        Vec<(&'a Path, &'a Reference)>,
+    ),
     /// full path, link path, index (without ^)
-    UnresovledIndexedBlock(PathBuf, &'a String, &'a String),
+    UnresovledIndexedBlock(
+        PathBuf,
+        &'a String,
+        &'a String,
+        Vec<(&'a Path, &'a Reference)>,
+    ),
     LinkRefDef(&'a PathBuf, &'a MDLinkReferenceDefinition),
 }
 
@@ -1455,7 +1473,7 @@ impl Referenceable<'_> {
 
             Referenceable::Footnote(_, footnote) => Some(footnote.index.clone().into()),
 
-            Referenceable::UnresolvedHeading(_, path, heading) => {
+            Referenceable::UnresolvedHeading(_, path, heading, _) => {
                 Some(format!("{}#{}", path, heading)).map(|full_ref| Refname {
                     full_refname: full_ref,
                     path: path.to_string().into(),
@@ -1463,13 +1481,13 @@ impl Referenceable<'_> {
                 })
             }
 
-            Referenceable::UnresovledFile(_, path) => Some(Refname {
+            Referenceable::UnresovledFile(_, path, _) => Some(Refname {
                 full_refname: path.to_string(),
                 path: Some(path.to_string()),
                 ..Default::default()
             }),
 
-            Referenceable::UnresovledIndexedBlock(_, path, index) => {
+            Referenceable::UnresovledIndexedBlock(_, path, index, _) => {
                 Some(format!("{}#^{}", path, index)).map(|full_ref| Refname {
                     full_refname: full_ref,
                     path: path.to_string().into(),

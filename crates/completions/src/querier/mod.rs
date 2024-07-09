@@ -151,6 +151,21 @@ impl<'a> Querier<'a> {
                         | Referenceable::UnresovledIndexedBlock(..)
                 )
             })
+            .filter(|it| match it {
+                Referenceable::UnresovledFile(.., refs)
+                | Referenceable::UnresolvedHeading(.., refs)
+                | Referenceable::UnresovledIndexedBlock(.., refs) => {
+                    refs.iter().any(|(path, reference)| {
+                        let ref_line = reference.data().range.start.line;
+                        let ref_char_range = reference.data().range.start.character as usize
+                            ..reference.data().range.end.character as usize;
+                        *path != query_metadata.path
+                            || !(ref_line == query_metadata.line
+                                && ref_char_range == query_metadata.char_range)
+                    })
+                }
+                _ => true,
+            })
             .collect::<Vec<_>>();
 
         let queried = run_query(query, data.into_iter());
@@ -224,9 +239,7 @@ impl<'a> Querier<'a> {
                         ),
                         None,
                     )),
-                    Referenceable::UnresovledFile(ref path, file_ref)
-                        if file_ref != &query_string =>
-                    {
+                    Referenceable::UnresovledFile(ref path, file_ref, ref refs) => {
                         Some(ReferenceNamedSectionCmd {
                             label: file_ref.to_string(),
                             kind: CompletionItemKind::KEYWORD,
@@ -244,7 +257,7 @@ impl<'a> Querier<'a> {
                             ),
                         })
                     }
-                    Referenceable::UnresolvedHeading(ref path, file, heading)
+                    Referenceable::UnresolvedHeading(ref path, file, heading, ref refs)
                         if format!("{file}#{heading}") != query_string =>
                     {
                         Some(ReferenceNamedSectionCmd {
@@ -315,6 +328,7 @@ impl<'a> Querier<'a> {
                             .entity_view(&Referenceable::UnresovledFile(
                                 daily_note_path.clone(),
                                 &file_name,
+                                vec![],
                             ))
                     },
                     actions: generated_upsert_entity_ref(
@@ -519,11 +533,11 @@ impl Queryable for Referenceable<'_> {
             Referenceable::IndexedBlock(path, index_data) => {
                 format!("{}#^{}", file_name(path), index_data.index)
             }
-            Referenceable::UnresovledFile(_path, string) => string.to_string(),
-            Referenceable::UnresolvedHeading(_path, file_ref, heading) => {
+            Referenceable::UnresovledFile(_path, string, _) => string.to_string(),
+            Referenceable::UnresolvedHeading(_path, file_ref, heading, _) => {
                 format!("{file_ref}#{heading}")
             }
-            Referenceable::UnresovledIndexedBlock(_path, file_ref, index) => {
+            Referenceable::UnresovledIndexedBlock(_path, file_ref, index, _) => {
                 format!("{}#^{}", file_ref, index)
             }
             _ => unimplemented!("Matching on unimplemented referenceable"),
