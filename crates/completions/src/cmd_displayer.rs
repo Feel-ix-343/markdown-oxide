@@ -1,5 +1,6 @@
 use std::{collections::HashMap, iter, path::Path};
 
+use do_notation::m;
 use tower_lsp::lsp_types::{
     Command as LspCommand, CompletionItem, CompletionItemKind, CompletionItemLabelDetails,
     CompletionList, CompletionResponse, CompletionTextEdit, Documentation, InsertTextFormat,
@@ -156,12 +157,12 @@ pub fn cmds_lsp_comp_resp<A: Actions>(
             CompletionItem {
                 label,
                 kind: Some(kind),
-                documentation: try {
-                    let value = cmd_ui_info?;
-                    Documentation::MarkupContent(MarkupContent {
+                documentation: m! {
+                    value <- cmd_ui_info;
+                    Some(Documentation::MarkupContent(MarkupContent {
                         kind: tower_lsp::lsp_types::MarkupKind::Markdown,
                         value,
-                    })
+                    }))
                 },
                 text_edit: text_edit.map(CompletionTextEdit::Edit),
                 additional_text_edits: if addtl_edits.is_empty() {
@@ -175,12 +176,9 @@ pub fn cmds_lsp_comp_resp<A: Actions>(
                     "0".repeat((i as u8).leading_zeros() as usize),
                     i
                 )),
-                label_details: try {
-                    let label_detail = label_detail?;
-                    CompletionItemLabelDetails {
-                        detail: Some(label_detail),
-                        description: None,
-                    }
+                label_details: m! {
+                    label_detail <- label_detail;
+                    Some(CompletionItemLabelDetails{detail:Some(label_detail),description:None})
                 },
                 command: workspace_edit.map(|it| LspCommand {
                     command: "apply_edits".to_string(),

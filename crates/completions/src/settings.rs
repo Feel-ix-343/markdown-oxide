@@ -12,7 +12,7 @@ impl SettingsAdapter<'_> {
 
     pub(crate) fn link_snippets(&self) -> bool {
         // TODO
-        true
+        false
     }
 }
 
