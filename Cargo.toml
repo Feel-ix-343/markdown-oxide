@@ -1,6 +1,6 @@
 [package]
 name = "markdown-oxide"
-version = "0.22.0"
+version = "0.23.1"
 edition = "2021"
 repository = "https://github.com/Feel-ix-343/markdown-oxide"
 
