@@ -3,11 +3,11 @@
 
 # Heading 1
 
-Get daily note completions -- even if the daily note is not yet created
+Get daily note completions -- yet created ^test
 
 Configure your daily note formatting in the config file
 
-today is 2024-03-27
+today jfkdjfk sr is 2024-03-27   ^6cb3c
 
 [next Tuesday](2024-04-02)
 
@@ -18,6 +18,9 @@ today is 2024-03-27
 [last Sunday](2024-03-24)
 
 
+- [[Test#^test]] fjasdklfj dkl
+- [[Test#^6cb3c|today is 202]]
+- [[Test#^6cb3c|today is 202]]
 
 
 - This is some text 1

@@ -6,6 +6,7 @@ use std::sync::Arc;
 use completion::get_completions;
 use config::Settings;
 use diagnostics::diagnostics;
+use do_notation::m;
 use itertools::Itertools;
 use rayon::prelude::*;
 use references::references;
@@ -18,7 +19,7 @@ use tower_lsp::jsonrpc::{Error, ErrorCode, Result};
 
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
-use vault::Vault;
+use vault::{Preview, Rangeable, Reference, Vault};
 
 mod codeactions;
 mod codelens;
@@ -352,7 +353,8 @@ impl LanguageServer for Backend {
                     all_commit_characters: None,
                     completion_item: None,
                 }),
-                // definition: Some(GotoCapability::default()),
+                // definition: Some(GotoCapability::default()),,
+                inlay_hint_provider: Some(OneOf::Left(true)),
                 definition_provider: Some(OneOf::Left(true)),
                 references_provider: Some(OneOf::Left(true)),
                 rename_provider: Some(OneOf::Left(true)),
@@ -701,6 +703,79 @@ impl LanguageServer for Backend {
             .await;
 
         return res;
+    }
+
+    async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
+        self.bind_vault(|vault| {
+            let path = params_path!(params)?;
+            let Some(references) = vault.select_references(Some(&path)) else {
+                return Ok(None);
+            };
+
+            let embed_block_references_in_range = references
+                .into_iter()
+                .filter(|(_, reference)| {
+                    let range = reference.range();
+                    range.start.line >= params.range.start.line
+                        && range.end.line <= params.range.end.line
+                })
+                .flat_map(|(path, reference)| match reference {
+                    Reference::MDIndexedBlockLink(..) | Reference::WikiIndexedBlockLink(..) => {
+                        Some((path, reference))
+                    }
+                    _ => None,
+                });
+
+            let preview_texts = embed_block_references_in_range.flat_map(|(path, it)| {
+                let binding = vault.select_referenceables_for_reference(it, path);
+                let referenceable = binding.first()?;
+                let binding =
+                    vault
+                        .select_referenceable_preview(referenceable)
+                        .and_then(|preview| match preview {
+                            Preview::Text(text) => Some(text),
+                            _ => None,
+                        })?;
+                let preview = binding.trim();
+                let index_index = preview.rfind("^")?;
+                let preview = preview.get(0..index_index)?.trim();
+                // only first x chars
+                let x: Option<_> = None;
+                let preview = (match x {
+                    Some(x) => preview.get(0..=x),
+                    None => None,
+                })
+                .map(|it| format!("{it}..."))
+                .unwrap_or(preview.to_string());
+
+                Some((
+                    preview.to_string(),
+                    it.range.start.line,
+                    it.range.end.character,
+                ))
+            });
+
+            let hints: Vec<InlayHint> = preview_texts
+                .flat_map(|(preview, line, end_char)| {
+                    Some(InlayHint {
+                        position: Position {
+                            line,
+                            character: end_char,
+                        },
+                        label: InlayHintLabel::String(preview),
+                        kind: None,
+                        data: None,
+                        tooltip: None,
+                        text_edits: None,
+                        padding_left: None,
+                        padding_right: None,
+                    })
+                })
+                .collect();
+
+            Ok(Some(hints))
+        })
+        .await
     }
 }
 
