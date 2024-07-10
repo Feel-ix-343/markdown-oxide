@@ -18,9 +18,10 @@ today jfkdjfk sr is 2024-03-27   ^6cb3c
 [last Sunday](2024-03-24)
 
 
-- [[Test#^test]] fjasdklfj dkl
-- [[Test#^6cb3c|today is 202]]
-- [[Test#^6cb3c|today is 202]]
+- ![[Test#^test]] fjasdklfj dkl
+- ![[Test#^6cb3c]]
+- ![[Test#^6cb3c]]
+
 
 
 - This is some text 1

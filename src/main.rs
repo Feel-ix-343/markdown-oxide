@@ -719,9 +719,17 @@ impl LanguageServer for Backend {
                     range.start.line >= params.range.start.line
                         && range.end.line <= params.range.end.line
                 })
-                .flat_map(|(path, reference)| match reference {
-                    Reference::MDIndexedBlockLink(..) | Reference::WikiIndexedBlockLink(..) => {
-                        Some((path, reference))
+                .flat_map(|(ref_path, reference)| match reference {
+                    Reference::MDIndexedBlockLink(..) | Reference::WikiIndexedBlockLink(..)
+                        if vault
+                            .select_line(ref_path, reference.data().range.start.line as isize)
+                            .and_then(|line| {
+                                let character =
+                                    line.get((reference.range().start.character - 1) as usize)?;
+                                Some(*character == '!')
+                            })? =>
+                    {
+                        Some((ref_path, reference))
                     }
                     _ => None,
                 });
