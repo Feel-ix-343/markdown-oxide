@@ -576,6 +576,18 @@ include_md_extension_wikilink = false
 # Enable hover; this is relevant for VSCode and Zed where hover could be triggered on mouse hover
 # and could be annoying
 hover = true
+
+# Handle case in fuzzy matches: Ignore | Smart | Respect
+case_matching = "Smart"
+
+# Enable inlay hints
+inlay_hints = true
+# Enable transclusion, in the form of inlay hints, for embedded block links: ![[link]]
+# Inlay hints must be enabled
+block_transclusion = true
+# Full or Partial, for Partial, block_transclusion_length = { partial = 10 }
+# block_transclusion must be enabled for this to take effect
+block_transclusion_length = "Full"
 ```
 
 
