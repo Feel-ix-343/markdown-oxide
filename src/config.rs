@@ -24,6 +24,9 @@ pub struct Settings {
     pub include_md_extension_wikilink: bool,
     pub hover: bool,
     pub case_matching: Case,
+    pub inlay_hints: bool,
+    pub block_transclusion: bool,
+    pub block_transclusion_length: EmbeddedBlockTransclusionLength,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -31,6 +34,12 @@ pub enum Case {
     Ignore,
     Smart,
     Respect,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub enum EmbeddedBlockTransclusionLength {
+    Partial(usize),
+    Full,
 }
 
 impl Settings {
@@ -72,6 +81,9 @@ impl Settings {
             .set_default("include_md_extension_wikilink", false)?
             .set_default("hover", true)?
             .set_default("case_matching", "Smart")?
+            .set_default("inlay_hints", true)?
+            .set_default("block_transclusion", true)?
+            .set_default("block_transclusion_length", "Full")?
             .set_override_option(
                 "semantic_tokens",
                 capabilities.text_document.as_ref().and_then(|it| {

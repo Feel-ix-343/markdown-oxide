@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use completion::get_completions;
-use config::Settings;
+use config::{EmbeddedBlockTransclusionLength, Settings};
 use diagnostics::diagnostics;
 use do_notation::m;
 use itertools::Itertools;
@@ -97,6 +97,14 @@ impl Backend {
         if settings.semantic_tokens {
             let _ = self.client.semantic_tokens_refresh().await;
         }
+
+        if settings.inlay_hints {
+            let _ = self.client.inlay_hint_refresh().await;
+            // log
+            self.client
+                .log_message(MessageType::WARNING, "Inlay Hints Refreshed")
+                .await;
+        }
     }
 
     async fn reconstruct_vault(&self) {
@@ -156,7 +164,13 @@ impl Backend {
             }
         };
 
-        let _ = self.client.semantic_tokens_refresh().await;
+        if settings.semantic_tokens {
+            let _ = self.client.semantic_tokens_refresh().await;
+        }
+
+        if settings.inlay_hints {
+            let _ = self.client.inlay_hint_refresh().await;
+        }
     }
 
     async fn publish_diagnostics(&self) -> Result<()> {
@@ -706,84 +720,104 @@ impl LanguageServer for Backend {
     }
 
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
-        self.bind_vault(|vault| {
-            let path = params_path!(params)?;
-            let Some(references) = vault.select_references(Some(&path)) else {
-                return Ok(None);
-            };
+        let settings = self.bind_settings(|settings| Ok(settings.clone())).await?;
+        if !settings.inlay_hints {
+            return Ok(None);
+        }
 
-            let embed_block_references_in_range = references
-                .into_iter()
-                .filter(|(_, reference)| {
-                    let range = reference.range();
-                    range.start.line >= params.range.start.line
-                        && range.end.line <= params.range.end.line
-                })
-                .flat_map(|(ref_path, reference)| match reference {
-                    Reference::MDIndexedBlockLink(..) | Reference::WikiIndexedBlockLink(..)
-                        if vault
-                            .select_line(ref_path, reference.data().range.start.line as isize)
-                            .and_then(|line| {
-                                let character =
-                                    line.get((reference.range().start.character - 1) as usize)?;
-                                Some(*character == '!')
-                            })? =>
-                    {
-                        Some((ref_path, reference))
-                    }
-                    _ => None,
+        let hints = self
+            .bind_vault(|vault| {
+                if !settings.block_transclusion {
+                    return Ok(None);
+                }
+
+                let path = params_path!(params)?;
+                let Some(references) = vault.select_references(Some(&path)) else {
+                    return Ok(None);
+                };
+
+                let embed_block_references_in_range = references
+                    .into_iter()
+                    .filter(|(_, reference)| {
+                        let range = reference.range();
+                        range.start.line >= params.range.start.line
+                            && range.end.line <= params.range.end.line
+                    })
+                    .flat_map(|(ref_path, reference)| match reference {
+                        Reference::MDIndexedBlockLink(..) | Reference::WikiIndexedBlockLink(..)
+                            if vault
+                                .select_line(ref_path, reference.data().range.start.line as isize)
+                                .and_then(|line| {
+                                    let character = line.get(
+                                        (reference.range().start.character.checked_sub(1)?)
+                                            as usize,
+                                    )?;
+                                    Some(*character == '!')
+                                })? =>
+                        {
+                            Some((ref_path, reference))
+                        }
+                        _ => None,
+                    });
+
+                let preview_texts = embed_block_references_in_range.flat_map(|(path, it)| {
+                    let binding = vault.select_referenceables_for_reference(it, path);
+                    let referenceable = binding.first()?;
+                    let binding =
+                        vault
+                            .select_referenceable_preview(referenceable)
+                            .and_then(|preview| match preview {
+                                Preview::Text(text) => Some(text),
+                                _ => None,
+                            })?;
+                    let preview = binding.trim();
+                    let index_index = preview.rfind("^")?;
+                    let preview = preview.get(0..index_index)?.trim();
+                    // only first x chars
+                    let preview = (match settings.block_transclusion_length {
+                        EmbeddedBlockTransclusionLength::Partial(x) => preview.get(0..=x),
+                        EmbeddedBlockTransclusionLength::Full => None,
+                    })
+                    .map(|it| format!("{it}..."))
+                    .unwrap_or(preview.to_string());
+
+                    Some((
+                        preview.to_string(),
+                        it.range.start.line,
+                        it.range.end.character,
+                    ))
                 });
 
-            let preview_texts = embed_block_references_in_range.flat_map(|(path, it)| {
-                let binding = vault.select_referenceables_for_reference(it, path);
-                let referenceable = binding.first()?;
-                let binding =
-                    vault
-                        .select_referenceable_preview(referenceable)
-                        .and_then(|preview| match preview {
-                            Preview::Text(text) => Some(text),
-                            _ => None,
-                        })?;
-                let preview = binding.trim();
-                let index_index = preview.rfind("^")?;
-                let preview = preview.get(0..index_index)?.trim();
-                // only first x chars
-                let x: Option<_> = None;
-                let preview = (match x {
-                    Some(x) => preview.get(0..=x),
-                    None => None,
-                })
-                .map(|it| format!("{it}..."))
-                .unwrap_or(preview.to_string());
-
-                Some((
-                    preview.to_string(),
-                    it.range.start.line,
-                    it.range.end.character,
-                ))
-            });
-
-            let hints: Vec<InlayHint> = preview_texts
-                .flat_map(|(preview, line, end_char)| {
-                    Some(InlayHint {
-                        position: Position {
-                            line,
-                            character: end_char,
-                        },
-                        label: InlayHintLabel::String(preview),
-                        kind: None,
-                        data: None,
-                        tooltip: None,
-                        text_edits: None,
-                        padding_left: None,
-                        padding_right: None,
+                let hints: Vec<InlayHint> = preview_texts
+                    .flat_map(|(preview, line, end_char)| {
+                        Some(InlayHint {
+                            position: Position {
+                                line,
+                                character: end_char,
+                            },
+                            label: InlayHintLabel::String(preview),
+                            kind: None,
+                            data: None,
+                            tooltip: None,
+                            text_edits: None,
+                            padding_left: None,
+                            padding_right: None,
+                        })
                     })
-                })
-                .collect();
+                    .collect();
 
-            Ok(Some(hints))
-        })
-        .await
+                Ok(Some(hints))
+            })
+            .await;
+
+        self.client
+            .log_message(
+                MessageType::INFO,
+                format!("Recalculating inlayHints for {params:?} {hints:?}"),
+            )
+            .await;
+
+        hints
     }
 }
 

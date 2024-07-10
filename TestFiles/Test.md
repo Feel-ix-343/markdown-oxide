@@ -21,6 +21,7 @@ today jfkdjfk sr is 2024-03-27   ^6cb3c
 - ![[Test#^test]] fjasdklfj dkl
 - ![[Test#^6cb3c]]
 - ![[Test#^6cb3c]]
+- ![[This is another link#^9d273|test block link]]
 
 
 
