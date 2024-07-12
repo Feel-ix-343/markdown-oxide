@@ -97,14 +97,6 @@ impl Backend {
         if settings.semantic_tokens {
             let _ = self.client.semantic_tokens_refresh().await;
         }
-
-        if settings.inlay_hints {
-            let _ = self.client.inlay_hint_refresh().await;
-            // log
-            self.client
-                .log_message(MessageType::WARNING, "Inlay Hints Refreshed")
-                .await;
-        }
     }
 
     async fn reconstruct_vault(&self) {
@@ -166,10 +158,6 @@ impl Backend {
 
         if settings.semantic_tokens {
             let _ = self.client.semantic_tokens_refresh().await;
-        }
-
-        if settings.inlay_hints {
-            let _ = self.client.inlay_hint_refresh().await;
         }
     }
 
