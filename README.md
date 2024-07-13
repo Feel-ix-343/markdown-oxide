@@ -12,7 +12,7 @@ Markdown Oxide's features are implemented in the form of a language server aimin
 
 ### Neovim
 
-1. Given Neovim access to the binary.
+1. Give Neovim access to the binary.
 
     - <details>
          <summary>Cargo Install (from source)</summary>
