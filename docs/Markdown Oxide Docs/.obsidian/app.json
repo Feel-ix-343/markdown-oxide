@@ -1,5 +1,6 @@
 {
-  "vimMode": true,
-  "defaultViewMode": "preview",
-  "livePreview": false
+  "vimMode": false,
+  "defaultViewMode": "source",
+  "livePreview": true,
+  "showInlineTitle": false
 }

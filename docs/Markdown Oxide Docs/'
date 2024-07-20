@@ -1,0 +1,13 @@
+
+
+# What is Markdown-Oxide?
+
+![[What Is Markdown-Oxide#^whatIsMarkdownOxide]]
+
+The initial version of Markdown-Oxide is primarily a PKM for your favorite text-editor. It is a Langauge Server that creatively implements parts of the [Language Server Protocol](https://microsoft.github.io/language-server-protocol/) to support various PKM workflows in popular text editors. 
+
+The best supported text editor for the initial version is Neovim, but also used are VSCode, Helix, and Zed.
+
+If the features of Markdown-Oxide can facilitate your PKM workflow and the your Markdown-Oxide may be a great fit for you.
+
+Markdown Oxide version 0 was created to enable users to do pre-determined, Obsidian-inspired, PKM workflows in the comfort of their favorite text editor. v0 was not made for those new to PKMing. For this reason, this guide will not show many potential workflows or explain much about PKMing and rather should be used to determine _if_ v0 is for you (and your text editor(s)) based on how you currently PKM.[^1]

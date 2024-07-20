@@ -1,5 +1,5 @@
 
-When clicking on each drop down, you will be presented with a demo in of the feature in Neovim following [my configuration](https://github.com/Feel-ix-343/Neovim-Config) ^demoExpl
+When clicking on each drop-down, you will be presented with a demo of the feature in Neovim following [my configuration](https://github.com/Feel-ix-343/Neovim-Config) ^demoExpl
 
 # Completions
 
@@ -7,80 +7,89 @@ When clicking on each drop down, you will be presented with a demo in of the fea
 
 - ^implCompletion
 
-    <details open>
-      <summary>Wikilink Completions</summary>
+    - ^linking
+        <details>
+          <summary>Wikilink Completions to Files and Headings</summary>
 
-    ![wikilinkcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/29c4830f-30e5-4094-9f5b-7b39009437da)
-      
-    </details>
+        ![wikilinkcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/29c4830f-30e5-4094-9f5b-7b39009437da)
+          
+        </details>
 
-    <details>
-        <summary>Markdown Link Completions</summary>
+        <details>
+            <summary>Markdown Link Completions to Files and Headings</summary>
 
-    ![markdownlinkcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/16c8565a-6a28-4df1-a312-e4b158fb9f03)
+        ![markdownlinkcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/16c8565a-6a28-4df1-a312-e4b158fb9f03)
 
-        
-    </details>
+            
+        </details>
 
-    <details>
-        <summary>Block Completions: Fuzzy search through the whole folder of files and link anywhere, following obsidian block linking syntax</summary>
+        <details>
+            <summary>(helix + zed not support yet): Block Completions: Fuzzy search through your files and link to any *block* of text</summary>   
 
-    to use this, type `[[`, and after you press space, completions for every block in the vault will appear; continue typing to fuzzy match the block that you want; finally, select the block; a link will be inserted to the text document and an index (ex ^1j239) will be appended to the block in its respective file. In Neovim, this text will not be written yet into the file (it will be edited in an unsaved buffer) so type `:wa`, and it should be resolved (as long as you have `dynamicRegistration = true` as described [here](https://github.com/Feel-ix-343/markdown-oxide?tab=readme-ov-file#neovim)!
+        to use this, type `[[`, and after you press space, completions for every block in the vault will appear; continue typing to fuzzy match the block that you want; finally, select the block; a link will be inserted to the text document and an index (ex ^1j239) will be appended to the block in its respective file. In Neovim, this text will not be written yet into the file (it will be edited in an unsaved buffer) so type `:wall`, and it should be resolved (as long as you have `dynamicRegistration = true` as described in the [Neovim setup](<Getting started with Markdown Oxide Version 0#Neovim>)!
 
-    ![blockcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/a48c28a7-55b0-438c-becc-1dfde350fa94)
-        
-    </details>  
-
-    <details>
-        <summary>Tag Completions</summary>
-
-    ![tagcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/bf20d7ac-171a-4d95-b510-ba323073c0b8)
-
-        
-    </details>
-
-    <details>
-        <summary>Footnote Completions</summary>
-
-    ![footnotecompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/92a6739d-8a7a-457e-84bd-fde6548aa25a)
-        
-    </details>
-
-    <details>
-        <summary>Unresolved File and Heading Completions</summary>
-        
-    For those who like to reference things before they are written, `markdown-oxide` has terrific support for unresolved references! It provides completions for unresolved references, provides lsp_references for them, and provides code actions to create files + append headings.  
+        ![blockcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/a48c28a7-55b0-438c-becc-1dfde350fa94)
+            
+        </details>  
 
 
-   ![unresolvedcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/96ed1a8e-eea3-4d3f-9557-e51b076fb3fb)
+    - ^tagCompletions
 
-        
-    </details>
+        <details>
+            <summary>Tag Completions</summary>
 
-    <details>
-        <summary>Callout Completions</summary>
+        ![tagcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/bf20d7ac-171a-4d95-b510-ba323073c0b8)
 
-    ![calloutcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/11cd44f1-cf2e-4f27-92b4-1ed4914356ca)
+            
+        </details>
+
+    - ^footnoteCompletions
+        <details>
+            <summary>Footnote Completions: easily link to the footnotes defined in the active file</summary>
+
+        ![footnotecompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/92a6739d-8a7a-457e-84bd-fde6548aa25a)
+            
+        </details>
+
+    -  ^unresolvedCompletions
+        <details>
+            <summary>Unresolved File and Heading Completions</summary>
+            
+        For those who like to reference things before they are written, `markdown-oxide` has terrific support for unresolved references! It provides completions for unresolved references, provides lsp_references for them, and provides code actions to create files + append headings.  
 
 
-        
-    </details>
+       ![unresolvedcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/96ed1a8e-eea3-4d3f-9557-e51b076fb3fb)
 
-    <details>
-        <summary>Nested Callout Completions</summary>
+            
+        </details>
 
-    ![nestedcalloutcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/2ae86432-86fd-4327-b6e1-a94a5074db06)
+    -  ^calloutCompletions
+        <details>
+            <summary>Callout Completions following Obsidian's callout syntax</summary>
 
-        
-    </details>
+        ![calloutcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/11cd44f1-cf2e-4f27-92b4-1ed4914356ca)
 
-    <details>
-        <summary>Alias Completions</summary>
 
-    ![alias_completions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/d83b2a6a-7b04-4cd4-92a2-ce78eccb4c3a)
+            
+        </details>
 
-        
-    </details>
+    - 
+        <details>
+            <summary>Nested Callout Completions</summary>
+
+        ![nestedcalloutcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/2ae86432-86fd-4327-b6e1-a94a5074db06)
+
+            
+        </details>
+
+    - 
+        <details>
+            <summary>Alias Completions</summary>
+
+        ![alias_completions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/d83b2a6a-7b04-4cd4-92a2-ce78eccb4c3a)
+
+            
+        </details>
 
 
 ## Unimplemented Completions Features
@@ -100,42 +109,48 @@ When clicking on each drop down, you will be presented with a demo in of the fea
 - ^implReference
 
 
-    <details>
-        <summary>File References: Gets references to the file and all headings and blocks in the file</summary>
+    - ^backlinks
+        <details>
+            <summary>File References: Gets references to the file and all headings and blocks in the file</summary>
 
-    ![filereferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/9fbd6051-ef57-42eb-b61b-1cc3ddfb2293)
-        
-    </details>
+        ![filereferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/9fbd6051-ef57-42eb-b61b-1cc3ddfb2293)
+            
+        </details>
 
-    <details>
-        <summary>Heading References</summary>
+        <details>
+            <summary>Heading References</summary>
 
-        
-    ![headingreferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/50598628-ed27-4a9b-adba-861ca8f933ea)
-        
-    </details>
+            
+        ![headingreferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/50598628-ed27-4a9b-adba-861ca8f933ea)
+            
+        </details>
 
-    <details>
-        <summary>Tag References: Gets all references to the tag and subtags</summary>
 
-    ![tagreferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/d73ac764-2c86-45c9-9403-17b50e6962e4)
-        
-    </details>
+        <details>
+            <summary>Indexed Block References</summary>
 
-    <details>
-        <summary>Indexed Block References</summary>
+        ![indexedblockreferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/5d92257e-56b8-4209-b990-d25bbaa75a69)
 
-    ![indexedblockreferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/5d92257e-56b8-4209-b990-d25bbaa75a69)
+            
+        </details>
 
-        
-    </details>
 
-    <details>
-        <summary>Footnote References</summary>
+    - ^tagReferences
 
-    ![footnotereferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/25940052-ca6c-4b7c-b334-f0001260c490)
+        <details>
+            <summary>Tag References: Gets all references to the tag and subtags</summary>
 
-    </details>
+        ![tagreferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/d73ac764-2c86-45c9-9403-17b50e6962e4)
+            
+        </details>
+
+    - ^footnoteReferences
+        <details>
+            <summary>Footnote References: Navigate the uses of a footnote in the active file</summary>
+
+        ![footnotereferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/25940052-ca6c-4b7c-b334-f0001260c490)
+
+        </details>
 
     <details>
         <summary>Unresolved file and heading references</summary>
@@ -173,23 +188,26 @@ When clicking on each drop down, you will be presented with a demo in of the fea
 
 - ^implCodeAction
 
-    <details>
-        <summary>Create file for unresolved file link</summary>
+    - ^unresolvedLinkCodeAction
 
-    ![codeactionsfile](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/707955e4-1e54-4f61-ac54-979d9f95b13c)
+        <details>
+            <summary>Create file for unresolved file link</summary>
 
-
-    </details> 
-
-    <details>
-        <summary>Append heading to file and create the file if necessary</summary>
-
-        
-    ![codeactionsheading](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/02af43aa-5185-406c-adb3-4c2792902761)
+        ![codeactionsfile](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/707955e4-1e54-4f61-ac54-979d9f95b13c)
 
 
+        </details> 
 
-    </details>
+    - 
+        <details>
+            <summary>Append heading to file and create the file if necessary</summary>
+
+            
+        ![codeactionsheading](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/02af43aa-5185-406c-adb3-4c2792902761)
+
+
+
+        </details>
 
 ## Future Code Actions Features
 
@@ -217,36 +235,39 @@ When clicking on each drop down, you will be presented with a demo in of the fea
 
 - ^implSymbols
 
-    File symbols: Headings and subheadings
-
-    Workspace symbols: everything linkable: files, headings, tags, ... Like a good search feature
+    - File symbols: A hierarchical outline of headings and subheadings in the current file ^fileSymbols
+    - Workspace symbols: search everything linkable: files, headings, tags.        ^workspaceSymbols
+    - Find all references to a tag by typing the tag name as a search term for workspace symbols ^workspaceTag
 
 ## Unimplemented Symbols
 
 - [ ] Lists and indented lists
 
 
+
+
 # Rename
 
 - ^implRename
+    * ^renameLinked
+
+        <details>
+            <summary>(not zed) Rename File and all references</summary>
+
+        ![renamefile](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/3ac404fb-cfcd-4943-81ba-8ab3645831b7)
+
+
+        </details>
+
+        <details>
+            <summary>(not zed) Rename Heading and all references</summary>
+
+        ![renameheading](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/4227cd57-ca07-4d11-b6e8-afcaba554271)
+
+        </details>
 
     <details>
-        <summary>Rename File</summary>
-
-    ![renamefile](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/3ac404fb-cfcd-4943-81ba-8ab3645831b7)
-
-
-    </details>
-
-    <details>
-        <summary>Rename Heading</summary>
-
-    ![renameheading](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/4227cd57-ca07-4d11-b6e8-afcaba554271)
-
-    </details>
-
-    <details>
-        <summary>Rename Tag</summary>
+        <summary>(not zed) Rename Tag</summary>
 
     ![renametag](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/48b8a825-2342-477c-8440-198ab9273a83)
 
@@ -257,7 +278,7 @@ When clicking on each drop down, you will be presented with a demo in of the fea
 
 - ^implDailyNoteComp
 
-    Daily Note completions relative to the current date
+    Daily Note link completions using natural language relative to the current date
 
     - <details>
         <summary>...for wikilinks</summary>
@@ -274,9 +295,13 @@ When clicking on each drop down, you will be presented with a demo in of the fea
 
     </details>
 
-
-# LSP Workspace Commands
-
 ## Opening Daily Notes
 
-![[v0/Guides/v0 Getting Started Guide#^8g4c9]]
+- Opening Daily Notes   ^8g4c9
+    * Open or create daily notes through a natural language relative name. `:Daily next tuesday`
+        + The full specification for the relative name is [here](<Daily Notes#Opening Daily Notes>)
+        + Some examples of this command in neovim following the [Neovim Setup](<v0 Getting Started Guide#Installation and Possible Editor Config>) below: ![[Daily Notes#^nvimrelativenamescmds]]
+    * Open or create daily notes through predefined relative names.  `:Today`
+        + The names are as follow: ![[Daily Notes#^predefinedNames]]
+        + Each of these names have their own workspace commands
+

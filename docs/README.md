@@ -1,1 +1,1 @@
-These are docs published with Obsidian publish. 
+These are docs published with Obsidian publish.

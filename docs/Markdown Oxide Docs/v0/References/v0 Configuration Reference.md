@@ -2,9 +2,9 @@
 
 `Markdown-Oxide` supports several configuration options. All can be specified in a `~/.config/moxide/settings.toml` or `.moxide.toml` file. Moxide also tries to import some settings from Obsidian directly.   ^configurationinfo
 
-Here are the options with the defaults
-
 # Default Config File
+
+This contains all possible settings with brief descriptions. A bit of elaboration on the settings is included after. 
 
 ```toml
 # Leave blank to try to import from Obsidian Daily Notes
@@ -89,14 +89,14 @@ This is used in the following places
 
 ## Date Formatting
 
-![[MXIDE config's date formatting]]
+![[Date formatting]]
 
 
 # Settings From Obsidian
 
 - ... ^someobsidiansettings
     * Daily Note:
-        + `dailynote`: checks if you have the dailynote Obsidian plugin and translates this formatting to MXIDE's date formatting   ^1862g
-        + Info on this date formatting can be found [here](<MXIDE config's date formatting>)
+        + `dailynote`: checks if you have the dailynote Obsidian plugin and translates this formatting to Markdown Oxide's date formatting   ^1862g
+        + Info on this date formatting can be found [here](<Date Formatting>)
     * `new_file_folder_path`: uses the specific folder for new files you set in Obsidian if you have it enabled. This is relevant to the [Create Unresolved File Code Action](<v0 Features Reference#^implCodeAction>)
-    * `daily_notes_folder_path`: uses the specific folder for new daily notes you set in the Obsidian Daily Notes plugin, if you have this option enabled. This is relevant to the path for [opening daily notes](<v0/Guides/v0 Getting Started Guide#^8g4c9>) and for [the code action that creates unresolved links](<v0 Features Reference#^implCodeAction>) if they have the `dailynote` format.
+    * `daily_notes_folder_path`: uses the specific folder for new daily notes you set in the Obsidian Daily Notes plugin, if you have this option enabled. This is relevant to the path for [opening daily notes](<v0 Features Reference#Opening Daily Notes>) and for [the code action that creates unresolved links](<v0 Features Reference#^implCodeAction>) if they have the `dailynote` format.

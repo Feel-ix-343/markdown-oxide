@@ -4,24 +4,23 @@
     "type": "split",
     "children": [
       {
-        "id": "0cb3142af53dfafe",
+        "id": "acfea0793806610c",
         "type": "tabs",
         "children": [
           {
-            "id": "b15ac8a42024aaff",
+            "id": "1648e4973359b587",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Daily Notes.md",
+                "file": "Felix Zeller.md",
                 "mode": "preview",
                 "backlinks": true,
-                "source": true
+                "source": false
               }
             }
           }
-        ],
-        "stacked": true
+        ]
       }
     ],
     "direction": "vertical"
@@ -60,7 +59,7 @@
             }
           },
           {
-            "id": "fc280b94471315da",
+            "id": "e5a8924dc7b829b3",
             "type": "leaf",
             "state": {
               "type": "bookmarks",
@@ -87,7 +86,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "Daily Notes.md",
+                "file": "Felix Zeller.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +103,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "Daily Notes.md",
+                "file": "Felix Zeller.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               }
@@ -127,7 +126,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Daily Notes.md"
+                "file": "Felix Zeller.md"
               }
             }
           }
@@ -149,42 +148,42 @@
       "publish:Publish changes...": false
     }
   },
-  "active": "b15ac8a42024aaff",
+  "active": "1648e4973359b587",
   "lastOpenFiles": [
+    "v0/References/v0 Configuration Reference.md",
+    "v0/References/v0 Features Reference.md",
+    "v0/Articles/Markdown-Oxide v0.md",
+    "Daily Notes.md",
+    "v0/Guides/Getting started with Markdown Oxide Version 0.md",
+    "v0/Articles/Markdown-Oxide v0.md~",
+    "v0/References/v0 Features Reference.md~",
+    "v0/References/v0 Configuration Reference.md~",
+    "v0/Guides/Getting started with Markdown Oxide Version 0.md~",
+    "v0/Guides/v0 Getting Started Guide.md",
+    "v0/Guides/v0 Getting Started Guide.md~",
+    "Setup.md",
     "Daily Notes.md~",
+    "Setup.md~",
+    "What Is Markdown-Oxide.md",
+    "What Is Markdown-Oxide.md~",
+    "v0/Articles/4913",
+    "Home.md",
+    "Home.md~",
+    "Felix Zeller.md",
+    "Personal Knowledge Management System.md",
+    "Index.md",
     "Block Queries for Linking.md",
     "Documentation Notes.md",
-    "v0/Guides/v0 Getting Started Guide.md",
+    "Felix.md",
+    "What is Markdown Oxide.md",
+    "What is Markdown Oxide?.md",
+    "v0/Articles/Markdown Oxide Version 0.md",
+    "Date formatting.md",
     "MXIDE.md",
-    "Index.md",
-    "Home.md",
-    "v0/References/v0 Configuration Reference.md",
-    "Setup.md",
-    "Daily Notes.md",
-    "Setup.md~",
-    "v0/Guides/v0 Getting Started Guide.md~",
-    "Setup'.md~",
     "Setup'.md",
     "v0 Setup.md",
-    "v0 Setup.md~",
-    "Index.md~",
-    "v0/Guides/4913",
-    "v0/References/v0 Configuration Reference.md~",
-    "v0/References/v0 Features Reference.md",
-    "v0/References/v0 Features Reference.md~",
-    "MXIDE config's date formatting.md",
-    "MXIDE config's date formatting.md~",
     "Block Completions.md",
     "v0.md",
-    "v1.md",
-    "v0 Reference.md",
-    "What is Markdown Oxide?.md",
-    "2024-07-12.md",
-    "2024-07-06.md",
-    "2024-07-14.md",
-    "2024-07-13.md",
-    "2024-07-11.md",
-    "v0 Features.md",
-    "Daily Note.md"
+    "v1.md"
   ]
 }

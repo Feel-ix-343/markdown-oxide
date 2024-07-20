@@ -189,7 +189,7 @@ Instead of memorizing this, however, I'd recommend just trying relative names ou
 
 ### Neovim
 
-Here are some examples for neovim daily note commands (as specified in the setup [here](Setup#^nvimconfigsetup))
+Here are some examples for neovim daily note commands (as specified in the setup [here](<Getting started with Markdown Oxide Version 0#^nvimconfigsetup>)
 
 - examples ^nvimrelativenamescmds
     * `:Daily two days ago`
