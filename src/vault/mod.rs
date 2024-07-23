@@ -900,7 +900,7 @@ impl Reference {
                 | MDHeadingLink(.., file_ref_text, link_infile_ref)
                 | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => {
                     matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir))
-                        && link_infile_ref == infile_ref
+                        && link_infile_ref.to_lowercase() == infile_ref.to_lowercase()
                 }
                 Tag(_) => false,
                 WikiFileLink(_) => false,
@@ -1524,7 +1524,7 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
         } else {
             let last_segment = refname.link_file_key()?;
 
-            Some(file_ref_text == last_segment)
+            Some(file_ref_text.to_lowercase() == last_segment.to_lowercase())
         }
     })()
     .is_some_and(|b| b)
