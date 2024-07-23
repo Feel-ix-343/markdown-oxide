@@ -1,39 +1,46 @@
 {
-  description = "A devShell example";
-
   inputs = {
-    nixpkgs.url      = "github:NixOS/nixpkgs/nixos-unstable";
-    rust-overlay.url = "github:oxalica/rust-overlay";
-    flake-utils.url  = "github:numtide/flake-utils";
+    nixpkgs.url = "github:cachix/devenv-nixpkgs/rolling";
+    systems.url = "github:nix-systems/default";
+    devenv.url = "github:cachix/devenv";
+    devenv.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = { self, nixpkgs, rust-overlay, flake-utils, ... }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let
-        overlays = [ (import rust-overlay) ];
-        pkgs = import nixpkgs {
-          inherit system overlays;
-        };
-      in
-      with pkgs;
+  inputs.fenix.url = "github:nix-community/fenix";
+  inputs.fenix.inputs = { nixpkgs.follows = "nixpkgs"; };
+
+  nixConfig = {
+    extra-trusted-public-keys = "devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=";
+    extra-substituters = "https://devenv.cachix.org";
+  };
+
+  outputs = { self, nixpkgs, devenv, systems, ... } @ inputs:
+    let
+      forEachSystem = nixpkgs.lib.genAttrs (import systems);
+    in
       {
-        devShells.default = mkShell {
-          buildInputs = [
-            openssl
-            pkg-config
-            # rust-bin.nightly."2024-05-20".default
-            rust-bin.stable.latest.default
-            nodejs_22
-            vsce
-          ];
+      packages = forEachSystem (system: {
+        devenv-up = self.devShells.${system}.default.config.procfileScript;
+      });
 
-          shellHook = ''
-            alias ls=eza
-            alias find=fd
+      devShells = forEachSystem
+        (system:
+          let
+            pkgs = nixpkgs.legacyPackages.${system};
+          in
+            {
+            default = devenv.lib.mkShell {
+              inherit inputs pkgs;
+              modules = [
+                {
+                  # https://devenv.sh/reference/options/
+                  packages = [ pkgs.hello ];
 
-            zsh
-          '';
-        };
-      }
-    );
+                  languages.rust.enable = true;
+                  languages.rust.channel = "stable";
+                }
+              ];
+            };
+          });
+    };
 }
