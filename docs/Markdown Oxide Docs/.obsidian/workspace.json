@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Felix Zeller.md",
+                "file": "v0/Articles/Markdown-Oxide v0.md",
                 "mode": "preview",
                 "backlinks": true,
                 "source": false
@@ -86,7 +86,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "Felix Zeller.md",
+                "file": "v0/Articles/Markdown-Oxide v0.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -103,7 +103,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "Felix Zeller.md",
+                "file": "v0/Articles/Markdown-Oxide v0.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               }
@@ -126,7 +126,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Felix Zeller.md"
+                "file": "v0/Articles/Markdown-Oxide v0.md"
               }
             }
           }
@@ -150,9 +150,11 @@
   },
   "active": "1648e4973359b587",
   "lastOpenFiles": [
-    "v0/References/v0 Configuration Reference.md",
+    "publish.css",
     "v0/References/v0 Features Reference.md",
     "v0/Articles/Markdown-Oxide v0.md",
+    "Felix Zeller.md",
+    "v0/References/v0 Configuration Reference.md",
     "Daily Notes.md",
     "v0/Guides/Getting started with Markdown Oxide Version 0.md",
     "v0/Articles/Markdown-Oxide v0.md~",
@@ -168,8 +170,6 @@
     "What Is Markdown-Oxide.md~",
     "v0/Articles/4913",
     "Home.md",
-    "Home.md~",
-    "Felix Zeller.md",
     "Personal Knowledge Management System.md",
     "Index.md",
     "Block Queries for Linking.md",
