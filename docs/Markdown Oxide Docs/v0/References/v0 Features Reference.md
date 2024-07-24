@@ -26,7 +26,7 @@ When clicking on each drop-down, you will be presented with a demo of the featur
         <details>
             <summary>(helix + zed not support yet): Block Completions: Fuzzy search through your files and link to any *block* of text</summary>   
 
-        to use this, type `[[`, and after you press space, completions for every block in the vault will appear; continue typing to fuzzy match the block that you want; finally, select the block; a link will be inserted to the text document and an index (ex ^1j239) will be appended to the block in its respective file. In Neovim, this text will not be written yet into the file (it will be edited in an unsaved buffer) so type `:wall`, and it should be resolved (as long as you have `dynamicRegistration = true` as described in the [Neovim setup](<Getting started with Markdown Oxide Version 0#Neovim>)!
+        to use this, type `[[`, and after you press space, completions for every block in the vault will appear; continue typing to fuzzy match the block that you want; finally, select the block; a link will be inserted to the text document and an index (ex ^1j239) will be appended to the block in its respective file. In Neovim, this text will not be written yet into the file (it will be edited in an unsaved buffer) so type `:wall`, and it should be resolved (as long as you have `dynamicRegistration = true` as described in the [Neovim setup](README#Neovim)!
 
         ![blockcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/a48c28a7-55b0-438c-becc-1dfde350fa94)
             
@@ -94,7 +94,7 @@ When clicking on each drop-down, you will be presented with a demo of the featur
 
 ## Unimplemented Completions Features
 
-- [ ] Subheading completions in the form [[file#heading#subheading]] from https://help.obsidian.md/Linking+notes+and+files/Internal+links#Link+to+a+heading+in+a+note (Note: right now you can link to subheadings through [[file#subheading]])
+- [ ] Subheading completions in the form `[[file#heading#subheading]]` from https://help.obsidian.md/Linking+notes+and+files/Internal+links#Link+to+a+heading+in+a+note (Note: right now you can link to subheadings through `[[file#subheading]]`)
 - [ ] Headings in the current file
 - [ ] Metadata completions
 - [ ] Dataview completions
@@ -300,7 +300,7 @@ When clicking on each drop-down, you will be presented with a demo of the featur
 - Opening Daily Notes   ^8g4c9
     * Open or create daily notes through a natural language relative name. `:Daily next tuesday`
         + The full specification for the relative name is [here](<Daily Notes#Opening Daily Notes>)
-        + Some examples of this command in neovim following the [Neovim Setup](<v0 Getting Started Guide#Installation and Possible Editor Config>) below: ![[Daily Notes#^nvimrelativenamescmds]]
+        + Some examples of this command in neovim following the [Neovim Setup](README#Neovim) below: ![[Daily Notes#^nvimrelativenamescmds]]
     * Open or create daily notes through predefined relative names.  `:Today`
         + The names are as follow: ![[Daily Notes#^predefinedNames]]
         + Each of these names have their own workspace commands
