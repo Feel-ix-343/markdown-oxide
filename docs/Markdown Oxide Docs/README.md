@@ -1,7 +1,7 @@
 
 **markdown-oxide**: Robust, Composable PKM: You bring the text editor; we bring the PKM - inspired by and compatible with Obsidian 
 
-**[Quick Start](#quick-start>)**
+**[Quick Start](#quick-start)**
 
 # Docs
 
