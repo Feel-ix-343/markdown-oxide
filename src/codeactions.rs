@@ -99,7 +99,7 @@ pub fn code_actions(
 
                         Some(CodeActionOrCommand::CodeAction(CodeAction {
                             title: format!(
-                                "Append Heading \"{}\" to file {} and create the file if it doesn't exist",
+                                "Append Heading \"{}\" to file {}.md, creating it if it doesn't exist",
                                 heading,
                                 link_path
                             ),
