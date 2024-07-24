@@ -1,7 +1,7 @@
 
 **markdown-oxide**: Robust, Composable PKM: You bring the text editor; we bring the PKM - inspired by and compatible with Obsidian 
 
-**[[#Quick Start]]*
+**[Quick Start](#Quick Start)*
 
 # Recommended links
 
@@ -20,10 +20,10 @@ Get started with Markdown-oxide as fast as possible!
 
 Set up the PKM for your text editor...
 
-- [[#Neovim]]
-- [[#VSCode]]
-- [[#Zed]]
-- [[#Helix]]
+- [Neovim](#Neovim)
+- [VSCode](#VSCode)
+- [Zed](#Zed)
+- [Helix](#Helix)
 
 ## Neovim
 
