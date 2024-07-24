@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "v0/Articles/Markdown-Oxide v0.md",
+                "file": "Home.md",
                 "mode": "preview",
                 "backlinks": true,
                 "source": false
@@ -70,7 +70,8 @@
       }
     ],
     "direction": "horizontal",
-    "width": 200
+    "width": 200,
+    "collapsed": true
   },
   "right": {
     "id": "63aba346fd695768",
@@ -86,7 +87,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "v0/Articles/Markdown-Oxide v0.md",
+                "file": "Home.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -103,7 +104,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "v0/Articles/Markdown-Oxide v0.md",
+                "file": "Home.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               }
@@ -126,7 +127,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "v0/Articles/Markdown-Oxide v0.md"
+                "file": "Home.md"
               }
             }
           }
@@ -150,25 +151,25 @@
   },
   "active": "1648e4973359b587",
   "lastOpenFiles": [
-    "publish.css",
+    "README.md~",
     "v0/References/v0 Features Reference.md",
+    "Home.md~",
+    "v0/Guides/Getting started with Markdown Oxide Version 0.md",
+    "v0/Guides/Getting started with Markdown Oxide Version 0.md~",
     "v0/Articles/Markdown-Oxide v0.md",
+    "publish.css",
     "Felix Zeller.md",
     "v0/References/v0 Configuration Reference.md",
     "Daily Notes.md",
-    "v0/Guides/Getting started with Markdown Oxide Version 0.md",
     "v0/Articles/Markdown-Oxide v0.md~",
     "v0/References/v0 Features Reference.md~",
     "v0/References/v0 Configuration Reference.md~",
-    "v0/Guides/Getting started with Markdown Oxide Version 0.md~",
     "v0/Guides/v0 Getting Started Guide.md",
     "v0/Guides/v0 Getting Started Guide.md~",
     "Setup.md",
     "Daily Notes.md~",
     "Setup.md~",
     "What Is Markdown-Oxide.md",
-    "What Is Markdown-Oxide.md~",
-    "v0/Articles/4913",
     "Home.md",
     "Personal Knowledge Management System.md",
     "Index.md",
