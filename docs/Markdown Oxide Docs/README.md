@@ -3,16 +3,18 @@
 
 **[Quick Start](#Quick Start)**
 
-# Recommended links
+# Docs
+
 
 Here are some recommended links from our documentation website, <https://oxide.md>
 
-- ^recommended
-    * [What is markdown-oxide?](https://oxide.md/v0/Articles/Markdown-Oxide+v0): An overview of our PKM features to help you determine if markdown-oxide is for you
-    * [Markdown-oxide getting-started guide](https://oxide.md/v0/Guides/Getting+started+with+Markdown+Oxide+Version+0): A guide to setting up your text editor, configuring the PKM, and using the features. 
-    * [Features Reference](https://oxide.md/v0/references/v0+Features+Reference): An organized list of all features
-    * [Configuration Reference](https://oxide.md/v0/references/v0+Configuration+Reference): Configuration information to reference
-        + [Default Config File](https://oxide.md/v0/References/v0+Configuration+Reference#Default+Config+File)
+## Recommended Links
+
+* [What is markdown-oxide?](https://oxide.md/v0/Articles/Markdown-Oxide+v0): An overview of our PKM features to help you determine if markdown-oxide is for you
+* [Markdown-oxide getting-started guide](https://oxide.md/v0/Guides/Getting+started+with+Markdown+Oxide+Version+0): A guide to setting up your text editor, configuring the PKM, and using the features. 
+* [Features Reference](https://oxide.md/v0/references/v0+Features+Reference): An organized list of all features
+* [Configuration Reference](https://oxide.md/v0/references/v0+Configuration+Reference): Configuration information to reference
+    + [Default Config File](https://oxide.md/v0/References/v0+Configuration+Reference#Default+Config+File)
 
 # Quick Start
 
