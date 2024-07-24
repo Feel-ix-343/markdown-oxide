@@ -5,7 +5,7 @@
 
 # Recommended links
 
-Here are some recommended links from our documentation website, <oxide.md>
+Here are some recommended links from our documentation website, <https://oxide.md>
 
 - ^recommended
     * [What is markdown-oxide?](https://oxide.md/v0/Articles/Markdown-Oxide+v0): An overview of our PKM features to help you determine if markdown-oxide is for you
