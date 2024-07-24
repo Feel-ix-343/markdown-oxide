@@ -66,12 +66,12 @@
               "state": {}
             }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "horizontal",
-    "width": 200,
-    "collapsed": true
+    "width": 200
   },
   "right": {
     "id": "63aba346fd695768",
@@ -151,8 +151,9 @@
   },
   "active": "1648e4973359b587",
   "lastOpenFiles": [
-    "README.md~",
+    "Date formatting.md~",
     "Home.md~",
+    "README.md~",
     "v0/References/v0 Features Reference.md",
     "v0/Guides/Getting started with Markdown Oxide Version 0.md",
     "v0/Guides/Getting started with Markdown Oxide Version 0.md~",

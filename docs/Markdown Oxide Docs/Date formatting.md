@@ -26,6 +26,3 @@ Some examples are:
     * "1 Jan 2024" => `%d %b %Y`
 
 ---
-
-> [!note]- Suggestions!
-> If you have any suggestions for the formattings, open an issue! https://github.com/Feel-ix-343/markdown-oxide
