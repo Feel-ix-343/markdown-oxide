@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Home.md",
+                "file": "Felix Zeller.md",
                 "mode": "preview",
                 "backlinks": true,
                 "source": false
@@ -71,7 +71,8 @@
       }
     ],
     "direction": "horizontal",
-    "width": 200
+    "width": 200,
+    "collapsed": true
   },
   "right": {
     "id": "63aba346fd695768",
@@ -87,7 +88,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "Home.md",
+                "file": "Felix Zeller.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +105,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "Home.md",
+                "file": "Felix Zeller.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               }
@@ -127,7 +128,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Home.md"
+                "file": "Felix Zeller.md"
               }
             }
           }
@@ -151,6 +152,8 @@
   },
   "active": "1648e4973359b587",
   "lastOpenFiles": [
+    "Felix Zeller.md~",
+    "Home.md",
     "Block Queries for Linking.md~",
     "v0/References/v0 Features Reference.md~",
     "Daily Notes.md~",
@@ -166,12 +169,9 @@
     "v0/References/v0 Configuration Reference.md",
     "Daily Notes.md",
     "v0/Articles/Markdown-Oxide v0.md~",
-    "v0/References/v0 Configuration Reference.md~",
     "v0/Guides/v0 Getting Started Guide.md",
-    "v0/Guides/v0 Getting Started Guide.md~",
     "Setup.md",
     "What Is Markdown-Oxide.md",
-    "Home.md",
     "Personal Knowledge Management System.md",
     "Index.md",
     "Block Queries for Linking.md",
