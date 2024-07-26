@@ -17,8 +17,6 @@ fn datetime_to_file(
     let filename = datetime.format(dailynote_format).to_string();
     let path = root_dir.join(&filename);
 
-    println!("path: {:?}", path);
-
     Url::from_file_path(path.with_extension("md")).ok()
 }
 
