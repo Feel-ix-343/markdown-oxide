@@ -6,4 +6,5 @@ An index of potentially relevant files. Some have not been created yet.
 - v1
     * [[Block Queries for Linking]]
     * [[Editor Specific Plugins]]
+    * [[Block Organization]]
 
