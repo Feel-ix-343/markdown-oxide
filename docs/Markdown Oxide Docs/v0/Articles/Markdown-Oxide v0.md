@@ -4,7 +4,7 @@
 
 ![[What Is Markdown-Oxide#^whatIsMarkdownOxide]]
 
-While other integrations may come in the future, the initial version of Markdown-Oxide focuses on composing with your favorite text editor. It is implemented as a language server for the [Language Server Protocol(LSP)](https://microsoft.github.io/language-server-protocol/), allowing for various PKM workflows in popular text editors. It also is inspired by and highly compatible with Obsidian. 
+It is implemented as a language server for the [Language Server Protocol(LSP)](https://microsoft.github.io/language-server-protocol/), allowing for various PKM workflows in popular text editors. It also is inspired by and highly compatible with Obsidian. 
 
 > [!note] Editor Support
 > The best-supported text editor is Neovim, but also popular with users are VSCode, Helix, and Zed.

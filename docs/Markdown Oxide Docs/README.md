@@ -1,5 +1,5 @@
 
-**markdown-oxide**: Robust, Composable PKM: You bring the text editor; we bring the PKM - inspired by and compatible with Obsidian 
+**markdown-oxide**: Robust, Minimalist, Unbundled PKM for your use with your favorite text-editor.
 
 **[Quick Start](#quick-start)**
 
