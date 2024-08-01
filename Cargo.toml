@@ -1,7 +1,7 @@
 
 [workspace]
 members = [
-  "crates/markdown-oxide",
+  "crates/markdown-oxide", "crates/parsing",
 ] # other `members` are specified in dependencies
 resolver = "2"
 
