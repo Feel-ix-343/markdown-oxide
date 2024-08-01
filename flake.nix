@@ -1,45 +1,46 @@
 {
-  description = "A devShell example";
-
   inputs = {
-    nixpkgs.url      = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url  = "github:numtide/flake-utils";
-    fenix = {
-      url = "github:nix-community/fenix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    nixpkgs.url = "github:cachix/devenv-nixpkgs/rolling";
+    systems.url = "github:nix-systems/default";
+    devenv.url = "github:cachix/devenv";
+    devenv.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = { self, nixpkgs, flake-utils, fenix, ... }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let
-        overlays = [ fenix.overlays.default ];
-        pkgs = import nixpkgs {
-          inherit system overlays;
-        };
-      in
+  inputs.fenix.url = "github:nix-community/fenix";
+  inputs.fenix.inputs = { nixpkgs.follows = "nixpkgs"; };
+
+  nixConfig = {
+    extra-trusted-public-keys = "devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=";
+    extra-substituters = "https://devenv.cachix.org";
+  };
+
+  outputs = { self, nixpkgs, devenv, systems, ... } @ inputs:
+    let
+      forEachSystem = nixpkgs.lib.genAttrs (import systems);
+    in
       {
-        devShells.default = pkgs.mkShell {
-          buildInputs = [
-            pkgs.openssl
-            pkgs.pkg-config
-            (pkgs.fenix.complete.withComponents [
-              "cargo"
-              "clippy"
-              "rust-src"
-              "rustfmt"
-            ])
-            pkgs.rust-analyzer-nightly
-          ];
+      packages = forEachSystem (system: {
+        devenv-up = self.devShells.${system}.default.config.procfileScript;
+      });
 
-          shellHook = ''
-            alias ls=eza
-            alias find=fd
+      devShells = forEachSystem
+        (system:
+          let
+            pkgs = nixpkgs.legacyPackages.${system};
+          in
+            {
+            default = devenv.lib.mkShell {
+              inherit inputs pkgs;
+              modules = [
+                {
+                  # https://devenv.sh/reference/options/
+                  packages = [ pkgs.hello ];
 
-            alacritty &
-            nvim -S
-          '';
-        };
-      }
-    );
+                  languages.rust.enable = true;
+                  languages.rust.channel = "stable";
+                }
+              ];
+            };
+          });
+    };
 }
