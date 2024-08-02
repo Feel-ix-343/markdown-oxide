@@ -34,10 +34,12 @@
               modules = [
                 {
                   # https://devenv.sh/reference/options/
-                  packages = [ pkgs.hello ];
+                  packages = [ pkgs.hello pkgs.evcxr ];
 
                   languages.rust.enable = true;
                   languages.rust.channel = "stable";
+
+                  languages.python.enable = true;
                 }
               ];
             };
