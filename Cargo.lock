@@ -825,6 +825,8 @@ dependencies = [
 name = "parsing"
 version = "0.1.0"
 dependencies = [
+ "ropey",
+ "tree-sitter",
  "tree-sitter-md",
 ]
 

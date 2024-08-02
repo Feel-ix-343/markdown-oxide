@@ -5,3 +5,5 @@ edition = "2021"
 
 [dependencies]
 tree-sitter-md.path = "./tree-sitter-markdown"
+tree-sitter = "*"
+ropey.workspace = true
