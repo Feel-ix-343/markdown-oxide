@@ -1,0 +1,3 @@
+[submodule "crates/parsing/crates/parsing/tree-sitter-markdown"]
+	path = crates/parsing/crates/parsing/tree-sitter-markdown
+	url = git@github.com:tree-sitter-grammars/tree-sitter-markdown.git
