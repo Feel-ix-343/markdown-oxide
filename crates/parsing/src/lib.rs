@@ -1,6 +1,8 @@
 use std::{
+    collections::HashMap,
     fmt::{Debug, Formatter},
     ops::Not,
+    path::Path,
     sync::Arc,
 };
 
@@ -8,6 +10,14 @@ use ropey::Rope;
 use tree_sitter::Range;
 use tree_sitter_md::{MarkdownCursor, MarkdownParser, MarkdownTree};
 
+// struct QueryBlock {
+//     sub_blocks: Option<Vec<Arc<QueryBlock>>>,
+//     parent: Option<Arc<QueryBlock>>,
+//
+//     /// Rendered TExt
+//     queryable_text: String,
+//     collections: Vec<Arc<Collection>>,
+// }
 struct Document {
     sections: Vec<Section>,
     rope: Rope,
@@ -65,9 +75,12 @@ impl Section {
                 });
                 let nodes: Vec<Node> = children
                     .flat_map(|node| match node.kind() {
-                        "paragraph" => vec![Node::Block(Block::ParagraphBlock(
-                            ParagraphBlock::parse(node, rope.clone()),
-                        ))],
+                        "paragraph" => {
+                            match ParagraphBlock::parse(node, markdown_tree, rope.clone()) {
+                                Some(par) => vec![Node::Block(BlockContainer::ParagraphBlock(par))],
+                                _ => vec![],
+                            }
+                        }
                         "list" => {
                             let mut cursor = node.walk();
                             let children = node.children(&mut cursor);
@@ -78,7 +91,7 @@ impl Section {
                                     }
                                     _ => None,
                                 })
-                                .map(|it| Block::ListBlock(it))
+                                .map(|it| BlockContainer::ListBlock(it))
                                 .map(|it| Node::Block(it))
                                 .collect::<Vec<_>>()
                         }
@@ -108,36 +121,33 @@ impl Section {
 
 #[derive(Debug)]
 enum Node {
-    Block(Block),
+    Block(BlockContainer),
     Section(Section),
 }
 
 #[derive(Debug)]
-enum Block {
+enum BlockContainer {
     ListBlock(ListBlock),
     ParagraphBlock(ParagraphBlock),
 }
 
 struct ListBlock {
-    full_range: Range,
-    text_range: Range,
-    text: Arc<str>,
+    range: Range,
+    content: BlockContent,
     children: Option<Vec<ListBlock>>,
+    checkbox: Option<CheckBox>,
 }
 
-impl Debug for ListBlock {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ListBlock")
-            .field("text", &self.text)
-            .field("children", &self.children)
-            .finish()
-    }
+#[derive(Debug)]
+enum CheckBox {
+    Checked,
+    Unchecked,
 }
 
 impl ListBlock {
     fn parse(
         node: tree_sitter::Node,
-        _markdown_tree: &MarkdownTree,
+        markdown_tree: &MarkdownTree,
         rope: Rope,
     ) -> Option<ListBlock> {
         match node.kind() {
@@ -147,10 +157,20 @@ impl ListBlock {
                     Some(list) if list.kind() == "list" => {
                         let children = list
                             .children(&mut tree_cursor)
-                            .flat_map(|it| ListBlock::parse(it, _markdown_tree, rope.clone()))
+                            .flat_map(|it| ListBlock::parse(it, markdown_tree, rope.clone()))
                             .collect::<Vec<_>>();
 
                         Some(children)
+                    }
+                    _ => None,
+                };
+
+                let checkbox = match node.child(1) {
+                    Some(node) if node.kind() == "task_list_marker_checked" => {
+                        Some(CheckBox::Checked)
+                    }
+                    Some(node) if node.kind() == "task_list_marker_unchecked" => {
+                        Some(CheckBox::Unchecked)
                     }
                     _ => None,
                 };
@@ -165,17 +185,13 @@ impl ListBlock {
                         x
                     })?;
 
-                let text_range = inline_node.range();
-                let text = rope
-                    .byte_slice(text_range.start_byte..text_range.end_byte)
-                    .as_str()
-                    .unwrap();
+                let content = BlockContent::parse(inline_node, rope, markdown_tree)?;
 
                 Some(ListBlock {
                     children: sub_list,
-                    text_range,
-                    text: Arc::from(text),
-                    full_range: node.range(),
+                    content,
+                    range: node.range(),
+                    checkbox,
                 })
             }
             _ => None,
@@ -183,33 +199,204 @@ impl ListBlock {
     }
 }
 
+impl Debug for ListBlock {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ListBlock")
+            .field("content", &self.content)
+            .field("children", &self.children)
+            .field("checkbox", &self.checkbox)
+            .finish()
+    }
+}
+
 struct ParagraphBlock {
+    /// Paragraph Range is (row, 0) to (row + 1, 0)
     range: Range,
-    text: Arc<str>,
+    content: BlockContent,
 }
 
 impl Debug for ParagraphBlock {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ParagraphBlock")
-            .field("text", &self.text)
+            .field("content", &self.content)
             .finish()
     }
 }
 
 impl ParagraphBlock {
-    fn parse(node: tree_sitter::Node, rope: Rope) -> ParagraphBlock {
+    fn parse(
+        node: tree_sitter::Node,
+        markdown_tree: &MarkdownTree,
+        rope: Rope,
+    ) -> Option<ParagraphBlock> {
+        let range = node.range();
         let mut cursor = node.walk();
         let mut children = node.children(&mut cursor);
         let inline = children.find(|it| it.kind() == "inline").unwrap();
-        let range = inline.range();
-        let text = rope
-            .byte_slice(range.start_byte..range.end_byte)
-            .as_str()
-            .unwrap();
-        ParagraphBlock {
-            range,
-            text: Arc::from(text),
+        let content = BlockContent::parse(inline, rope.clone(), markdown_tree)?;
+
+        Some(ParagraphBlock { content, range })
+    }
+}
+
+struct BlockContent {
+    text: Arc<str>,
+    range: Range,
+    tags: Vec<Tag>,
+    wiki_links: Vec<WikiLink>,
+    md_links: Vec<MarkdownLink>,
+}
+
+impl BlockContent {
+    fn parse(
+        node: tree_sitter::Node,
+        rope: Rope,
+        markdown_tree: &MarkdownTree,
+    ) -> Option<BlockContent> {
+        let inline_tree = markdown_tree.inline_tree(&node)?;
+        let inline_node = inline_tree.root_node();
+        println!("{:?}", inline_node.to_sexp());
+        match (inline_node, inline_node.kind()) {
+            (node, "inline") => {
+                let range = node.range();
+                let text = rope.byte_slice(range.start_byte..range.end_byte).as_str()?;
+
+                let mut cursor = node.walk();
+
+                Some(BlockContent {
+                    text: Arc::from(text),
+                    range,
+                    tags: node
+                        .children(&mut cursor)
+                        .flat_map(|it| Tag::parse(it, rope.clone()))
+                        .collect(),
+                    md_links: node
+                        .children(&mut cursor)
+                        .flat_map(|it| MarkdownLink::parse(it, rope.clone()))
+                        .collect(),
+                    wiki_links: node
+                        .children(&mut cursor)
+                        .flat_map(|it| WikiLink::parse(it, rope.clone()))
+                        .collect(),
+                })
+            }
+            _ => None,
         }
+    }
+}
+
+impl Debug for BlockContent {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BlockContent")
+            .field("text", &self.text)
+            .field("tags", &self.tags)
+            .field("wiki_links", &self.wiki_links)
+            .field("md_links", &self.md_links)
+            .finish()
+    }
+}
+
+struct Tag {
+    /// Tag Range, including #
+    range: Range,
+    /// Tag text no #
+    text: Arc<str>,
+}
+
+impl Tag {
+    fn parse(inline_child: tree_sitter::Node, rope: Rope) -> Option<Tag> {
+        match (inline_child, inline_child.kind()) {
+            (node, "tag") => {
+                let range = node.range();
+                let text_range = range.start_byte + 1..range.end_byte;
+                let text = rope.byte_slice(text_range).as_str()?;
+                Some(Tag {
+                    range,
+                    text: Arc::from(text),
+                })
+            }
+            _ => None,
+        }
+    }
+}
+
+impl Debug for Tag {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Tag").field("text", &self.text).finish()
+    }
+}
+
+struct WikiLink {
+    range: Range,
+    to: Arc<str>,
+    display: Option<Arc<str>>,
+}
+
+impl WikiLink {
+    fn parse(inline_child: tree_sitter::Node, rope: Rope) -> Option<WikiLink> {
+        match (inline_child, inline_child.kind()) {
+            (node, "wiki_link") => {
+                let range = node.range();
+                let to = node.named_child(0).and_then(|it| {
+                    let range = it.range();
+                    let text = rope.byte_slice(range.start_byte..range.end_byte).as_str()?;
+                    Some(Arc::from(text))
+                })?;
+                let display = node.named_child(1).and_then(|it| {
+                    let range = it.range();
+                    let text = rope.byte_slice(range.start_byte..range.end_byte).as_str()?;
+                    Some(Arc::from(text))
+                });
+                Some(WikiLink { range, to, display })
+            }
+            _ => None,
+        }
+    }
+}
+
+impl Debug for WikiLink {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WikiLink")
+            .field("to", &self.to)
+            .field("display", &self.display)
+            .finish()
+    }
+}
+
+struct MarkdownLink {
+    range: Range,
+    to: Arc<str>,
+    display: Arc<str>,
+}
+
+impl MarkdownLink {
+    fn parse(inline_child: tree_sitter::Node, rope: Rope) -> Option<MarkdownLink> {
+        match (inline_child, inline_child.kind()) {
+            (node, "inline_link") => {
+                let range = node.range();
+                let to = node.named_child(1).and_then(|it| {
+                    let range = it.range();
+                    let text = rope.byte_slice(range.start_byte..range.end_byte).as_str()?;
+                    Some(Arc::from(text))
+                })?;
+                let display = node.named_child(0).and_then(|it| {
+                    let range = it.range();
+                    let text = rope.byte_slice(range.start_byte..range.end_byte).as_str()?;
+                    Some(Arc::from(text))
+                })?;
+                Some(MarkdownLink { range, to, display })
+            }
+            _ => None,
+        }
+    }
+}
+
+impl Debug for MarkdownLink {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MarkdownLink")
+            .field("to", &self.to)
+            .field("display", &self.display)
+            .finish()
     }
 }
 
@@ -286,10 +473,12 @@ mod tests {
 
 # Test
 
-- #Heading
-    - Test
+- [ ] Block [[Link|Display]] [NormalLink](Link)
+    - #tag Sub Block #tag
 
 Make a *function* for tree-sitter to work with rust well #LATER more text [[Link#HEad]]
+
+- f dj [MarkdownLink](Link)
 
 "#;
 
