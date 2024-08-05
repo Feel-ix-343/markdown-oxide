@@ -23,13 +23,13 @@ pub(crate) trait Block: Send + Sync {
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
-enum BlockFileLocation {
+pub(crate) enum BlockFileLocation {
     Line(Line),
     Lines(Lines),
 }
 
-type Line = usize;
-type Lines = std::ops::Range<Line>;
+pub(crate) type Line = usize;
+pub(crate) type Lines = std::ops::Range<Line>;
 
 use std::fmt::Debug;
 
