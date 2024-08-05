@@ -13,13 +13,15 @@ use tree_sitter::Range;
 use crate::document::{BlockContainer, Document, ListBlock, Node, ParagraphBlock, Section};
 
 #[derive(Deref, Debug)]
-pub(crate) struct Blocks(Vec<Arc<dyn Block>>);
+pub(crate) struct Blocks(Vec<Arc<Block>>);
 
 /// All useful data regarding a block: hover, querying, go_to_definition, ...
-pub(crate) trait Block: Send + Sync {
-    fn parent(&self) -> Option<anyhow::Result<Arc<dyn Block>>>;
-    fn children(&self) -> Option<anyhow::Result<Vec<Arc<dyn Block>>>>;
-    fn location(&self) -> &BlockFileLocation;
+#[derive()]
+pub(crate) struct Block {
+    parent: Option<Arc<RwLock<Option<Arc<Block>>>>>,
+    children: Option<Vec<Arc<RwLock<Option<Arc<Block>>>>>>,
+    location: Arc<BlockFileLocation>,
+    // raw_content: Arc<str>,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
@@ -33,16 +35,6 @@ pub(crate) type Lines = std::ops::Range<Line>;
 
 use std::fmt::Debug;
 
-impl Debug for dyn Block {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Block")
-            // .field("parent", &self.parent())
-            .field("children", &self.children())
-            .field("location", &self.location())
-            .finish()
-    }
-}
-
 impl Blocks {
     pub(crate) fn new(doc: &Document) -> Self {
         let list_blocks = doc.block_containers();
@@ -50,15 +42,12 @@ impl Blocks {
             .into_iter()
             .map(|it| match it {
                 BlockContainer::ParagraphBlock(block) => {
-                    let concrete: Arc<dyn Block> = Arc::new(ConcreteBlock::from_paragraph(block));
+                    let concrete = Arc::new(Block::from_paragraph(block));
                     vec![concrete]
                 }
                 BlockContainer::ListBlock(list_block) => {
-                    let concrete = ConcreteBlock::from_list_block(list_block);
-                    concrete
-                        .into_iter()
-                        .map(|it| it as Arc<dyn Block>)
-                        .collect()
+                    let concrete = Block::from_list_block(list_block);
+                    concrete.into_iter().map(|it| it).collect()
                 }
             })
             .flatten()
@@ -68,17 +57,18 @@ impl Blocks {
     }
 }
 
-/// All useful data regarding a block: hover, querying, go_to_definition, ...
-#[derive(Debug)]
-struct ConcreteBlock {
-    parent: Option<Arc<RwLock<Option<Arc<ConcreteBlock>>>>>,
-    children: Option<Vec<Arc<RwLock<Option<Arc<ConcreteBlock>>>>>>,
-    location: Arc<BlockFileLocation>,
-    // raw_content: Arc<str>,
+impl Debug for Block {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Block")
+            .field("location", &self.location())
+            // .field("parent", &self.parent)
+            .field("children", &self.children())
+            .finish()
+    }
 }
 
-impl Block for ConcreteBlock {
-    fn parent(&self) -> Option<anyhow::Result<Arc<dyn Block>>> {
+impl Block {
+    fn parent(&self) -> Option<anyhow::Result<Arc<Block>>> {
         match &self.parent {
             Some(arcmut) => {
                 let read = arcmut.read();
@@ -95,7 +85,7 @@ impl Block for ConcreteBlock {
         }
     }
 
-    fn children(&self) -> Option<anyhow::Result<Vec<Arc<dyn Block>>>> {
+    fn children(&self) -> Option<anyhow::Result<Vec<Arc<Block>>>> {
         match &self.children {
             Some(children) => Some({
                 children
@@ -108,7 +98,7 @@ impl Block for ConcreteBlock {
                             .as_ref()
                             .ok_or(anyhow!("Failed to read from block option"))?;
 
-                        Ok(arc.clone() as Arc<dyn Block>)
+                        Ok(arc.clone())
                     })
                     .collect()
             }),
@@ -121,10 +111,10 @@ impl Block for ConcreteBlock {
     }
 }
 
-impl ConcreteBlock {
+impl Block {
     fn from_list_block(list_block: &impl DocumentListBlock) -> Vec<Arc<Self>> {
         let joined = Joined::from_list_block(list_block);
-        ConcreteBlock::from_joined(&joined)
+        Block::from_joined(&joined)
     }
 
     fn from_paragraph(paragraph_block: &ParagraphBlock) -> Self {
@@ -135,11 +125,11 @@ impl ConcreteBlock {
         }
     }
 
-    fn from_joined(joined: &Joined) -> Vec<Arc<ConcreteBlock>> {
+    fn from_joined(joined: &Joined) -> Vec<Arc<Block>> {
         let m = joined.iter().fold(
-            HashMap::<Arc<BlockFileLocation>, Arc<RwLock<Option<Arc<ConcreteBlock>>>>>::new(),
+            HashMap::<Arc<BlockFileLocation>, Arc<RwLock<Option<Arc<Block>>>>>::new(),
             |mut acc, (location, (parent, children))| {
-                let block = ConcreteBlock {
+                let block = Block {
                     parent: parent.1.as_ref().map(|parent| {
                         let parent_mutex = acc
                             .entry(parent.0.clone())
@@ -356,7 +346,7 @@ mod blocks_tests {
 
     use itertools::Itertools;
 
-    use crate::blocks::{BlockFileLocation, ConcreteBlock};
+    use crate::blocks::{Block, BlockFileLocation};
 
     use super::{BlockWithChildren, BlockWithParent, DocumentListBlock, Joined};
 
