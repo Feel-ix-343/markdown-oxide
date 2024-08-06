@@ -5,12 +5,14 @@ use std::{
     sync::{Arc, Mutex, RwLock},
 };
 
+use std::fmt::Debug;
+
 use anyhow::anyhow;
 use derive_deref::Deref;
 use itertools::Itertools;
 use tree_sitter::Range;
 
-use crate::document::{BlockContainer, Document, ListBlock, Node, ParagraphBlock, Section};
+use crate::document::{DocBlock, DocListBlock, DocParagraphBlock, DocSection, Document, Node};
 
 #[derive(Deref, Debug)]
 pub(crate) struct Blocks(Vec<Arc<Block>>);
@@ -18,10 +20,25 @@ pub(crate) struct Blocks(Vec<Arc<Block>>);
 /// All useful data regarding a block: hover, querying, go_to_definition, ...
 #[derive()]
 pub(crate) struct Block {
-    parent: Option<Arc<RwLock<Option<Arc<Block>>>>>,
-    children: Option<Vec<Arc<RwLock<Option<Arc<Block>>>>>>,
-    location: Arc<BlockFileLocation>,
+    parent: Option<AtomicBlockSlot>,
+    children: Option<Vec<AtomicBlockSlot>>,
+    location: BlockFileLocation,
     // raw_content: Arc<str>,
+}
+
+/// Shared, mutable slot for a Block. This allows us to calculate complex recursive relationships between Blocks inside
+/// the Block struct itself.
+///
+/// It acts as a deferred initialization so that we can construct recursive datastructures without infinite recursion.
+///
+/// Once the struct using this is constructed to a usable state, all atomic block slots should be *Set*. Reading
+/// an atomic slot returns a result to reflect this.
+#[derive(Debug, Clone)]
+struct AtomicBlockSlot(Arc<RwLock<SlotState>>);
+#[derive(Clone)]
+enum SlotState {
+    Empty,
+    Set(Arc<Block>),
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
@@ -33,27 +50,25 @@ pub(crate) enum BlockFileLocation {
 pub(crate) type Line = usize;
 pub(crate) type Lines = std::ops::Range<Line>;
 
-use std::fmt::Debug;
-
 impl Blocks {
-    pub(crate) fn new(doc: &Document) -> Self {
+    pub(crate) fn new(doc: &Document) -> anyhow::Result<Self> {
         let list_blocks = doc.block_containers();
-        let blocks = list_blocks
+        let blocks: anyhow::Result<Vec<_>> = list_blocks
             .into_iter()
             .map(|it| match it {
-                BlockContainer::ParagraphBlock(block) => {
+                DocBlock::ParagraphBlock(block) => {
                     let concrete = Arc::new(Block::from_paragraph(block));
-                    vec![concrete]
+                    anyhow::Ok(vec![concrete])
                 }
-                BlockContainer::ListBlock(list_block) => {
-                    let concrete = Block::from_list_block(list_block);
-                    concrete.into_iter().map(|it| it).collect()
+                DocBlock::ListBlock(list_block) => {
+                    let concrete = Block::new(list_block)?;
+                    anyhow::Ok(concrete)
                 }
             })
-            .flatten()
+            .flatten_ok()
             .collect();
 
-        Self(blocks)
+        Ok(Self(blocks?))
     }
 }
 
@@ -61,261 +76,125 @@ impl Debug for Block {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Block")
             .field("location", &self.location())
-            // .field("parent", &self.parent)
-            .field("children", &self.children())
+            .field("parent", &self.parent)
+            .field("children", &self.children)
             .finish()
     }
 }
 
+/// Block methods
 impl Block {
     fn parent(&self) -> Option<anyhow::Result<Arc<Block>>> {
-        match &self.parent {
-            Some(arcmut) => {
-                let read = arcmut.read();
-                let Ok(option) = read.as_ref() else {
-                    return Some(Err(anyhow!("Failed to read parent from RwLock")));
-                };
-                let Some(arc) = option.as_ref() else {
-                    return Some(Err(anyhow!("Failed to read from block option")));
-                };
-
-                Some(Ok(arc.clone()))
-            }
-            None => None,
-        }
+        self.parent.as_ref().map(|shared| shared.read())
     }
 
     fn children(&self) -> Option<anyhow::Result<Vec<Arc<Block>>>> {
-        match &self.children {
-            Some(children) => Some({
-                children
-                    .iter()
-                    .map(|child| {
-                        let read = child.read();
-                        let arc = read
-                            .as_ref()
-                            .or(Err(anyhow!("Failed to read children from RwLock")))?
-                            .as_ref()
-                            .ok_or(anyhow!("Failed to read from block option"))?;
-
-                        Ok(arc.clone())
-                    })
-                    .collect()
-            }),
-            _ => None,
-        }
+        self.children
+            .as_ref()
+            .map(|children| children.iter().map(|child| child.read()).collect())
     }
 
     fn location(&self) -> &BlockFileLocation {
         &self.location
     }
+
+    fn is_initialized(&self) -> bool {
+        match (&self.children, &self.parent) {
+            (Some(children), Some(parent)) => {
+                children.iter().all(|child| child.is_initialized()) && parent.is_initialized()
+            }
+            _ => true,
+        }
+    }
 }
 
+/// Map used for constructing related blocks in Block struct.
+///
+/// All IDs will be set to an Empty slot from iterating over DocumentBlocks
+struct BlockIDMap(HashMap<Arc<Path>, HashMap<BlockId, AtomicBlockSlot>>);
+/// Path and Index, excluding the ^ in index
+struct BlockId(Arc<Path>, Arc<str>);
+
+/// Block construction
 impl Block {
-    fn from_list_block(list_block: &impl DocumentListBlock) -> Vec<Arc<Self>> {
-        let joined = Joined::from_list_block(list_block);
-        Block::from_joined(&joined)
+    fn new(list_block: &impl DocumentListBlockAdapter) -> anyhow::Result<Vec<Arc<Self>>> {
+        let blocks = Self::recurse_list_block(list_block, None)?.1;
+
+        Ok(blocks)
     }
 
-    fn from_paragraph(paragraph_block: &ParagraphBlock) -> Self {
+    fn recurse_list_block(
+        list_block: &impl DocumentListBlockAdapter,
+        parent: Option<AtomicBlockSlot>,
+    ) -> anyhow::Result<(AtomicBlockSlot, Vec<Arc<Block>>)> {
+        let location = list_block.location();
+        match list_block.children() {
+            None => {
+                let block = Arc::new(Block {
+                    parent,
+                    children: None,
+                    location,
+                });
+
+                let shared_block = AtomicBlockSlot::new(block.clone());
+
+                Ok((shared_block, vec![block]))
+            }
+            Some(children) => {
+                let uninitialized_this = AtomicBlockSlot::empty();
+
+                let r = children.iter().try_fold(
+                    (Vec::<AtomicBlockSlot>::new(), Vec::<Arc<Block>>::new()),
+                    |(mut children, mut all), child| {
+                        Self::recurse_list_block(child, Some(uninitialized_this.clone())).map(
+                            |(child, acc)| {
+                                children.push(child);
+                                all.extend(acc);
+
+                                (children, all)
+                            },
+                        )
+                    },
+                );
+
+                match r {
+                    Ok((children, acc)) => {
+                        let block = Arc::new(Block {
+                            parent,
+                            children: Some(children),
+                            location,
+                        });
+                        let initialized = uninitialized_this.initialize(block.clone())?;
+
+                        let mut all = vec![block];
+                        all.extend(acc);
+
+                        Ok((initialized, all))
+                    }
+                    Err(e) => Err(e),
+                }
+            }
+        }
+    }
+
+    fn from_paragraph(paragraph_block: &DocParagraphBlock) -> Self {
         Self {
             parent: None,
             children: None,
-            location: Arc::new(BlockFileLocation::from_range(paragraph_block.range)),
+            location: BlockFileLocation::from_range(paragraph_block.range),
         }
     }
+}
 
-    fn from_joined(joined: &Joined) -> Vec<Arc<Block>> {
-        let m = joined.iter().fold(
-            HashMap::<Arc<BlockFileLocation>, Arc<RwLock<Option<Arc<Block>>>>>::new(),
-            |mut acc, (location, (parent, children))| {
-                let block = Block {
-                    parent: parent.1.as_ref().map(|parent| {
-                        let parent_mutex = acc
-                            .entry(parent.0.clone())
-                            .or_insert(Arc::new(RwLock::new(None)));
-                        parent_mutex.clone()
-                    }),
-                    children: children.1.as_ref().map(|children| {
-                        children
-                            .iter()
-                            .map(|child| {
-                                let child_mutex = acc
-                                    .entry(child.0.clone())
-                                    .or_insert(Arc::new(RwLock::new(None)));
-                                child_mutex.clone()
-                            })
-                            .collect()
-                    }),
-                    location: location.clone(),
-                };
-
-                match acc.get_mut(location) {
-                    Some(this_mutex) => {
-                        let mut mutex_guard = this_mutex.write().expect("Broken Mutex");
-                        *mutex_guard = Some(Arc::new(block));
-                    }
-                    None => {
-                        acc.insert(
-                            location.clone(),
-                            Arc::new(RwLock::new(Some(Arc::new(block)))),
-                        );
-                    }
-                };
-
-                acc
-            },
-        );
-
-        m.values()
-            .map(|it| {
-                let guard = it.read().expect("Broken Mutex");
-                let block = guard.as_ref().unwrap();
-                block.clone()
-            })
-            .collect()
+impl BlockId {
+    fn from_block(block: &DocBlock) -> Option<Self> {
+        let index = block.
     }
 }
 
-// structs to construct the block data structure.
-// First we collect all blocks by arc with references
-// to children and parent -- seperately. Then we join these together to create block
-
-#[derive(Debug, PartialEq, Eq)]
-struct BlockWithParent(Arc<BlockFileLocation>, Option<Arc<BlockWithParent>>);
-
-#[derive(Debug, PartialEq, Eq)]
-struct BlockWithChildren(Arc<BlockFileLocation>, Option<Vec<Arc<BlockWithChildren>>>);
-
-//
-// Block UI Location serves as the index in the join
-
-#[derive(Deref, Debug)]
-struct ChildrenMap(HashMap<Arc<BlockFileLocation>, Arc<BlockWithChildren>>);
-
-#[derive(Deref, Debug)]
-struct ParentMap(HashMap<Arc<BlockFileLocation>, Arc<BlockWithParent>>);
-
-#[derive(Deref, Debug)]
-struct Joined(HashMap<Arc<BlockFileLocation>, (Arc<BlockWithParent>, Arc<BlockWithChildren>)>);
-
-impl Joined {
-    fn from_list_block(list_block: &impl DocumentListBlock) -> Self {
-        let parent_map = ParentMap::from_list_block(list_block);
-        let children_map = ChildrenMap::from_list_block(list_block);
-        Self::from_maps(&parent_map, &children_map)
-    }
-
-    fn from_maps(parent_map: &ParentMap, children_map: &ChildrenMap) -> Self {
-        let zipped = parent_map
-            .iter()
-            .flat_map(|(key, value)| {
-                let with_children = children_map.get(key)?;
-                Some((key.clone(), (value.clone(), with_children.clone())))
-            })
-            .collect();
-
-        Joined(zipped)
-    }
-}
-
-trait DocumentListBlock: Sized {
+trait DocumentListBlockAdapter: Sized {
     fn children(&self) -> &Option<Vec<Self>>;
     fn location(&self) -> BlockFileLocation;
-}
-
-impl ChildrenMap {
-    fn from_list_block(list_block: &impl DocumentListBlock) -> Self {
-        let children_blocks = BlockWithChildren::from_list_block(list_block);
-        Self(
-            children_blocks
-                .into_iter()
-                .map(|it| (it.0.clone(), it))
-                .collect(),
-        )
-    }
-}
-
-impl BlockWithChildren {
-    fn from_list_block(list_block: &impl DocumentListBlock) -> Vec<Arc<BlockWithChildren>> {
-        let (_, all) = Self::recurse_list_block(list_block);
-        all.collect()
-    }
-
-    fn recurse_list_block<'a>(
-        list_block: &impl DocumentListBlock,
-    ) -> (
-        Arc<BlockWithChildren>,
-        Box<dyn Iterator<Item = Arc<BlockWithChildren>> + 'a>,
-    ) {
-        match (list_block.location(), list_block.children()) {
-            (location, None) => {
-                let arc = Arc::new(BlockWithChildren(location.into(), None));
-
-                (arc.clone(), Box::new(std::iter::once(arc)))
-            }
-            (location, Some(children)) => {
-                let (children, children_acc) = children.iter().fold(
-                    (
-                        Vec::<Arc<BlockWithChildren>>::new(),
-                        Box::new(std::iter::empty())
-                            as Box<dyn Iterator<Item = Arc<BlockWithChildren>>>,
-                    ),
-                    |(mut children, acc), list_child| {
-                        let (child, list) = BlockWithChildren::recurse_list_block(list_child);
-                        children.push(child);
-                        let acc = Box::new(acc.chain(list));
-                        (children, acc)
-                    },
-                );
-                let this = Arc::new(BlockWithChildren(location.into(), Some(children)));
-                (
-                    this.clone(),
-                    Box::new(std::iter::once(this).chain(children_acc)),
-                )
-            }
-        }
-    }
-}
-
-impl ParentMap {
-    fn from_list_block(list_block: &impl DocumentListBlock) -> Self {
-        Self(
-            BlockWithParent::from_list_block(list_block)
-                .into_iter()
-                .map(|it| (it.0.clone(), it))
-                .collect(),
-        )
-    }
-}
-
-impl BlockWithParent {
-    fn from_list_block(list_block: &impl DocumentListBlock) -> Vec<Arc<BlockWithParent>> {
-        Self::recurse_list_block(list_block, None).collect()
-    }
-
-    fn recurse_list_block<'a>(
-        list_block: &'a impl DocumentListBlock,
-        parent: Option<Arc<BlockWithParent>>,
-    ) -> Box<dyn Iterator<Item = Arc<BlockWithParent>> + 'a> {
-        match (list_block.location(), list_block.children()) {
-            (location, None) => Box::new(std::iter::once(Arc::new(BlockWithParent(
-                location.into(),
-                parent,
-            )))),
-            (location, Some(children)) => {
-                let this = Arc::new(BlockWithParent(location.into(), parent));
-
-                let once = std::iter::once(this.clone());
-
-                let children = children
-                    .into_iter()
-                    .flat_map(move |child| Self::recurse_list_block(child, Some(this.clone())));
-
-                Box::new(once.chain(children))
-            }
-        }
-    }
 }
 
 impl BlockFileLocation {
@@ -328,12 +207,63 @@ impl BlockFileLocation {
     }
 }
 
-impl DocumentListBlock for ListBlock {
+impl DocumentListBlockAdapter for DocListBlock {
     fn children(&self) -> &Option<Vec<Self>> {
         &self.children
     }
     fn location(&self) -> BlockFileLocation {
         BlockFileLocation::Line(self.range.start_point.row)
+    }
+}
+
+impl AtomicBlockSlot {
+    fn empty() -> Self {
+        Self(Arc::new(RwLock::new(SlotState::Empty)))
+    }
+
+    fn initialize(&self, block: Arc<Block>) -> anyhow::Result<Self> {
+        let mut write = self
+            .0
+            .write()
+            .or(Err(anyhow!("Failed to read from lock when I shuold have")))?;
+        *write = SlotState::Set(block);
+
+        Ok(self.clone())
+    }
+
+    fn new(block: Arc<Block>) -> Self {
+        Self(Arc::new(RwLock::new(SlotState::Set(block))))
+    }
+
+    fn is_initialized(&self) -> bool {
+        match *self.0.read().expect("Broken RwLock") {
+            SlotState::Empty => false,
+            SlotState::Set(_) => true,
+        }
+    }
+
+    fn read(&self) -> anyhow::Result<Arc<Block>> {
+        let read = self
+            .0
+            .read()
+            .map_err(|_| anyhow!("Failed to read from RwLock"))?;
+        let block = match *read {
+            SlotState::Empty => return Err(anyhow!("Block not initialized when it should be")),
+            SlotState::Set(ref block) => block.clone(),
+        };
+        Ok(block)
+    }
+}
+
+impl Debug for SlotState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SlotState::Empty => f.write_str("Empty"),
+            SlotState::Set(block) => f
+                .debug_struct("Initialized")
+                .field("Location", &block.location)
+                .finish(),
+        }
     }
 }
 
@@ -348,13 +278,13 @@ mod blocks_tests {
 
     use crate::blocks::{Block, BlockFileLocation};
 
-    use super::{BlockWithChildren, BlockWithParent, DocumentListBlock, Joined};
+    use super::DocumentListBlockAdapter;
 
     const LOCATION: BlockFileLocation = BlockFileLocation::Line(0);
 
     #[derive(Clone)]
     struct MockListBlockNoRange(Option<Vec<MockListBlockNoRange>>);
-    impl DocumentListBlock for MockListBlockNoRange {
+    impl DocumentListBlockAdapter for MockListBlockNoRange {
         fn location(&self) -> BlockFileLocation {
             LOCATION
         }
@@ -364,59 +294,8 @@ mod blocks_tests {
         }
     }
 
-    #[test]
-    fn test_blocks_with_children_for_list_block() {
-        let list_block = MockListBlockNoRange(Some(vec![
-            MockListBlockNoRange(None),
-            MockListBlockNoRange(Some(vec![MockListBlockNoRange(None)])),
-        ]));
-
-        let output = BlockWithChildren::from_list_block(&list_block);
-
-        let location: Arc<_> = LOCATION.into();
-        let b1 = Arc::new(BlockWithChildren(location.clone(), None));
-        let b2 = Arc::new(BlockWithChildren(location.clone(), None));
-        let b3 = Arc::new(BlockWithChildren(location.clone(), Some(vec![b2.clone()])));
-        let last = Arc::new(BlockWithChildren(
-            location.clone(),
-            Some(vec![b1.clone(), b3.clone()]),
-        ));
-        let expected = vec![last.clone(), b1.clone(), b3.clone(), b2.clone()];
-
-        assert_eq!(output, expected);
-
-        // Sharing memory correctly
-        assert!(Arc::ptr_eq(
-            &output[1],
-            &output[0].as_ref().1.as_ref().unwrap()[0]
-        ))
-    }
-
-    #[test]
-    fn test_block_with_parent_list_block() {
-        let list_block = MockListBlockNoRange(Some(vec![
-            MockListBlockNoRange(None),
-            MockListBlockNoRange(Some(vec![MockListBlockNoRange(None)])),
-        ]));
-
-        let output = BlockWithParent::from_list_block(&list_block);
-
-        assert!(Arc::ptr_eq(
-            &output[0],
-            output[1].as_ref().1.as_ref().unwrap()
-        ));
-        assert!(Arc::ptr_eq(
-            &output[0],
-            output[2].as_ref().1.as_ref().unwrap()
-        ));
-        assert!(Arc::ptr_eq(
-            &output[2],
-            output[3].as_ref().1.as_ref().unwrap()
-        ));
-    }
-
     struct MockListBlockRange(usize, Option<Vec<MockListBlockRange>>);
-    impl DocumentListBlock for MockListBlockRange {
+    impl DocumentListBlockAdapter for MockListBlockRange {
         fn location(&self) -> BlockFileLocation {
             BlockFileLocation::Line(self.0)
         }
@@ -426,7 +305,7 @@ mod blocks_tests {
     }
 
     #[test]
-    fn test_joined_from_list_block() {
+    fn block_construction() {
         let list_block = MockListBlockRange(
             0,
             Some(vec![
@@ -435,7 +314,7 @@ mod blocks_tests {
             ]),
         );
 
-        let output = Joined::from_list_block(&list_block);
-        assert!(output.len() == 4);
+        let output = Block::new(&list_block);
+        assert!(output.is_ok());
     }
 }

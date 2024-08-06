@@ -16,12 +16,12 @@ use std::fmt::Debug;
 use ropey::Rope;
 
 pub(crate) struct Document {
-    pub(crate) sections: Vec<Section>,
+    pub(crate) sections: Vec<DocSection>,
     pub(crate) rope: Rope,
 }
 
 #[derive(Debug)]
-pub(crate) struct Section {
+pub(crate) struct DocSection {
     pub(crate) heading: Option<Heading>,
     pub(crate) level: usize,
     pub(crate) nodes: Vec<Node>,
@@ -29,20 +29,20 @@ pub(crate) struct Section {
 
 #[derive(Debug)]
 pub(crate) enum Node {
-    Block(BlockContainer),
-    Section(Section),
+    Block(DocBlock),
+    Section(DocSection),
 }
 
 #[derive(Debug)]
-pub(crate) enum BlockContainer {
-    ListBlock(ListBlock),
-    ParagraphBlock(ParagraphBlock),
+pub(crate) enum DocBlock {
+    ListBlock(DocListBlock),
+    ParagraphBlock(DocParagraphBlock),
 }
 
-pub(crate) struct ListBlock {
+pub(crate) struct DocListBlock {
     pub(crate) range: Range,
     pub(crate) content: BlockContent,
-    pub(crate) children: Option<Vec<ListBlock>>,
+    pub(crate) children: Option<Vec<DocListBlock>>,
     pub(crate) checkbox: Option<CheckBox>,
 }
 
@@ -52,7 +52,7 @@ pub(crate) enum CheckBox {
     Unchecked,
 }
 
-pub(crate) struct ParagraphBlock {
+pub(crate) struct DocParagraphBlock {
     /// Paragraph Range is (row, 0) to (row + 1, 0)
     pub(crate) range: Range,
     pub(crate) content: BlockContent,
@@ -64,6 +64,7 @@ pub(crate) struct BlockContent {
     pub(crate) tags: Vec<Tag>,
     pub(crate) wiki_links: Vec<WikiLink>,
     pub(crate) md_links: Vec<MarkdownLink>,
+    pub(crate) index: Option<Arc<str>>
 }
 
 pub(crate) struct Tag {
@@ -91,6 +92,16 @@ pub(crate) struct Heading {
     pub(crate) text: Arc<str>,
 }
 
+#[derive(Debug)]
+pub(crate) enum HeadingLevel {
+    One,
+    Two,
+    Three,
+    Four,
+    Five,
+    Six,
+}
+
 impl Debug for Document {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Document")
@@ -99,6 +110,32 @@ impl Debug for Document {
     }
 }
 
+/// Document behavior
+impl Document {
+    pub(crate) fn block_containers(&self) -> Vec<&DocBlock> {
+        self.sections
+            .iter()
+            .map(|it| it.block_containers())
+            .flatten()
+            .collect()
+    }
+}
+
+/// DocBlock behavior
+impl DocBlock {
+    fn content(&self) -> &BlockContent {
+        match self {
+            Self::ListBlock(b) => &b.content,
+            Self::ParagraphBlock(b) => &b.content
+        }
+    }
+
+    pub(crate) fn index(&self) -> Option<Arc<str>> {
+        self.content().index.clone()
+    }
+}
+
+/// Document construction
 impl Document {
     pub(crate) fn new(text: &str) -> Option<Document> {
         let mut markdown_parser = MarkdownParser::default();
@@ -112,7 +149,7 @@ impl Document {
                 let mut cursor = node.walk();
                 let children = node.children(&mut cursor);
                 let sections = children
-                    .flat_map(|it| Section::parse_section(it, &markdown_tree, 0, rope.clone()))
+                    .flat_map(|it| DocSection::parse_section(it, &markdown_tree, 0, rope.clone()))
                     .collect();
                 let elapsed = now.elapsed();
                 Some(Document { sections, rope })
@@ -122,24 +159,13 @@ impl Document {
     }
 }
 
-/// Behavior
-impl Document {
-    pub(crate) fn block_containers(&self) -> Vec<&BlockContainer> {
-        self.sections
-            .iter()
-            .map(|it| it.block_containers())
-            .flatten()
-            .collect()
-    }
-}
-
-impl Section {
-    pub(crate) fn parse_section(
+impl DocSection {
+    fn parse_section(
         node: tree_sitter::Node,
         markdown_tree: &MarkdownTree,
         level: usize,
         rope: Rope,
-    ) -> Option<Section> {
+    ) -> Option<DocSection> {
         match node.kind() {
             "section" => {
                 let mut cursor = node.walk();
@@ -154,9 +180,9 @@ impl Section {
                 let nodes: Vec<Node> = children
                     .flat_map(|node| match node.kind() {
                         "paragraph" => {
-                            match ParagraphBlock::parse(node, markdown_tree, rope.clone()) {
+                            match DocParagraphBlock::parse(node, markdown_tree, rope.clone()) {
                                 Some(par) => {
-                                    vec![Node::Block(BlockContainer::ParagraphBlock(par))]
+                                    vec![Node::Block(DocBlock::ParagraphBlock(par))]
                                 }
                                 _ => vec![],
                             }
@@ -167,16 +193,16 @@ impl Section {
                             children
                                 .flat_map(|child| match child.kind() {
                                     "list_item" => {
-                                        ListBlock::parse(child, markdown_tree, rope.clone())
+                                        DocListBlock::parse(child, markdown_tree, rope.clone())
                                     }
                                     _ => None,
                                 })
-                                .map(|it| BlockContainer::ListBlock(it))
+                                .map(|it| DocBlock::ListBlock(it))
                                 .map(|it| Node::Block(it))
                                 .collect::<Vec<_>>()
                         }
                         "section" => {
-                            Section::parse_section(node, markdown_tree, level + 1, rope.clone())
+                            DocSection::parse_section(node, markdown_tree, level + 1, rope.clone())
                                 .map(|it| vec![Node::Section(it)])
                                 .unwrap_or(Vec::new())
                         } // need my monad trans
@@ -185,7 +211,7 @@ impl Section {
                     .collect();
 
                 if nodes.is_empty().not() || heading.is_some() {
-                    Some(Section {
+                    Some(DocSection {
                         heading,
                         level,
                         nodes,
@@ -199,8 +225,8 @@ impl Section {
     }
 }
 
-impl Section {
-    fn block_containers(&self) -> Box<dyn Iterator<Item = &BlockContainer> + '_> {
+impl DocSection {
+    fn block_containers(&self) -> Box<dyn Iterator<Item = &DocBlock> + '_> {
         Box::new(
             self.nodes
                 .iter()
@@ -213,12 +239,12 @@ impl Section {
     }
 }
 
-impl ListBlock {
-    pub(crate) fn parse(
+impl DocListBlock {
+    fn parse(
         node: tree_sitter::Node,
         markdown_tree: &MarkdownTree,
         rope: Rope,
-    ) -> Option<ListBlock> {
+    ) -> Option<DocListBlock> {
         match node.kind() {
             "list_item" => {
                 let mut tree_cursor = node.walk();
@@ -226,7 +252,7 @@ impl ListBlock {
                     Some(list) if list.kind() == "list" => {
                         let children = list
                             .children(&mut tree_cursor)
-                            .flat_map(|it| ListBlock::parse(it, markdown_tree, rope.clone()))
+                            .flat_map(|it| DocListBlock::parse(it, markdown_tree, rope.clone()))
                             .collect::<Vec<_>>();
 
                         Some(children)
@@ -256,7 +282,7 @@ impl ListBlock {
 
                 let content = BlockContent::parse(inline_node, rope, markdown_tree)?;
 
-                Some(ListBlock {
+                Some(DocListBlock {
                     children: sub_list,
                     content,
                     range: node.range(),
@@ -268,7 +294,7 @@ impl ListBlock {
     }
 }
 
-impl Debug for ListBlock {
+impl Debug for DocListBlock {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ListBlock")
             .field("content", &self.content)
@@ -278,7 +304,7 @@ impl Debug for ListBlock {
     }
 }
 
-impl Debug for ParagraphBlock {
+impl Debug for DocParagraphBlock {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ParagraphBlock")
             .field("content", &self.content)
@@ -286,24 +312,24 @@ impl Debug for ParagraphBlock {
     }
 }
 
-impl ParagraphBlock {
-    pub(crate) fn parse(
+impl DocParagraphBlock {
+    fn parse(
         node: tree_sitter::Node,
         markdown_tree: &MarkdownTree,
         rope: Rope,
-    ) -> Option<ParagraphBlock> {
+    ) -> Option<DocParagraphBlock> {
         let range = node.range();
         let mut cursor = node.walk();
         let mut children = node.children(&mut cursor);
         let inline = children.find(|it| it.kind() == "inline").unwrap();
         let content = BlockContent::parse(inline, rope.clone(), markdown_tree)?;
 
-        Some(ParagraphBlock { content, range })
+        Some(DocParagraphBlock { content, range })
     }
 }
 
 impl BlockContent {
-    pub(crate) fn parse(
+    fn parse(
         node: tree_sitter::Node,
         rope: Rope,
         markdown_tree: &MarkdownTree,
@@ -351,7 +377,7 @@ impl Debug for BlockContent {
 }
 
 impl Tag {
-    pub(crate) fn parse(inline_child: tree_sitter::Node, rope: Rope) -> Option<Tag> {
+    fn parse(inline_child: tree_sitter::Node, rope: Rope) -> Option<Tag> {
         match (inline_child, inline_child.kind()) {
             (node, "tag") => {
                 let range = node.range();
@@ -374,7 +400,7 @@ impl Debug for Tag {
 }
 
 impl WikiLink {
-    pub(crate) fn parse(inline_child: tree_sitter::Node, rope: Rope) -> Option<WikiLink> {
+    fn parse(inline_child: tree_sitter::Node, rope: Rope) -> Option<WikiLink> {
         match (inline_child, inline_child.kind()) {
             (node, "wiki_link") => {
                 let range = node.range();
@@ -405,7 +431,7 @@ impl Debug for WikiLink {
 }
 
 impl MarkdownLink {
-    pub(crate) fn parse(inline_child: tree_sitter::Node, rope: Rope) -> Option<MarkdownLink> {
+    fn parse(inline_child: tree_sitter::Node, rope: Rope) -> Option<MarkdownLink> {
         match (inline_child, inline_child.kind()) {
             (node, "inline_link") => {
                 let range = node.range();
@@ -444,18 +470,9 @@ impl Debug for Heading {
     }
 }
 
-#[derive(Debug)]
-pub(crate) enum HeadingLevel {
-    One,
-    Two,
-    Three,
-    Four,
-    Five,
-    Six,
-}
 
 impl Heading {
-    pub(crate) fn parse(it: tree_sitter::Node<'_>, rope: Rope) -> Option<Heading> {
+    fn parse(it: tree_sitter::Node<'_>, rope: Rope) -> Option<Heading> {
         let mut cursor = it.walk();
         let mut children = it.children(&mut cursor);
         let heading_range = children

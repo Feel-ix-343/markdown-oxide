@@ -85,10 +85,10 @@ mod documents {
 
             println!("Blocks: {:?}", now.elapsed());
 
-            println!(
-                "Blocks: {:#?}",
-                blocks.get(&Arc::from(path.join("2024-08-05.md")))
-            );
+            // println!(
+            //     "Blocks: {:#?}",
+            //     blocks.get(&Arc::from(path.join("2024-08-05.md")))
+            // );
 
             let elapsed = now.elapsed();
             println!("Elapsed: {:?}", elapsed);
