@@ -85,6 +85,7 @@ mod documents {
             let documents = Documents::from_root_dir(&path);
 
             let partial_block_cx = BlockCx::new(&documents, &path);
+            println!("PartialBlockCx: {:?}", now.elapsed());
             let blocks: HashMap<_, _> = documents
                 .documents
                 .par_iter()
@@ -102,17 +103,17 @@ mod documents {
             println!("Blocks: {:?}", now.elapsed());
 
             // print blocks in 2024-08-05
-            println!(
-                "Blocks: {:#?}",
-                documents
-                    .documents
-                    .get(&Arc::from(path.join("2024-08-05.md")))
-            );
-
             // println!(
             //     "Blocks: {:#?}",
-            //     blocks.get(&Arc::from(path.join("2024-08-05.md")))
+            //     documents
+            //         .documents
+            //         .get(&Arc::from(path.join("2024-08-05.md")))
             // );
+
+            println!(
+                "Blocks: {:#?}",
+                blocks.get(&Arc::from(path.join("2024-08-06.md")))
+            );
 
             let elapsed = now.elapsed();
             println!("Elapsed: {:?}", elapsed);

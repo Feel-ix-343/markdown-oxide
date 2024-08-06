@@ -374,7 +374,7 @@ impl PersistentBlockIdMap {
         Self(
             documents
                 .documents()
-                .iter()
+                .par_iter()
                 .map(|(path, document)| {
                     let m: HashMap<_, _> = document
                         .all_blocks()
@@ -434,7 +434,7 @@ impl DocumentListBlockAdapter for DocListBlock {
         &self.children
     }
     fn location(&self) -> BlockFileLocation {
-        BlockFileLocation::Line(self.range.start_point.row)
+        BlockFileLocation::Line(self.range.start_point.row + 1) // TODO: Should this be +1? I can't remember
     }
 
     fn link_refs(&self) -> impl Iterator<Item = &str> {
