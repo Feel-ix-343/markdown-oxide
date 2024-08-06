@@ -128,7 +128,7 @@ impl Document {
             .flatten()
     }
 
-    pub(crate) fn all_blocks(&self) -> Box<dyn Iterator<Item = DocBlock> + '_> {
+    pub(crate) fn all_blocks(&self) -> Box<dyn Iterator<Item = BorrowedDocBlock<'_>> + '_> {
         Box::new(
             self.sections
                 .iter()
@@ -267,19 +267,30 @@ impl DocSection {
                 .flatten(),
         )
     }
+}
 
-    fn all_blocks(&self) -> Box<dyn Iterator<Item = DocBlock> + '_> {
+pub(crate) enum BorrowedDocBlock<'a> {
+    ListBlock(&'a DocListBlock),
+    ParagraphBlock(&'a DocParagraphBlock),
+}
+
+// Behavior
+impl DocSection {
+    fn all_blocks(&self) -> Box<dyn Iterator<Item = BorrowedDocBlock<'_>> + '_> {
         Box::new(
             self.nodes
                 .iter()
                 .map(|it| match it {
                     Node::Block(block) => match block {
-                        p @ DocBlock::ParagraphBlock(b) => Box::new(std::iter::once(p.clone()))
-                            as Box<dyn Iterator<Item = DocBlock>>,
-                        DocBlock::ListBlock(block) => Box::new(block.list_blocks().map(|it| {
-                            let cloned = it.to_owned();
-                            DocBlock::from(cloned)
-                        })),
+                        DocBlock::ParagraphBlock(b) => {
+                            Box::new(std::iter::once(BorrowedDocBlock::ParagraphBlock(b)))
+                                as Box<dyn Iterator<Item = BorrowedDocBlock>>
+                        }
+                        DocBlock::ListBlock(block) => Box::new(
+                            block
+                                .list_blocks()
+                                .map(|it| BorrowedDocBlock::ListBlock(it)),
+                        ),
                     },
                     Node::Section(section) => section.all_blocks(),
                 })

@@ -15,7 +15,9 @@ use rayon::prelude::*;
 use tree_sitter::Range;
 
 use crate::{
-    document::{DocBlock, DocListBlock, DocParagraphBlock, DocSection, Document, Node},
+    document::{
+        BorrowedDocBlock, DocBlock, DocListBlock, DocParagraphBlock, DocSection, Document, Node,
+    },
     documents::Documents,
 };
 
@@ -327,6 +329,15 @@ impl HasIndex for DocParagraphBlock {
 impl HasIndex for DocBlock {
     fn index(&self) -> Option<Arc<str>> {
         self.doc_index()
+    }
+}
+
+impl HasIndex for BorrowedDocBlock<'_> {
+    fn index(&self) -> Option<Arc<str>> {
+        match self {
+            Self::ParagraphBlock(p) => p.index(),
+            Self::ListBlock(l) => l.index(),
+        }
     }
 }
 
