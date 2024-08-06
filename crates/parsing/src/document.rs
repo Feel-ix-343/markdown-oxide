@@ -606,13 +606,9 @@ pub(crate) mod tests {
     // - [ ] Block [[Link|Display]] [NormalLink](Link)
     //     - #tag Sub Block #tag
     //
-    // Make a *function* for tree-sitter to work with rust well #LATER more text [[Link#HEad]]
+    //     "#;
     //
-    // - f dj [MarkdownLink](Link)
-    //
-    // "#;
-    //
-    //         println!("{:#?}", parse(file_text).unwrap())
+    //         // println!("{:#?}", Document::new(file_text))
     //
     //         // assert_eq!(file_text, "How will this print?");
     //     }

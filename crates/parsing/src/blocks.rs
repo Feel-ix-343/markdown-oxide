@@ -40,7 +40,7 @@ pub(crate) struct Block {
 ///
 /// Once the struct using this is constructed to a usable state, all atomic block slots should be *Set*. Reading
 /// an atomic slot returns a result to reflect this.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct AtomicBlockSlot(Arc<RwLock<SlotState>>);
 #[derive(Clone)]
 enum SlotState {
@@ -482,6 +482,16 @@ impl AtomicBlockSlot {
             SlotState::Set(ref block) => block.clone(),
         };
         Ok(block)
+    }
+}
+
+impl Debug for AtomicBlockSlot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let slot_state = self.0.read().expect("Failed to read from RwLock");
+
+        f.debug_struct("Atomic Block Slot")
+            .field("State", &slot_state)
+            .finish()
     }
 }
 
