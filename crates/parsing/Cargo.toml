@@ -12,3 +12,6 @@ itertools.workspace = true
 rayon.workspace = true
 anyhow.workspace = true
 derive_deref.workspace = true
+regex.workspace = true
+once_cell.workspace = true
+pathdiff.workspace = true

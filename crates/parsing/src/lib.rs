@@ -20,9 +20,15 @@ mod documents {
 
     use rayon::prelude::*;
 
-    struct Documents {
+    pub(crate) struct Documents {
         documents: HashMap<Arc<Path>, Document>,
         root_dir: Arc<Path>,
+    }
+
+    impl Documents {
+        pub(crate) fn documents(&self) -> &HashMap<Arc<Path>, Document> {
+            &self.documents
+        }
     }
 
     impl Documents {
@@ -65,9 +71,10 @@ mod documents {
     mod tests {
         use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
 
+        use anyhow::Context;
         use rayon::prelude::*;
 
-        use crate::blocks::Blocks;
+        use crate::blocks::{BlockCx, Blocks};
 
         use super::Documents;
 
@@ -77,13 +84,30 @@ mod documents {
             let path = PathBuf::from_str("/home/felix/notes")?;
             let documents = Documents::from_root_dir(&path);
 
+            let partial_block_cx = BlockCx::new(&documents, &path);
             let blocks: HashMap<_, _> = documents
                 .documents
                 .par_iter()
-                .map(|(p, document)| (p, Blocks::new(document)))
+                .map(|(p, document)| {
+                    let block_cx = partial_block_cx(p);
+                    (
+                        p,
+                        Blocks::new(block_cx, document)
+                            .context(format!("Constructing blocks for path: {p:?}"))
+                            .unwrap(),
+                    )
+                })
                 .collect();
 
             println!("Blocks: {:?}", now.elapsed());
+
+            // print blocks in 2024-08-05
+            println!(
+                "Blocks: {:#?}",
+                documents
+                    .documents
+                    .get(&Arc::from(path.join("2024-08-05.md")))
+            );
 
             // println!(
             //     "Blocks: {:#?}",

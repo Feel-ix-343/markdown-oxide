@@ -1,7 +1,10 @@
+use once_cell::sync::Lazy;
 use rayon::prelude::*;
+use regex::Regex;
 use tree_sitter_md::MarkdownParser;
 
 use std::ops::Not;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -33,12 +36,13 @@ pub(crate) enum Node {
     Section(DocSection),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum DocBlock {
     ListBlock(DocListBlock),
     ParagraphBlock(DocParagraphBlock),
 }
 
+#[derive(Clone)]
 pub(crate) struct DocListBlock {
     pub(crate) range: Range,
     pub(crate) content: BlockContent,
@@ -46,27 +50,30 @@ pub(crate) struct DocListBlock {
     pub(crate) checkbox: Option<CheckBox>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum CheckBox {
     Checked,
     Unchecked,
 }
 
+#[derive(Clone)]
 pub(crate) struct DocParagraphBlock {
     /// Paragraph Range is (row, 0) to (row + 1, 0)
     pub(crate) range: Range,
     pub(crate) content: BlockContent,
 }
 
+#[derive(Clone)]
 pub(crate) struct BlockContent {
     pub(crate) text: Arc<str>,
     pub(crate) range: Range,
     pub(crate) tags: Vec<Tag>,
     pub(crate) wiki_links: Vec<WikiLink>,
     pub(crate) md_links: Vec<MarkdownLink>,
-    pub(crate) index: Option<Arc<str>>
+    pub(crate) index: Option<Arc<str>>,
 }
 
+#[derive(Clone)]
 pub(crate) struct Tag {
     /// Tag Range, including #
     pub(crate) range: Range,
@@ -74,12 +81,14 @@ pub(crate) struct Tag {
     pub(crate) text: Arc<str>,
 }
 
+#[derive(Clone)]
 pub(crate) struct WikiLink {
     pub(crate) range: Range,
     pub(crate) to: Arc<str>,
     pub(crate) display: Option<Arc<str>>,
 }
 
+#[derive(Clone)]
 pub(crate) struct MarkdownLink {
     pub(crate) range: Range,
     pub(crate) to: Arc<str>,
@@ -112,12 +121,20 @@ impl Debug for Document {
 
 /// Document behavior
 impl Document {
-    pub(crate) fn block_containers(&self) -> Vec<&DocBlock> {
+    pub(crate) fn top_level_doc_blocks(&self) -> impl Iterator<Item = &DocBlock> + '_ {
         self.sections
             .iter()
-            .map(|it| it.block_containers())
+            .map(|it| it.top_level_blocks())
             .flatten()
-            .collect()
+    }
+
+    pub(crate) fn all_blocks(&self) -> Box<dyn Iterator<Item = DocBlock> + '_> {
+        Box::new(
+            self.sections
+                .iter()
+                .map(|section| section.all_blocks())
+                .flatten(),
+        )
     }
 }
 
@@ -126,12 +143,24 @@ impl DocBlock {
     fn content(&self) -> &BlockContent {
         match self {
             Self::ListBlock(b) => &b.content,
-            Self::ParagraphBlock(b) => &b.content
+            Self::ParagraphBlock(b) => &b.content,
         }
     }
 
-    pub(crate) fn index(&self) -> Option<Arc<str>> {
+    pub(crate) fn doc_index(&self) -> Option<Arc<str>> {
         self.content().index.clone()
+    }
+}
+
+impl From<DocListBlock> for DocBlock {
+    fn from(b: DocListBlock) -> Self {
+        Self::ListBlock(b)
+    }
+}
+
+impl From<DocParagraphBlock> for DocBlock {
+    fn from(b: DocParagraphBlock) -> Self {
+        Self::ParagraphBlock(b)
     }
 }
 
@@ -225,16 +254,51 @@ impl DocSection {
     }
 }
 
+// Behavior
 impl DocSection {
-    fn block_containers(&self) -> Box<dyn Iterator<Item = &DocBlock> + '_> {
+    fn top_level_blocks(&self) -> Box<dyn Iterator<Item = &DocBlock> + '_> {
         Box::new(
             self.nodes
                 .iter()
                 .map(|it| match it {
                     Node::Block(block) => Box::new(std::iter::once(block)),
-                    Node::Section(section) => section.block_containers(),
+                    Node::Section(section) => section.top_level_blocks(),
                 })
                 .flatten(),
+        )
+    }
+
+    fn all_blocks(&self) -> Box<dyn Iterator<Item = DocBlock> + '_> {
+        Box::new(
+            self.nodes
+                .iter()
+                .map(|it| match it {
+                    Node::Block(block) => match block {
+                        p @ DocBlock::ParagraphBlock(b) => Box::new(std::iter::once(p.clone()))
+                            as Box<dyn Iterator<Item = DocBlock>>,
+                        DocBlock::ListBlock(block) => Box::new(block.list_blocks().map(|it| {
+                            let cloned = it.to_owned();
+                            DocBlock::from(cloned)
+                        })),
+                    },
+                    Node::Section(section) => section.all_blocks(),
+                })
+                .flatten(),
+        )
+    }
+}
+
+/// Behavior
+impl DocListBlock {
+    pub(crate) fn list_blocks(&self) -> Box<dyn Iterator<Item = &DocListBlock> + '_> {
+        Box::new(
+            std::iter::once(self).chain(
+                self.children
+                    .iter()
+                    .flatten()
+                    .map(|child| child.list_blocks())
+                    .flatten(),
+            ),
         )
     }
 }
@@ -328,6 +392,16 @@ impl DocParagraphBlock {
     }
 }
 
+/// Behavior
+impl BlockContent {
+    pub(crate) fn link_refs(&self) -> impl Iterator<Item = &str> + '_ {
+        self.md_links
+            .iter()
+            .map(|it| it.to.as_ref())
+            .chain(self.wiki_links.iter().map(|it| it.to.as_ref()))
+    }
+}
+
 impl BlockContent {
     fn parse(
         node: tree_sitter::Node,
@@ -340,6 +414,13 @@ impl BlockContent {
             (node, "inline") => {
                 let range = node.range();
                 let text = rope.byte_slice(range.start_byte..range.end_byte).as_str()?;
+
+                static INDEX_RE: Lazy<Regex> =
+                    Lazy::new(|| Regex::new(r" \^(?<index>[\w-]+)$").unwrap());
+                let index = INDEX_RE
+                    .captures(text)
+                    .and_then(|capture| capture.name("index"))
+                    .map(|it| Arc::from(it.as_str()));
 
                 let mut cursor = node.walk();
 
@@ -358,6 +439,7 @@ impl BlockContent {
                         .children(&mut cursor)
                         .flat_map(|it| WikiLink::parse(it, rope.clone()))
                         .collect(),
+                    index,
                 })
             }
             _ => None,
@@ -372,6 +454,7 @@ impl Debug for BlockContent {
             .field("tags", &self.tags)
             .field("wiki_links", &self.wiki_links)
             .field("md_links", &self.md_links)
+            .field("index", &self.index)
             .finish()
     }
 }
@@ -469,7 +552,6 @@ impl Debug for Heading {
             .finish()
     }
 }
-
 
 impl Heading {
     fn parse(it: tree_sitter::Node<'_>, rope: Rope) -> Option<Heading> {
