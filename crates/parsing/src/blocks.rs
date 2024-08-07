@@ -107,13 +107,38 @@ impl Block {
         &self.location
     }
 
-    fn is_initialized(&self) -> bool {
-        match (&self.children, &self.parent) {
-            (Some(children), Some(parent)) => {
-                children.iter().all(|child| child.is_initialized()) && parent.is_initialized()
+    /// Debug if block is initialized, showing proper construction algorithm
+    pub(crate) fn is_initialized(&self) -> bool {
+        let Block {
+            parent,
+            children,
+            location: _,
+            outgoing,
+            incoming,
+        } = self;
+        if let Some(parent) = parent {
+            if !parent.is_initialized() {
+                return false;
             }
-            _ => true,
         }
+
+        if let Some(children) = children {
+            if !children.iter().all(|child| child.is_initialized()) {
+                return false;
+            }
+        }
+
+        if !outgoing.iter().all(|out| out.is_initialized()) {
+            return false;
+        }
+
+        if let Some(incoming) = incoming {
+            if !incoming.iter().all(|inc| inc.is_initialized()) {
+                return false;
+            };
+        };
+
+        true
     }
 }
 

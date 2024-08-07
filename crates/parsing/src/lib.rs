@@ -100,7 +100,7 @@ mod documents {
                 })
                 .collect();
 
-            println!("Blocks: {:?}", now.elapsed());
+            println!("Blocks done: {:?}", now.elapsed());
 
             // print blocks in 2024-08-05
             // println!(
@@ -110,10 +110,16 @@ mod documents {
             //         .get(&Arc::from(path.join("2024-08-05.md")))
             // );
 
-            println!(
-                "Blocks: {:#?}",
-                blocks.get(&Arc::from(path.join("2024-08-07.md")))
-            );
+            // println!(
+            //     "Blocks: {:#?}",
+            //     blocks.get(&Arc::from(path.join("2024-08-07.md")))
+            // );
+
+            assert!(blocks
+                .par_iter()
+                .all(|(_, blocks)| blocks.iter().all(|block| { block.is_initialized() })));
+
+            println!("Initialized check done: {:?}", now.elapsed());
 
             let elapsed = now.elapsed();
             println!("Elapsed: {:?}", elapsed);
