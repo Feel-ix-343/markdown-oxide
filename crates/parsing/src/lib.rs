@@ -112,7 +112,7 @@ mod documents {
 
             println!(
                 "Blocks: {:#?}",
-                blocks.get(&Arc::from(path.join("2024-08-06.md")))
+                blocks.get(&Arc::from(path.join("2024-08-07.md")))
             );
 
             let elapsed = now.elapsed();

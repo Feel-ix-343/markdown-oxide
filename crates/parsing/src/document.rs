@@ -281,6 +281,13 @@ impl BorrowedDocBlock<'_> {
             Self::ParagraphBlock(b) => &b.content,
         }
     }
+
+    pub(crate) fn range(&self) -> Range {
+        match self {
+            Self::ListBlock(b) => b.range,
+            Self::ParagraphBlock(b) => b.range,
+        }
+    }
 }
 
 // Behavior
