@@ -1,5 +1,5 @@
 
-**markdown-oxide**: Robust, Minimalist, Unbundled PKM for your use with your favorite text-editor.
+**markdown-oxide**: Robust, Minimalist, Unbundled PKM for your favorite text-editor.
 
 **[Quick Start](#quick-start)**
 
