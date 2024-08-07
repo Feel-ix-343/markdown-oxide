@@ -273,6 +273,15 @@ pub(crate) enum BorrowedDocBlock<'a> {
     ListBlock(&'a DocListBlock),
     ParagraphBlock(&'a DocParagraphBlock),
 }
+// Behavior
+impl BorrowedDocBlock<'_> {
+    pub(crate) fn content(&self) -> &BlockContent {
+        match self {
+            Self::ListBlock(b) => &b.content,
+            Self::ParagraphBlock(b) => &b.content,
+        }
+    }
+}
 
 // Behavior
 impl DocSection {
