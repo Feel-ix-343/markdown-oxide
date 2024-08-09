@@ -4,16 +4,16 @@
     "type": "split",
     "children": [
       {
-        "id": "acfea0793806610c",
+        "id": "a1434b6d6d5c0882",
         "type": "tabs",
         "children": [
           {
-            "id": "1648e4973359b587",
+            "id": "d695463100ad962a",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Felix Zeller.md",
+                "file": "v0/Articles/Markdown-Oxide v0.md",
                 "mode": "preview",
                 "backlinks": true,
                 "source": false
@@ -66,13 +66,11 @@
               "state": {}
             }
           }
-        ],
-        "currentTab": 1
+        ]
       }
     ],
     "direction": "horizontal",
-    "width": 200,
-    "collapsed": true
+    "width": 200
   },
   "right": {
     "id": "63aba346fd695768",
@@ -88,7 +86,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "Felix Zeller.md",
+                "file": "v0/Articles/Markdown-Oxide v0.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -105,7 +103,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "Felix Zeller.md",
+                "file": "v0/Articles/Markdown-Oxide v0.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               }
@@ -128,7 +126,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Felix Zeller.md"
+                "file": "v0/Articles/Markdown-Oxide v0.md"
               }
             }
           }
@@ -150,12 +148,16 @@
       "publish:Publish changes...": false
     }
   },
-  "active": "1648e4973359b587",
+  "active": "d695463100ad962a",
   "lastOpenFiles": [
+    "What Is Markdown-Oxide.md",
+    "v0/Articles/Markdown-Oxide v0.md",
+    "Home.md",
+    "Index.md",
+    "Felix Zeller.md",
     "Index.md~",
     "Home.md~",
     "Felix Zeller.md~",
-    "Home.md",
     "Block Queries for Linking.md~",
     "v0/References/v0 Features Reference.md~",
     "Daily Notes.md~",
@@ -164,17 +166,12 @@
     "README.md~",
     "v0/References/v0 Features Reference.md",
     "v0/Guides/Getting started with Markdown Oxide Version 0.md",
-    "v0/Articles/Markdown-Oxide v0.md",
     "publish.css",
-    "Felix Zeller.md",
     "v0/References/v0 Configuration Reference.md",
     "Daily Notes.md",
-    "v0/Articles/Markdown-Oxide v0.md~",
     "v0/Guides/v0 Getting Started Guide.md",
     "Setup.md",
-    "What Is Markdown-Oxide.md",
     "Personal Knowledge Management System.md",
-    "Index.md",
     "Block Queries for Linking.md",
     "Documentation Notes.md",
     "Felix.md",

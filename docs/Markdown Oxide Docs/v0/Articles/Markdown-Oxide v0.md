@@ -4,7 +4,7 @@
 
 ![[What Is Markdown-Oxide#^whatIsMarkdownOxide]]
 
-It is implemented as a language server for the [Language Server Protocol(LSP)](https://microsoft.github.io/language-server-protocol/), allowing for various PKM workflows in popular text editors. It also is inspired by and highly compatible with Obsidian. 
+It also is inspired by and highly compatible with Obsidian. 
 
 > [!note] Editor Support
 > The best-supported text editor is Neovim, but also popular with users are VSCode, Helix, and Zed.
@@ -13,12 +13,9 @@ It is implemented as a language server for the [Language Server Protocol(LSP)](h
 
 Markdown-oxide is for you if...
 - You have a favorite text editor -- possibly one that you have spent days configuring and cannot live without -- and it supports the LSP.
-    - For example, I started using Neovim when I first started programming. Now, I would not choose to use anything else to write text.
 - Your set of Personal Knowledge Management needs can be met by Markdown-oxide.
 
-In this article, I give an overview of the features Markdown-oxide so that you can decide if it is for you.
-
-If you do decide you want to use it, there is a linked guide to help you set up and get comfortable with Markdown-oxide. 
+In this article, I give an overview of the features Markdown-oxide so that you can decide if it is for you. If you do decide you want to use it, there is a linked guide to help you set up and get comfortable with Markdown-oxide. 
 
 # PKM Features
 
