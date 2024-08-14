@@ -1,6 +1,5 @@
 
 mod slot;
-mod topics;
 mod blocks;
 mod location;
 
