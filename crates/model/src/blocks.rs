@@ -10,27 +10,23 @@ use std::fmt::Debug;
 use anyhow::{anyhow, Context};
 use derive_deref::Deref;
 use itertools::Itertools;
+use parsing::{document::{BorrowedDocBlock, DocBlock, DocListBlock, DocParagraphBlock, Document}, Documents};
 use pathdiff::diff_paths;
 use rayon::prelude::*;
-use tree_sitter::Range;
 
 use crate::{
-    document::{
-        BorrowedDocBlock, DocBlock, DocListBlock, DocParagraphBlock, DocSection, Document, Node,
-    },
-    documents::Documents,
     location,
     slot::{Slot, SlotDebug},
 };
 
 #[derive(Deref, Debug)]
-pub(crate) struct Blocks(Vec<Arc<Block>>);
+pub struct Blocks(Vec<Arc<Block>>);
 
 pub type BlockSlot = Slot<Arc<Block>>;
 
 /// All useful data regarding a block: hover, querying, go_to_definition, ...
 #[derive()]
-pub(crate) struct Block {
+pub struct Block {
     parent: Option<BlockSlot>,
     children: Option<Vec<BlockSlot>>,
     location: location::EntityFileLocation,
@@ -232,8 +228,6 @@ impl Block {
             Self::outgoing(cx, &this_location_id).context("Outgoing for paragraph block")?;
         let incoming = Self::incoming(&index_ids, cx)?;
 
-        let (topics, topic_slot_to_initialize) = Self::topics(cx, doc_block)?;
-
         let block = Arc::new(Self {
             parent,
             children,
@@ -241,8 +235,6 @@ impl Block {
             outgoing,
             incoming,
         });
-
-        topic_slot_to_initialize.set(block.clone())?;
 
         Self::set_slots_for_block_ids(cx, &this_location_id, index_ids, block.clone())?;
         Ok(block)
@@ -602,7 +594,6 @@ impl Debug for Block {
             .field("children", &self.children)
             .field("outgoing", &self.outgoing)
             .field("incoming", &self.incoming)
-            .field("topics", &self.topics)
             .finish()
     }
 }

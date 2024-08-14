@@ -7,10 +7,9 @@
 //     collections: Vec<Arc<Collection>>,
 // }
 
-mod blocks;
-mod document;
-mod location;
-mod slot;
+pub use documents::Documents;
+
+pub mod document;
 
 mod documents {
     use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
@@ -22,19 +21,19 @@ mod documents {
 
     use rayon::prelude::*;
 
-    pub(crate) struct Documents {
+    pub struct Documents {
         documents: HashMap<Arc<Path>, Document>,
         root_dir: Arc<Path>,
     }
 
     impl Documents {
-        pub(crate) fn documents(&self) -> &HashMap<Arc<Path>, Document> {
+        pub fn documents(&self) -> &HashMap<Arc<Path>, Document> {
             &self.documents
         }
     }
 
     impl Documents {
-        fn from_root_dir(root_dir: &Path) -> Self {
+        pub fn from_root_dir(root_dir: &Path) -> Self {
             let md_file_paths = WalkDir::new(root_dir)
                 .into_iter()
                 .filter_entry(|e| {
@@ -62,74 +61,6 @@ mod documents {
                 documents,
                 root_dir: Arc::from(root_dir),
             }
-        }
-    }
-
-    // tests
-    #[cfg(test)]
-    mod tests {
-        use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
-
-        use anyhow::Context;
-        use rayon::prelude::*;
-
-        use crate::blocks::{BlockCx, Blocks};
-
-        use super::Documents;
-
-        #[test]
-        fn bench() -> anyhow::Result<()> {
-            let now = std::time::Instant::now();
-            let path = PathBuf::from_str("/home/felix/notes")?;
-            let documents = Documents::from_root_dir(&path);
-
-            println!("Parse Documents: {:?}", now.elapsed());
-
-            let topics = TopicsMap::empty();
-            let partial_block_cx = BlockCx::new(&documents, &path, &topics);
-            println!("PartialBlockCx: {:?}", now.elapsed());
-            let blocks: HashMap<_, _> = documents
-                .documents
-                .par_iter()
-                .map(|(p, document)| {
-                    let block_cx = partial_block_cx(p);
-                    (
-                        p,
-                        Blocks::new(block_cx, document)
-                            .context(format!("Constructing blocks for path: {p:?}"))
-                            .unwrap(),
-                    )
-                })
-                .collect();
-
-            println!("Blocks done: {:?}", now.elapsed());
-
-            // print blocks in 2024-08-05
-            // println!(
-            //     "Blocks: {:#?}",
-            //     documents
-            //         .documents
-            //         .get(&Arc::from(path.join("2024-08-05.md")))
-            // );
-
-            // println!(
-            //     "Blocks: {:#?}",
-            //     blocks.get(&Arc::from(path.join("2024-08-09.md")))
-            // );
-
-            assert!(blocks
-                .par_iter()
-                .all(|(_, blocks)| blocks.iter().all(|block| { block.is_initialized() })));
-
-            assert!(topics.is_initialized().unwrap());
-
-            println!("Initialized check done: {:?}", now.elapsed());
-
-            let elapsed = now.elapsed();
-            println!("Elapsed: {:?}", elapsed);
-            assert!(elapsed.as_secs() < 1);
-
-            Ok(())
         }
     }
 }

@@ -1,7 +1,7 @@
 
 [workspace]
 members = [
-  "crates/markdown-oxide", "crates/parsing",
+  "crates/markdown-oxide", "crates/model", "crates/parsing"
 ] # other `members` are specified in dependencies
 resolver = "2"
 
@@ -28,6 +28,7 @@ tokio = { version = "1.34.0", features = ["full"] }
 tower-lsp = { git = "https://github.com/Feel-ix-343/tower-lsp" }
 walkdir = "2.4.0"
 derive_deref = "1.1.1"
+tree-sitter = "*"
 
 
 # local crates
@@ -35,3 +36,5 @@ completions.path = "crates/completions"
 moxide_config.path = "crates/moxide_config"
 vault.path = "crates/vault"
 ui.path = "crates/ui"
+parsing.path = "crates/parsing"
+model.path = "crates/model"

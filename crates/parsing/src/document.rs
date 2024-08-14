@@ -18,91 +18,91 @@ use std::fmt::Debug;
 
 use ropey::Rope;
 
-pub(crate) struct Document {
-    pub(crate) sections: Vec<DocSection>,
-    pub(crate) rope: Rope,
+pub struct Document {
+    pub sections: Vec<DocSection>,
+    pub rope: Rope,
 }
 
 #[derive(Debug)]
-pub(crate) struct DocSection {
-    pub(crate) heading: Option<Heading>,
-    pub(crate) level: usize,
-    pub(crate) nodes: Vec<Node>,
+pub struct DocSection {
+    pub heading: Option<Heading>,
+    pub level: usize,
+    pub nodes: Vec<Node>,
 }
 
 #[derive(Debug)]
-pub(crate) enum Node {
+pub enum Node {
     Block(DocBlock),
     Section(DocSection),
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum DocBlock {
+pub enum DocBlock {
     ListBlock(DocListBlock),
     ParagraphBlock(DocParagraphBlock),
 }
 
 #[derive(Clone)]
-pub(crate) struct DocListBlock {
-    pub(crate) range: Range,
-    pub(crate) content: BlockContent,
-    pub(crate) children: Option<Vec<DocListBlock>>,
-    pub(crate) checkbox: Option<CheckBox>,
+pub struct DocListBlock {
+    pub range: Range,
+    pub content: BlockContent,
+    pub children: Option<Vec<DocListBlock>>,
+    pub checkbox: Option<CheckBox>,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum CheckBox {
+pub enum CheckBox {
     Checked,
     Unchecked,
 }
 
 #[derive(Clone)]
-pub(crate) struct DocParagraphBlock {
+pub struct DocParagraphBlock {
     /// Paragraph Range is (row, 0) to (row + 1, 0)
-    pub(crate) range: Range,
-    pub(crate) content: BlockContent,
+    pub range: Range,
+    pub content: BlockContent,
 }
 
 #[derive(Clone)]
-pub(crate) struct BlockContent {
-    pub(crate) text: Arc<str>,
-    pub(crate) range: Range,
-    pub(crate) tags: Vec<Tag>,
-    pub(crate) wiki_links: Vec<WikiLink>,
-    pub(crate) md_links: Vec<MarkdownLink>,
-    pub(crate) index: Option<Arc<str>>,
+pub struct BlockContent {
+    pub text: Arc<str>,
+    pub range: Range,
+    pub tags: Vec<Tag>,
+    pub wiki_links: Vec<WikiLink>,
+    pub md_links: Vec<MarkdownLink>,
+    pub index: Option<Arc<str>>,
 }
 
 #[derive(Clone)]
-pub(crate) struct Tag {
+pub struct Tag {
     /// Tag Range, including #
-    pub(crate) range: Range,
+    pub range: Range,
     /// Tag text no #
-    pub(crate) text: Arc<str>,
+    pub text: Arc<str>,
 }
 
 #[derive(Clone)]
-pub(crate) struct WikiLink {
-    pub(crate) range: Range,
-    pub(crate) to: Arc<str>,
-    pub(crate) display: Option<Arc<str>>,
+pub struct WikiLink {
+    pub range: Range,
+    pub to: Arc<str>,
+    pub display: Option<Arc<str>>,
 }
 
 #[derive(Clone)]
-pub(crate) struct MarkdownLink {
-    pub(crate) range: Range,
-    pub(crate) to: Arc<str>,
-    pub(crate) display: Arc<str>,
+pub struct MarkdownLink {
+    pub range: Range,
+    pub to: Arc<str>,
+    pub display: Arc<str>,
 }
 
-pub(crate) struct Heading {
-    pub(crate) range: Range,
-    pub(crate) level: HeadingLevel,
-    pub(crate) text: Arc<str>,
+pub struct Heading {
+    pub range: Range,
+    pub level: HeadingLevel,
+    pub text: Arc<str>,
 }
 
 #[derive(Debug)]
-pub(crate) enum HeadingLevel {
+pub enum HeadingLevel {
     One,
     Two,
     Three,
@@ -121,14 +121,14 @@ impl Debug for Document {
 
 /// Document behavior
 impl Document {
-    pub(crate) fn top_level_doc_blocks(&self) -> impl Iterator<Item = &DocBlock> + '_ {
+    pub fn top_level_doc_blocks(&self) -> impl Iterator<Item = &DocBlock> + '_ {
         self.sections
             .iter()
             .map(|it| it.top_level_blocks())
             .flatten()
     }
 
-    pub(crate) fn all_blocks(&self) -> Box<dyn Iterator<Item = BorrowedDocBlock<'_>> + '_> {
+    pub fn all_blocks(&self) -> Box<dyn Iterator<Item = BorrowedDocBlock<'_>> + '_> {
         Box::new(
             self.sections
                 .iter()
@@ -147,7 +147,7 @@ impl DocBlock {
         }
     }
 
-    pub(crate) fn doc_index(&self) -> Option<Arc<str>> {
+    pub fn doc_index(&self) -> Option<Arc<str>> {
         self.content().index.clone()
     }
 }
@@ -166,7 +166,7 @@ impl From<DocParagraphBlock> for DocBlock {
 
 /// Document construction
 impl Document {
-    pub(crate) fn new(text: &str) -> Option<Document> {
+    pub fn new(text: &str) -> Option<Document> {
         let mut markdown_parser = MarkdownParser::default();
         let markdown_tree = markdown_parser.parse(text.as_bytes(), None)?;
         let node = markdown_tree.walk().node();
@@ -269,20 +269,20 @@ impl DocSection {
     }
 }
 
-pub(crate) enum BorrowedDocBlock<'a> {
+pub enum BorrowedDocBlock<'a> {
     ListBlock(&'a DocListBlock),
     ParagraphBlock(&'a DocParagraphBlock),
 }
 // Behavior
 impl BorrowedDocBlock<'_> {
-    pub(crate) fn content(&self) -> &BlockContent {
+    pub fn content(&self) -> &BlockContent {
         match self {
             Self::ListBlock(b) => &b.content,
             Self::ParagraphBlock(b) => &b.content,
         }
     }
 
-    pub(crate) fn range(&self) -> Range {
+    pub fn range(&self) -> Range {
         match self {
             Self::ListBlock(b) => b.range,
             Self::ParagraphBlock(b) => b.range,
@@ -317,7 +317,7 @@ impl DocSection {
 
 /// Behavior
 impl DocListBlock {
-    pub(crate) fn list_blocks(&self) -> Box<dyn Iterator<Item = &DocListBlock> + '_> {
+    pub fn list_blocks(&self) -> Box<dyn Iterator<Item = &DocListBlock> + '_> {
         Box::new(
             std::iter::once(self).chain(
                 self.children
@@ -421,7 +421,7 @@ impl DocParagraphBlock {
 
 /// Behavior
 impl BlockContent {
-    pub(crate) fn link_refs(&self) -> impl Iterator<Item = &str> + '_ {
+    pub fn link_refs(&self) -> impl Iterator<Item = &str> + '_ {
         self.md_links
             .iter()
             .map(|it| it.to.as_ref())

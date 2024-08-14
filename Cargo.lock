@@ -709,6 +709,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "model"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "derive_deref",
+ "itertools",
+ "parsing",
+ "pathdiff",
+ "rayon",
+ "regex",
+ "tree-sitter",
+]
+
+[[package]]
 name = "moxide_config"
 version = "0.1.0"
 dependencies = [
