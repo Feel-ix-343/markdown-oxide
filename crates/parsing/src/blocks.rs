@@ -2,7 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     path::Path,
     rc::Rc,
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex},
 };
 
 use std::fmt::Debug;
@@ -19,44 +19,24 @@ use crate::{
         BorrowedDocBlock, DocBlock, DocListBlock, DocParagraphBlock, DocSection, Document, Node,
     },
     documents::Documents,
+    location,
+    slot::{Slot, SlotDebug},
 };
 
 #[derive(Deref, Debug)]
 pub(crate) struct Blocks(Vec<Arc<Block>>);
+
+pub type BlockSlot = Slot<Arc<Block>>;
 
 /// All useful data regarding a block: hover, querying, go_to_definition, ...
 #[derive()]
 pub(crate) struct Block {
     parent: Option<BlockSlot>,
     children: Option<Vec<BlockSlot>>,
-    location: BlockFileLocation,
+    location: location::EntityFileLocation,
     outgoing: Vec<BlockSlot>,
     incoming: Option<Vec<BlockSlot>>,
 }
-
-/// Shared, mutable slot for a Block. This allows us to calculate complex recursive relationships between Blocks inside
-/// the Block struct itself.
-///
-/// It acts as a deferred initialization so that we can construct recursive datastructures without infinite recursion.
-///
-/// Once the struct using this is constructed to a usable state, all atomic block slots should be *Set*. Reading
-/// an atomic slot returns a result to reflect this.
-#[derive(Clone)]
-struct BlockSlot(Arc<RwLock<SlotState>>);
-#[derive(Clone)]
-enum SlotState {
-    Empty,
-    Set(Arc<Block>),
-}
-
-#[derive(Debug, Hash, PartialEq, Eq, Clone)]
-pub(crate) enum BlockFileLocation {
-    Line(Line),
-    Lines(Lines),
-}
-
-pub(crate) type Line = usize;
-pub(crate) type Lines = std::ops::Range<Line>;
 
 impl Blocks {
     pub(crate) fn new(cx: BlockCx, doc: &Document) -> anyhow::Result<Self> {
@@ -79,18 +59,6 @@ impl Blocks {
     }
 }
 
-impl Debug for Block {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Block")
-            .field("location", &self.location())
-            .field("parent", &self.parent)
-            .field("children", &self.children)
-            .field("outgoing", &self.outgoing)
-            .field("incoming", &self.incoming)
-            .finish()
-    }
-}
-
 /// Block methods
 impl Block {
     pub fn parent(&self) -> Option<anyhow::Result<Arc<Block>>> {
@@ -103,7 +71,7 @@ impl Block {
             .map(|children| children.iter().map(|child| child.read()).collect())
     }
 
-    pub fn location(&self) -> &BlockFileLocation {
+    pub fn location(&self) -> &location::EntityFileLocation {
         &self.location
     }
 
@@ -145,9 +113,8 @@ impl Block {
 /// Cx with cheap clone
 ///
 /// Contains data structures used for constructing blocks
-#[derive(Clone)]
 pub(crate) struct BlockCx<'a> {
-    location_id_map: Arc<LocationIDMap>,
+    location_id_map: Arc<LocationIDMap>, // arc bc shared ownership
     index_id_map: Arc<IndexIDMap>,
     outgoing_map: Arc<OutgoingMap>,
     incoming_map: Arc<IncomingMap>,
@@ -163,7 +130,7 @@ pub(crate) struct BlockCx<'a> {
 ///
 /// This type should be cheap to construct and clone
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
-struct LocationID(Arc<Path>, BlockFileLocation);
+struct LocationID(Arc<Path>, location::EntityFileLocation);
 
 /// This will be the block's index id.
 ///
@@ -205,42 +172,22 @@ impl Block {
         cx: &BlockCx,
         parent: Option<BlockSlot>,
     ) -> anyhow::Result<(BlockSlot, Vec<Arc<Block>>)> {
-        let location = list_block.location();
-
-        let this_location_id = LocationID::for_block(list_block, cx.file_path.into());
-        let outgoing = Self::outgoing(cx, &this_location_id)
-            .context("Outgoing for list block")
-            .unwrap();
-
-        let index_ids = IndexID::for_block(list_block, cx.file_path, cx.root_dir);
-        let incoming =
-            Self::incoming(&index_ids, cx).map(|it| it.context("Incoming for list block").unwrap());
-
         match list_block.children() {
             None => {
-                let block = Arc::new(Block {
-                    parent,
-                    children: None,
-                    location,
-                    outgoing,
-                    incoming,
-                });
+                let block = Self::construct_block(cx, list_block, None, parent)
+                    .context("Construct most child block")?;
 
                 let shared_block = BlockSlot::new(block.clone());
-
-                Self::set_slots_for_ids(cx, &this_location_id, index_ids, block.clone())
-                    .context(format!("In most child block"))
-                    .unwrap();
 
                 Ok((shared_block, vec![block]))
             }
             Some(children) => {
-                let uninitialized_this = BlockSlot::empty();
+                let slot_for_children = BlockSlot::empty();
 
-                let r = children.iter().try_fold(
+                let (children, acc) = children.iter().try_fold(
                     (Vec::<BlockSlot>::new(), Vec::<Arc<Block>>::new()),
                     |(mut children, mut all), child| {
-                        Self::recurse_list_block(child, cx, Some(uninitialized_this.clone())).map(
+                        Self::recurse_list_block(child, cx, Some(slot_for_children.clone())).map(
                             |(child, acc)| {
                                 children.push(child);
                                 all.extend(acc);
@@ -249,31 +196,17 @@ impl Block {
                             },
                         )
                     },
-                );
+                )?;
 
-                match r {
-                    Ok((children, acc)) => {
-                        let block = Arc::new(Block {
-                            parent,
-                            children: Some(children),
-                            location,
-                            outgoing,
-                            incoming,
-                        });
+                let block = Self::construct_block(cx, list_block, Some(children), parent)
+                    .context("Construct Parent Block")?;
 
-                        Self::set_slots_for_ids(cx, &this_location_id, index_ids, block.clone())
-                            .context(format!("In most parent block"))
-                            .unwrap();
+                let initialized = slot_for_children.set(block.clone())?;
 
-                        let initialized = uninitialized_this.initialize(block.clone())?;
+                let mut all = vec![block];
+                all.extend(acc);
 
-                        let mut all = vec![block];
-                        all.extend(acc);
-
-                        Ok((initialized, all))
-                    }
-                    Err(e) => Err(e),
-                }
+                Ok((initialized, all))
             }
         }
     }
@@ -282,26 +215,36 @@ impl Block {
         paragraph_block: &DocParagraphBlock,
         cx: &BlockCx,
     ) -> anyhow::Result<Arc<Self>> {
-        let this_location_id = LocationID::for_block(paragraph_block, cx.file_path.into());
-        let index_ids = IndexID::for_block(paragraph_block, cx.file_path, cx.root_dir);
-        let outgoing = Self::outgoing(cx, &this_location_id)
-            .context("Outgoing for paragraph block")
-            .unwrap();
-        let incoming = Self::incoming(&index_ids, cx)
-            .map(|it| it.context("Incoming for paragraph block").unwrap());
+        let block = Self::construct_block(cx, paragraph_block, None, None)?;
+
+        Ok(block)
+    }
+
+    fn construct_block(
+        cx: &BlockCx<'_>,
+        doc_block: &impl DocBlockAdapter,
+        children: Option<Vec<BlockSlot>>,
+        parent: Option<BlockSlot>,
+    ) -> Result<Arc<Block>, anyhow::Error> {
+        let this_location_id = LocationID::for_block(doc_block, cx.file_path.into());
+        let index_ids = IndexID::for_block(doc_block, cx.file_path, cx.root_dir);
+        let outgoing =
+            Self::outgoing(cx, &this_location_id).context("Outgoing for paragraph block")?;
+        let incoming = Self::incoming(&index_ids, cx)?;
+
+        let (topics, topic_slot_to_initialize) = Self::topics(cx, doc_block)?;
 
         let block = Arc::new(Self {
-            parent: None,
-            children: None,
-            location: BlockFileLocation::from_range(paragraph_block.range),
+            parent,
+            children,
+            location: doc_block.file_location(),
             outgoing,
             incoming,
         });
 
-        Self::set_slots_for_ids(cx, &this_location_id, index_ids, block.clone())
-            .context("For paragraph block")
-            .unwrap();
+        topic_slot_to_initialize.set(block.clone())?;
 
+        Self::set_slots_for_block_ids(cx, &this_location_id, index_ids, block.clone())?;
         Ok(block)
     }
 
@@ -311,7 +254,7 @@ impl Block {
             .outgoing_for_location_id(this_location_id)
             .context("Getting outgoing ids for block")?;
         let outgoing = outgoing_index_ids
-            .into_iter()
+            .iter()
             .flat_map(|idx| cx.index_id_map.get(idx).cloned())
             .collect();
         Ok(outgoing)
@@ -320,7 +263,7 @@ impl Block {
     fn incoming(
         index_ids: &Option<Vec<IndexID>>,
         cx: &BlockCx<'_>,
-    ) -> Option<anyhow::Result<Vec<BlockSlot>>> {
+    ) -> anyhow::Result<Option<Vec<BlockSlot>>> {
         let incoming = index_ids.clone().map(|ids| {
             let incoming_location_ids = cx.incoming_map.incoming_for_index_ids(&ids);
             let incoming_slots = incoming_location_ids
@@ -336,10 +279,14 @@ impl Block {
                 .collect::<anyhow::Result<Vec<_>>>()?;
             Ok(incoming_slots)
         });
-        incoming
+        match incoming {
+            Some(Ok(incoming)) => Ok(Some(incoming)),
+            Some(Err(e)) => Err(e),
+            None => Ok(None),
+        }
     }
 
-    fn set_slots_for_ids(
+    fn set_slots_for_block_ids(
         cx: &BlockCx,
         location_id: &LocationID,
         index_ids: Option<Vec<IndexID>>,
@@ -360,27 +307,17 @@ impl Block {
 
 trait DocumentListBlockAdapter: Sized {
     fn children(&self) -> &Option<Vec<Self>>;
-    fn location(&self) -> BlockFileLocation;
+    fn location(&self) -> location::EntityFileLocation;
     fn list_block_index(&self) -> Option<&str>;
     fn link_refs(&self) -> impl Iterator<Item = &str>;
-}
-
-impl BlockFileLocation {
-    fn from_range(range: Range) -> BlockFileLocation {
-        if range.start_point.row + 1 == range.end_point.row {
-            BlockFileLocation::Line(range.start_point.row)
-        } else {
-            BlockFileLocation::Lines(range.start_point.row..range.end_point.row)
-        }
-    }
 }
 
 impl DocumentListBlockAdapter for DocListBlock {
     fn children(&self) -> &Option<Vec<Self>> {
         &self.children
     }
-    fn location(&self) -> BlockFileLocation {
-        BlockFileLocation::from_range(self.range)
+    fn location(&self) -> location::EntityFileLocation {
+        location::EntityFileLocation::from_range(self.range)
     }
 
     fn link_refs(&self) -> impl Iterator<Item = &str> {
@@ -389,67 +326,6 @@ impl DocumentListBlockAdapter for DocListBlock {
 
     fn list_block_index(&self) -> Option<&str> {
         self.content.index.as_ref().map(|it| it.as_ref())
-    }
-}
-
-impl BlockSlot {
-    fn empty() -> Self {
-        Self(Arc::new(RwLock::new(SlotState::Empty)))
-    }
-
-    fn initialize(&self, block: Arc<Block>) -> anyhow::Result<Self> {
-        let mut write = self
-            .0
-            .write()
-            .or(Err(anyhow!("Failed to read from lock when I shuold have")))?;
-        *write = SlotState::Set(block);
-
-        Ok(self.clone())
-    }
-
-    fn new(block: Arc<Block>) -> Self {
-        Self(Arc::new(RwLock::new(SlotState::Set(block))))
-    }
-
-    fn is_initialized(&self) -> bool {
-        match *self.0.read().expect("Broken RwLock") {
-            SlotState::Empty => false,
-            SlotState::Set(_) => true,
-        }
-    }
-
-    fn read(&self) -> anyhow::Result<Arc<Block>> {
-        let read = self
-            .0
-            .read()
-            .map_err(|_| anyhow!("Failed to read from RwLock"))?;
-        let block = match *read {
-            SlotState::Empty => return Err(anyhow!("Block not initialized when it should be")),
-            SlotState::Set(ref block) => block.clone(),
-        };
-        Ok(block)
-    }
-}
-
-impl Debug for BlockSlot {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let slot_state = self.0.read().expect("Failed to read from RwLock");
-
-        f.debug_struct("Atomic Block Slot")
-            .field("State", &slot_state)
-            .finish()
-    }
-}
-
-impl Debug for SlotState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SlotState::Empty => f.write_str("Empty"),
-            SlotState::Set(block) => f
-                .debug_struct("Initialized")
-                .field("Location", &block.location)
-                .finish(),
-        }
     }
 }
 
@@ -518,7 +394,7 @@ impl IndexIDMap {
         ))?;
         // setting one index will set them all
 
-        let _ = slot.initialize(block)?;
+        let _ = slot.set(block)?;
         Ok(())
     }
 }
@@ -530,7 +406,7 @@ impl LocationIDMap {
             "Block location should exist in map if it is being set"
         ))?;
 
-        let _ = slot.initialize(block)?;
+        let _ = slot.set(block)?;
         Ok(())
     }
 }
@@ -540,7 +416,7 @@ impl LocationIDMap {
 /// Includes for example all of the DocBlock, BorrowedDocBlock and their enum members
 /// ListBlock, ParagraphBlock ...
 trait DocBlockAdapter {
-    fn file_location(&self) -> BlockFileLocation;
+    fn file_location(&self) -> location::EntityFileLocation;
     fn index(&self) -> Option<&str>;
     fn link_refs(&self) -> impl Iterator<Item = &str>;
 }
@@ -591,8 +467,8 @@ impl IndexID {
 }
 
 impl DocBlockAdapter for BorrowedDocBlock<'_> {
-    fn file_location(&self) -> BlockFileLocation {
-        BlockFileLocation::from_range(self.range())
+    fn file_location(&self) -> location::EntityFileLocation {
+        location::EntityFileLocation::from_range(self.range())
     }
 
     fn index(&self) -> Option<&str> {
@@ -611,7 +487,7 @@ impl<T: DocumentListBlockAdapter> DocBlockAdapter for T {
     fn index(&self) -> Option<&str> {
         self.list_block_index()
     }
-    fn file_location(&self) -> BlockFileLocation {
+    fn file_location(&self) -> location::EntityFileLocation {
         self.location()
     }
 }
@@ -620,8 +496,8 @@ impl DocBlockAdapter for DocParagraphBlock {
     fn index(&self) -> Option<&str> {
         self.content.index.as_ref().map(|it| it.as_ref())
     }
-    fn file_location(&self) -> BlockFileLocation {
-        BlockFileLocation::from_range(self.range)
+    fn file_location(&self) -> location::EntityFileLocation {
+        location::EntityFileLocation::from_range(self.range)
     }
     fn link_refs(&self) -> impl Iterator<Item = &str> {
         self.content.link_refs()
@@ -718,6 +594,31 @@ impl BlockCx<'_> {
     }
 }
 
+impl Debug for Block {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Block")
+            .field("location", &self.location())
+            .field("parent", &self.parent)
+            .field("children", &self.children)
+            .field("outgoing", &self.outgoing)
+            .field("incoming", &self.incoming)
+            .field("topics", &self.topics)
+            .finish()
+    }
+}
+
+impl SlotDebug for Arc<Block> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Block")
+            .field("location", &self.location())
+            // .field("parent", &self.parent)
+            // .field("children", &self.children)
+            // .field("outgoing", &self.outgoing)
+            // .field("incoming", &self.incoming)
+            .finish()
+    }
+}
+
 #[cfg(test)]
 mod blocks_tests {
     use std::{
@@ -727,49 +628,9 @@ mod blocks_tests {
 
     use itertools::Itertools;
 
-    use crate::blocks::{Block, BlockFileLocation};
+    use crate::blocks::{location::EntityFileLocation, Block};
 
-    use super::{DocBlockAdapter, DocumentListBlockAdapter, IndexID};
-
-    const LOCATION: BlockFileLocation = BlockFileLocation::Line(0);
-
-    #[derive(Clone)]
-    struct MockListBlockNoRange(Option<Vec<MockListBlockNoRange>>);
-    impl DocumentListBlockAdapter for MockListBlockNoRange {
-        fn location(&self) -> BlockFileLocation {
-            LOCATION
-        }
-
-        fn children(&self) -> &Option<Vec<Self>> {
-            &self.0
-        }
-
-        fn list_block_index(&self) -> Option<&str> {
-            None
-        }
-
-        fn link_refs(&self) -> impl Iterator<Item = &str> {
-            std::iter::empty()
-        }
-    }
-
-    struct MockListBlockRange(usize, Option<Vec<MockListBlockRange>>);
-    impl DocumentListBlockAdapter for MockListBlockRange {
-        fn location(&self) -> BlockFileLocation {
-            BlockFileLocation::Line(self.0)
-        }
-        fn children(&self) -> &Option<Vec<Self>> {
-            &self.1
-        }
-
-        fn link_refs(&self) -> impl Iterator<Item = &str> {
-            std::iter::empty()
-        }
-
-        fn list_block_index(&self) -> Option<&str> {
-            None
-        }
-    }
+    use super::{location, DocBlockAdapter, DocumentListBlockAdapter, IndexID};
 
     struct MockDocBlock;
     impl DocBlockAdapter for MockDocBlock {
@@ -777,7 +638,7 @@ mod blocks_tests {
             Some("12345")
         }
 
-        fn file_location(&self) -> BlockFileLocation {
+        fn file_location(&self) -> location::EntityFileLocation {
             todo!()
         }
 

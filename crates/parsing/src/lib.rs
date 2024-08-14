@@ -9,6 +9,8 @@
 
 mod blocks;
 mod document;
+mod location;
+mod slot;
 
 mod documents {
     use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
@@ -33,7 +35,6 @@ mod documents {
 
     impl Documents {
         fn from_root_dir(root_dir: &Path) -> Self {
-            let now = std::time::Instant::now();
             let md_file_paths = WalkDir::new(root_dir)
                 .into_iter()
                 .filter_entry(|e| {
@@ -45,7 +46,6 @@ mod documents {
                 .flatten()
                 .filter(|f| f.path().extension().and_then(|e| e.to_str()) == Some("md"))
                 .collect_vec();
-            println!("WalkDir: {:?}", now.elapsed());
 
             let now = std::time::Instant::now();
             let documents: HashMap<Arc<Path>, Document> = md_file_paths
@@ -57,7 +57,6 @@ mod documents {
                     return Some((p.path().into(), document));
                 })
                 .collect();
-            println!("Read files: {:?}", now.elapsed());
 
             Documents {
                 documents,
@@ -84,7 +83,10 @@ mod documents {
             let path = PathBuf::from_str("/home/felix/notes")?;
             let documents = Documents::from_root_dir(&path);
 
-            let partial_block_cx = BlockCx::new(&documents, &path);
+            println!("Parse Documents: {:?}", now.elapsed());
+
+            let topics = TopicsMap::empty();
+            let partial_block_cx = BlockCx::new(&documents, &path, &topics);
             println!("PartialBlockCx: {:?}", now.elapsed());
             let blocks: HashMap<_, _> = documents
                 .documents
@@ -112,12 +114,14 @@ mod documents {
 
             // println!(
             //     "Blocks: {:#?}",
-            //     blocks.get(&Arc::from(path.join("2024-08-07.md")))
+            //     blocks.get(&Arc::from(path.join("2024-08-09.md")))
             // );
 
             assert!(blocks
                 .par_iter()
                 .all(|(_, blocks)| blocks.iter().all(|block| { block.is_initialized() })));
+
+            assert!(topics.is_initialized().unwrap());
 
             println!("Initialized check done: {:?}", now.elapsed());
 
