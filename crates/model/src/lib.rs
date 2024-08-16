@@ -2,6 +2,7 @@
 mod slot;
 mod blocks;
 mod location;
+mod topics;
 
 // tests
 #[cfg(test)]
@@ -12,7 +13,7 @@ mod tests {
     use parsing::Documents;
     use rayon::prelude::*;
 
-    use crate::blocks::{BlockCx, Blocks};
+    use crate::{blocks::{BlockCx, Blocks}, topics::Topics};
 
     #[test]
     fn bench() -> anyhow::Result<()> {
@@ -21,6 +22,11 @@ mod tests {
         let documents = Documents::from_root_dir(&path);
 
         println!("Parse Documents: {:?}", now.elapsed());
+
+        let topics = Topics::from_documents(&documents)?;
+        assert!(topics.is_initialized());
+        // println!("Topics: {:#?}", topics);
+        println!("Topics: {:?}", now.elapsed());
 
         let partial_block_cx = BlockCx::new(&documents, &path);
         println!("PartialBlockCx: {:?}", now.elapsed());

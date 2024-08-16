@@ -12,7 +12,7 @@ pub use documents::Documents;
 pub mod document;
 
 mod documents {
-    use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
+    use std::{collections::HashMap, ops::Deref, path::Path, sync::Arc, time::Duration};
 
     use itertools::Itertools;
     use walkdir::WalkDir;
@@ -24,6 +24,14 @@ mod documents {
     pub struct Documents {
         documents: HashMap<Arc<Path>, Document>,
         root_dir: Arc<Path>,
+    }
+
+    impl Deref for Documents {
+        type Target = HashMap<Arc<Path>, Document>;
+
+        fn deref(&self) -> &Self::Target {
+            &self.documents
+        }
     }
 
     impl Documents {

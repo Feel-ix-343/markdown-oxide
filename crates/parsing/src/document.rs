@@ -4,6 +4,7 @@ use regex::Regex;
 use tree_sitter_md::MarkdownParser;
 
 use std::ops::Not;
+use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
@@ -134,6 +135,14 @@ impl Document {
                 .iter()
                 .map(|section| section.all_blocks())
                 .flatten(),
+        )
+    }
+
+    pub fn all_sections(&self) -> Box<dyn Iterator<Item = &DocSection> + '_> {
+        Box::new(
+            self.sections
+                .iter()
+                .chain(self.sections.iter().flat_map(|it| it.all_sections())),
         )
     }
 }
@@ -267,6 +276,41 @@ impl DocSection {
                 .flatten(),
         )
     }
+
+    fn all_blocks(&self) -> Box<dyn Iterator<Item = BorrowedDocBlock<'_>> + '_> {
+        Box::new(
+            self.nodes
+                .iter()
+                .map(|it| match it {
+                    Node::Block(block) => match block {
+                        DocBlock::ParagraphBlock(b) => {
+                            Box::new(std::iter::once(BorrowedDocBlock::ParagraphBlock(b)))
+                                as Box<dyn Iterator<Item = BorrowedDocBlock>>
+                        }
+                        DocBlock::ListBlock(block) => Box::new(
+                            block
+                                .list_blocks()
+                                .map(|it| BorrowedDocBlock::ListBlock(it)),
+                        ),
+                    },
+                    Node::Section(section) => section.all_blocks(),
+                })
+                .flatten(),
+        )
+    }
+
+    fn all_sections(&self) -> Box<dyn Iterator<Item = &DocSection> + '_> {
+        Box::new(
+            self.nodes
+                .iter()
+                .flat_map(|it| match it {
+                    Node::Block(_) => None,
+                    Node::Section(section) => Some(section),
+                })
+                .map(|section| section.all_sections())
+                .flatten(),
+        )
+    }
 }
 
 pub enum BorrowedDocBlock<'a> {
@@ -291,29 +335,7 @@ impl BorrowedDocBlock<'_> {
 }
 
 // Behavior
-impl DocSection {
-    fn all_blocks(&self) -> Box<dyn Iterator<Item = BorrowedDocBlock<'_>> + '_> {
-        Box::new(
-            self.nodes
-                .iter()
-                .map(|it| match it {
-                    Node::Block(block) => match block {
-                        DocBlock::ParagraphBlock(b) => {
-                            Box::new(std::iter::once(BorrowedDocBlock::ParagraphBlock(b)))
-                                as Box<dyn Iterator<Item = BorrowedDocBlock>>
-                        }
-                        DocBlock::ListBlock(block) => Box::new(
-                            block
-                                .list_blocks()
-                                .map(|it| BorrowedDocBlock::ListBlock(it)),
-                        ),
-                    },
-                    Node::Section(section) => section.all_blocks(),
-                })
-                .flatten(),
-        )
-    }
-}
+impl DocSection {}
 
 /// Behavior
 impl DocListBlock {
