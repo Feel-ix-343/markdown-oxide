@@ -27,6 +27,7 @@ shellexpand = "3.1.0"
 tokio = { version = "1.34.0", features = ["full"] }
 tower-lsp = { git = "https://github.com/Feel-ix-343/tower-lsp" }
 walkdir = "2.4.0"
+derive_deref = "1.1.1"
 
 
 # local crates
