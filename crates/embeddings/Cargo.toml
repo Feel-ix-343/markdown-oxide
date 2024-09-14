@@ -1,0 +1,15 @@
+[package]
+name = "embeddings"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-openai = "0.23.4"
+tokio.workspace = true
+futures = "0.3.30"
+anyhow.workspace = true
+derive_deref.workspace = true
+rayon.workspace = true
+itertools.workspace = true
+serde.workspace = true
+tiktoken-rs = "0.5.9"

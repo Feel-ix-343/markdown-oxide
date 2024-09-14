@@ -7,7 +7,10 @@
 //     collections: Vec<Arc<Collection>>,
 // }
 
-mod blocks;
+pub use documents::Documents;
+
+pub use document::*;
+
 mod document;
 
 mod documents {
@@ -20,13 +23,13 @@ mod documents {
 
     use rayon::prelude::*;
 
-    struct Documents {
-        documents: HashMap<Arc<Path>, Document>,
+    pub struct Documents {
+        pub documents: HashMap<Arc<Path>, Document>,
         root_dir: Arc<Path>,
     }
 
     impl Documents {
-        fn from_root_dir(root_dir: &Path) -> Self {
+        pub fn from_root_dir(root_dir: &Path) -> Self {
             let now = std::time::Instant::now();
             let md_file_paths = WalkDir::new(root_dir)
                 .into_iter()
@@ -57,44 +60,6 @@ mod documents {
                 documents,
                 root_dir: Arc::from(root_dir),
             }
-        }
-    }
-
-    // tests
-    #[cfg(test)]
-    mod tests {
-        use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
-
-        use rayon::prelude::*;
-
-        use crate::blocks::Blocks;
-
-        use super::Documents;
-
-        #[test]
-        fn bench() -> anyhow::Result<()> {
-            let now = std::time::Instant::now();
-            let path = PathBuf::from_str("/home/felix/notes")?;
-            let documents = Documents::from_root_dir(&path);
-
-            let blocks: HashMap<_, _> = documents
-                .documents
-                .par_iter()
-                .map(|(p, document)| (p, Blocks::new(document)))
-                .collect();
-
-            println!("Blocks: {:?}", now.elapsed());
-
-            println!(
-                "Blocks: {:#?}",
-                blocks.get(&Arc::from(path.join("2024-08-05.md")))
-            );
-
-            let elapsed = now.elapsed();
-            println!("Elapsed: {:?}", elapsed);
-            assert!(elapsed.as_secs() < 1);
-
-            Ok(())
         }
     }
 }

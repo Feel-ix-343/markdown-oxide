@@ -1,0 +1,13 @@
+[package]
+name = "model"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+parsing.workspace = true
+anyhow.workspace = true
+itertools.workspace = true
+rayon.workspace = true
+embeddings.workspace = true
+derive_deref.workspace = true
+serde.workspace = true
