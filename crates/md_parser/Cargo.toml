@@ -1,0 +1,14 @@
+[package]
+name = "parsing"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tree-sitter-md.path = "./tree-sitter-markdown"
+tree-sitter = "*"
+ropey.workspace = true
+walkdir.workspace = true
+itertools.workspace = true
+rayon.workspace = true
+anyhow.workspace = true
+derive_deref.workspace = true

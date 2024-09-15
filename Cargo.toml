@@ -1,0 +1,13 @@
+
+[workspace]
+resolver = "2"
+
+members = ["crates/md_parser", "crates/vault_db"]
+
+[workspace.dependencies]
+ropey = "*"
+walkdir = "*"
+itertools = "*"
+rayon = "*"
+anyhow = "*"
+derive_deref = "*"
