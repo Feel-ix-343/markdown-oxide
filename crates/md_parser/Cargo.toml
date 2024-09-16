@@ -1,10 +1,10 @@
 [package]
-name = "parsing"
+name = "md_parser"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tree-sitter-md.path = "./tree-sitter-markdown"
+tree-sitter-md = { path = "./tree-sitter-markdown", features = ["parser"] }
 tree-sitter = "*"
 ropey.workspace = true
 walkdir.workspace = true

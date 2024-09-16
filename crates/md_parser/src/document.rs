@@ -1,13 +1,12 @@
 use rayon::prelude::*;
-use tree_sitter_md::MarkdownParser;
+use tree_sitter_md::MarkdownTree;
 
 use std::ops::Not;
 use std::sync::Arc;
 use std::time::Duration;
 
 use tree_sitter::Range;
-
-use tree_sitter_md::MarkdownTree;
+use tree_sitter_md::MarkdownParser;
 
 use std::fmt::Formatter;
 
@@ -205,6 +204,7 @@ impl Section {
     }
 }
 
+#[derive(Debug)]
 pub enum BorrowedDocBlock<'a> {
     ListBlock(&'a ListBlock),
     ParagraphBlock(&'a ParagraphBlock),
