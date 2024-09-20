@@ -186,12 +186,40 @@ fn convert_momentjs_to_chrono_format(moment_format: &str) -> String {
 #[cfg(test)]
 mod test {
 
-    use crate::config::convert_momentjs_to_chrono_format;
+    use std::path::PathBuf;
+
+    use crate::config::{
+        convert_momentjs_to_chrono_format, obsidian_daily_note_config,
+        obsidian_new_file_folder_path,
+    };
 
     #[test]
     fn test_format_conversion() {
         let moment_format = "YYYY-MM-DD";
         let chrono_format = convert_momentjs_to_chrono_format(moment_format);
         assert_eq!(chrono_format, "%Y-%m-%d");
+    }
+
+    #[test]
+    fn test_daily_note_config() {
+        let daily_notes_config = obsidian_daily_note_config(&root_dir()).unwrap();
+        assert_eq!(daily_notes_config.format, Some("%Y-%m-%d".to_string()));
+        assert_eq!(
+            daily_notes_config.folder,
+            Some("the-daily-notes-folder".to_string())
+        );
+    }
+
+    #[test]
+    fn test_new_file_folder_path() {
+        let new_file_folder_path = obsidian_new_file_folder_path(&root_dir());
+        assert_eq!(
+            new_file_folder_path,
+            Some("the-new-file-folder".to_string())
+        );
+    }
+
+    fn root_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("TestFiles")
     }
 }
