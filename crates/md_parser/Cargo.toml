@@ -12,3 +12,4 @@ itertools.workspace = true
 rayon.workspace = true
 anyhow.workspace = true
 derive_deref.workspace = true
+tracing.workspace = true

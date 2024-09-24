@@ -2,12 +2,17 @@
 [workspace]
 resolver = "2"
 
-members = ["crates/md_parser", "crates/vault_db"]
+members = ["crates/md_parser", "crates/vault"]
 
 [workspace.dependencies]
+
+tiktoken = "*"
+
 ropey = "*"
 walkdir = "*"
 itertools = "*"
 rayon = "*"
 anyhow = "*"
 derive_deref = "*"
+tracing = "*"
+tracing-subscriber = { version = "*", features = ["env-filter"] }

@@ -1,5 +1,5 @@
 [package]
-name = "vault_db"
+name = "vault"
 version = "0.1.0"
 edition = "2021"
 
@@ -12,9 +12,14 @@ serde = { version = "1.0.210", features = ["serde_derive"] }
 md_parser = { path = "../md_parser" }
 rayon.workspace = true
 async-openai = "0.24.0"
+tiktoken-rs = "*"
 tokio = { version = "*", features = ["full"] }
 futures = "0.3.30"
 
-tracing = "0.1"
-tracing-subscriber = "0.3"
 num_cpus = "1.13.1"
+
+ropey.workspace = true
+walkdir.workspace = true
+derive_deref.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

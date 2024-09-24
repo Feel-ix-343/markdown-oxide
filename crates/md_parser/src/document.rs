@@ -1,4 +1,7 @@
+use anyhow::anyhow;
 use rayon::prelude::*;
+use tracing::debug;
+use tracing::instrument;
 use tree_sitter_md::MarkdownTree;
 
 use std::ops::Not;
@@ -24,16 +27,17 @@ pub struct Section {
     pub heading: Option<Heading>,
     pub level: usize,
     pub nodes: Vec<Node>,
+    pub range: Range,
 }
 
 #[derive(Debug)]
 pub enum Node {
-    Block(BlockContainer),
+    Block(DocBlock),
     Section(Section),
 }
 
 #[derive(Debug)]
-pub enum BlockContainer {
+pub enum DocBlock {
     ListBlock(ListBlock),
     ParagraphBlock(ParagraphBlock),
 }
@@ -109,9 +113,12 @@ impl Debug for Document {
 }
 
 impl Document {
-    pub fn new(text: &str) -> Option<Document> {
+    #[instrument(level = "debug")]
+    pub fn new(text: &str) -> anyhow::Result<Document> {
         let mut markdown_parser = MarkdownParser::default();
-        let markdown_tree = markdown_parser.parse(text.as_bytes(), None)?;
+        let markdown_tree = markdown_parser
+            .parse(text.as_bytes(), None)
+            .ok_or(anyhow!("Treesitter failed to parse"))?;
         let node = markdown_tree.walk().node();
 
         let rope = Rope::from_str(text);
@@ -124,9 +131,9 @@ impl Document {
                     .flat_map(|it| Section::parse_section(it, &markdown_tree, 0, rope.clone()))
                     .collect();
                 let elapsed = now.elapsed();
-                Some(Document { sections, rope })
+                Ok(Document { sections, rope })
             }
-            _ => None,
+            k => Err(anyhow!("Failed to parse document at top level: {k:?}")),
         }
     }
 }
@@ -134,7 +141,25 @@ impl Document {
 /// Behavior
 impl Document {
     pub fn all_doc_blocks(&self) -> Box<dyn Iterator<Item = BorrowedDocBlock<'_>> + '_> {
-        Box::new(self.sections.iter().flat_map(|it| it.blocks()))
+        Box::new(self.sections.iter().flat_map(|it| it.all_blocks()))
+    }
+
+    pub fn sections(&self) -> Box<dyn Iterator<Item = &Section> + '_> {
+        Box::new(self.sections.iter().flat_map(|section| {
+            std::iter::once(section).chain(
+                section
+                    .nodes
+                    .iter()
+                    .filter_map(|node| {
+                        if let Node::Section(subsection) = node {
+                            Some(subsection.sections())
+                        } else {
+                            None
+                        }
+                    })
+                    .flatten(),
+            )
+        }))
     }
 }
 
@@ -147,6 +172,7 @@ impl Section {
     ) -> Option<Section> {
         match node.kind() {
             "section" => {
+                let section_range = node.range();
                 let mut cursor = node.walk();
                 let children = node.children(&mut cursor);
                 let heading = node.child(0).and_then(|it| {
@@ -161,7 +187,7 @@ impl Section {
                         "paragraph" => {
                             match ParagraphBlock::parse(node, markdown_tree, rope.clone()) {
                                 Some(par) => {
-                                    vec![Node::Block(BlockContainer::ParagraphBlock(par))]
+                                    vec![Node::Block(DocBlock::ParagraphBlock(par))]
                                 }
                                 _ => vec![],
                             }
@@ -176,7 +202,7 @@ impl Section {
                                     }
                                     _ => None,
                                 })
-                                .map(|it| BlockContainer::ListBlock(it))
+                                .map(|it| DocBlock::ListBlock(it))
                                 .map(|it| Node::Block(it))
                                 .collect::<Vec<_>>()
                         }
@@ -194,6 +220,7 @@ impl Section {
                         heading,
                         level,
                         nodes,
+                        range: section_range,
                     })
                 } else {
                     None
@@ -224,17 +251,43 @@ impl BorrowedDocBlock<'_> {
 }
 
 impl Section {
-    fn blocks(&self) -> Box<dyn Iterator<Item = BorrowedDocBlock> + '_> {
+    /// Recursive iterator through all blocks in the section
+    pub fn all_blocks(&self) -> Box<dyn Iterator<Item = BorrowedDocBlock> + '_> {
         Box::new(self.nodes.iter().flat_map(|it| match it {
-            Node::Block(BlockContainer::ListBlock(list_block)) => {
+            Node::Block(DocBlock::ListBlock(list_block)) => {
                 Box::new(list_block.blocks().map(BorrowedDocBlock::ListBlock))
                     as Box<dyn Iterator<Item = BorrowedDocBlock>>
             }
-            Node::Block(BlockContainer::ParagraphBlock(paragraph_block)) => Box::new(
-                std::iter::once(BorrowedDocBlock::ParagraphBlock(paragraph_block)),
-            ),
-            Node::Section(section) => section.blocks(),
+            Node::Block(DocBlock::ParagraphBlock(paragraph_block)) => Box::new(std::iter::once(
+                BorrowedDocBlock::ParagraphBlock(paragraph_block),
+            )),
+            Node::Section(section) => section.all_blocks(),
         }))
+    }
+
+    /// Iterator through just the top level blocks in a section
+    pub fn top_level_blocks(&self) -> Box<dyn Iterator<Item = &DocBlock> + '_> {
+        Box::new(self.nodes.iter().filter_map(|node| match node {
+            Node::Block(block) => Some(block),
+            Node::Section(_) => None,
+        }))
+    }
+
+    pub fn sections(&self) -> Box<dyn Iterator<Item = &Section> + '_> {
+        Box::new(
+            std::iter::once(self).chain(
+                self.nodes
+                    .iter()
+                    .filter_map(|node| {
+                        if let Node::Section(subsection) = node {
+                            Some(subsection.sections())
+                        } else {
+                            None
+                        }
+                    })
+                    .flatten(),
+            ),
+        )
     }
 }
 
@@ -523,23 +576,25 @@ impl Heading {
 pub(crate) mod tests {
     use super::*;
 
-    //     #[test]
-    //     fn test_parse() {
-    //         let file_text = r#"
-    //
-    // # Test
-    //
-    // - [ ] Block [[Link|Display]] [NormalLink](Link)
-    //     - #tag Sub Block #tag
-    //
-    // Make a *function* for tree-sitter to work with rust well #LATER more text [[Link#HEad]]
-    //
-    // - f dj [MarkdownLink](Link)
-    //
-    // "#;
-    //
-    //         println!("{:#?}", parse(file_text).unwrap())
-    //
-    //         // assert_eq!(file_text, "How will this print?");
-    //     }
+    #[test]
+    fn test_parse() {
+        let file_text = r#"
+
+test
+
+# Test
+
+- [ ] Block [[Link|Display]] [NormalLink](Link)
+    - #tag Sub Block #tag
+
+Make a *function* for tree-sitter to work with rust well #LATER more text [[Link#HEad]]
+
+- f dj [MarkdownLink](Link)
+
+    "#;
+
+        println!("{:#?}", Document::new(file_text).unwrap())
+
+        // assert_eq!(file_text, "How will this print?");
+    }
 }
