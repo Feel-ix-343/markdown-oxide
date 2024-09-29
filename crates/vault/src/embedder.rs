@@ -1,6 +1,7 @@
 use std::{borrow::Cow, collections::HashMap, hash::Hash, ops::Not, sync::Arc};
 
 use async_openai::config::{Config, OpenAIConfig};
+use derive_deref::Deref;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use tiktoken_rs::tokenizer::Tokenizer;
@@ -8,8 +9,8 @@ use tracing::{error, info, instrument};
 
 use crate::entity;
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Embedding(Vec<f32>);
+#[derive(Serialize, Deserialize, Debug, Deref)]
+pub struct Embedding(pub Vec<f32>);
 
 pub trait Embeddable<Id: Eq + Hash> {
     fn content(&self) -> anyhow::Result<Cow<str>>;
@@ -36,6 +37,23 @@ impl Embedder {
         }
     }
 
+    #[instrument(skip(self))]
+    pub async fn embed_query(&self, query: &str) -> anyhow::Result<Embedding> {
+        let request = async_openai::types::CreateEmbeddingRequestArgs::default()
+            .model("text-embedding-3-large")
+            .input(query)
+            .build()
+            .map_err(|e| anyhow::anyhow!("Failed to build embedding request: {}", e))?;
+
+        let response = self.openai_client.embeddings().create(request).await?;
+
+        if response.data.is_empty() {
+            return Err(anyhow::anyhow!("No embedding returned from OpenAI"));
+        }
+
+        Ok(Embedding(response.data[0].embedding.clone()))
+    }
+
     #[instrument(skip(self, items))]
     pub async fn embed<Id: Send + Eq + Hash + Debug, E: Embeddable<Id> + Sync>(
         &self,
@@ -53,19 +71,18 @@ impl Embedder {
                     chunk.len()
                 );
 
-                info!("Getting contents");
-                let contents = chunk
+                // filtered chunk
+                let filtered_chunks = chunk
                     .par_iter()
-                    .map(|item| {
-                        anyhow::Ok((
-                            item.id(),
-                            item.content().map_err(|e| {
-                                error!("Failed to get content: {e:?}");
-                                e
-                            })?,
-                        ))
-                    })
+                    .map(|chunk| anyhow::Ok((chunk, chunk.content()?)))
                     .flatten()
+                    .filter(|(_, content)| !content.is_empty())
+                    .collect::<Vec<_>>();
+
+                info!("Getting contents");
+                let contents = filtered_chunks
+                    .par_iter()
+                    .map(|(item, content)| (item.id(), content))
                     .map(|(id, content)| {
                         let tokens = self.tokenizer.encode_ordinary(&content);
                         if tokens.len() > 8192 {
@@ -74,12 +91,11 @@ impl Embedder {
                         let truncated_tokens = tokens.into_iter().take(8192).collect::<Vec<_>>();
                         (id, self.tokenizer.decode(truncated_tokens).unwrap())
                     })
-                    .filter(|(_, content)| !content.is_empty())
                     .collect::<Vec<_>>();
 
                 info!("Making request");
                 let request = async_openai::types::CreateEmbeddingRequestArgs::default()
-                    .model("text-embedding-3-small")
+                    .model("text-embedding-3-large")
                     .input(
                         contents
                             .iter()
@@ -92,8 +108,9 @@ impl Embedder {
                 let response = self.openai_client.embeddings().create(request).await?;
 
                 anyhow::Ok(
-                    chunk
+                    filtered_chunks
                         .iter()
+                        .map(|(item, _)| item)
                         .zip(response.data.into_iter())
                         .map(|(item, embedding)| {
                             (item.id(), Arc::new(Embedding(embedding.embedding)))
@@ -101,7 +118,7 @@ impl Embedder {
                         .collect::<Vec<_>>(),
                 )
             })
-            .buffer_unordered(3)
+            .buffer_unordered(5)
             .collect::<Vec<_>>()
             .await
             .into_iter()

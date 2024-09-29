@@ -141,6 +141,38 @@ impl<E: Entity> EntityObjectInterface for GenericEntityObject<E> {
     }
 }
 
+impl GenericEntityObject<md::Heading> {
+    pub fn heading_name(&self) -> anyhow::Result<String> {
+        Ok(self.data.title.clone())
+    }
+
+    pub fn heading_content(&self) -> anyhow::Result<String> {
+        self.entity_content().map(|cow| cow.into_owned())
+    }
+}
+
+impl GenericEntityObject<md::File> {
+    pub fn file_name(&self) -> anyhow::Result<String> {
+        Ok(self
+            .path
+            .file_name()
+            .ok_or_else(|| anyhow!("Invalid file path"))?
+            .to_str()
+            .ok_or_else(|| anyhow!("Invalid UTF-8 in file name"))?
+            .to_string())
+    }
+
+    pub fn file_content(&self) -> anyhow::Result<String> {
+        self.entity_content().map(|cow| cow.into_owned())
+    }
+}
+
+impl GenericEntityObject<md::Block> {
+    pub fn block_content(&self) -> anyhow::Result<String> {
+        self.entity_content().map(|cow| cow.into_owned())
+    }
+}
+
 impl<E: Entity> GenericEntityObject<E> {
     pub fn from(
         entity: Arc<E>,
