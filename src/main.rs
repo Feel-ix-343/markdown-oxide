@@ -6,7 +6,6 @@ use std::sync::Arc;
 use completion::get_completions;
 use config::{EmbeddedBlockTransclusionLength, Settings};
 use diagnostics::diagnostics;
-use do_notation::m;
 use itertools::Itertools;
 use rayon::prelude::*;
 use references::references;

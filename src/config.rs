@@ -44,8 +44,7 @@ pub enum EmbeddedBlockTransclusionLength {
 
 impl Settings {
     pub fn new(root_dir: &Path, capabilities: &ClientCapabilities) -> anyhow::Result<Settings> {
-        let (obsidian_daily_note, obsidian_daily_notes_folder) =
-            obsidian_dailynote_details(root_dir);
+        let obsidian_daily_note_config = obsidian_daily_note_config(root_dir).unwrap_or_default();
         let obsidian_new_file_folder_path = obsidian_new_file_folder_path(root_dir);
         let expanded = shellexpand::tilde("~/.config/moxide/settings");
         let settings = Config::builder()
@@ -65,11 +64,13 @@ impl Settings {
             )?
             .set_default(
                 "daily_notes_folder",
-                obsidian_daily_notes_folder.unwrap_or("".to_string()),
+                obsidian_daily_note_config.folder.unwrap_or("".to_string()),
             )?
             .set_default(
                 "dailynote",
-                obsidian_daily_note.unwrap_or("%Y-%m-%d".to_string()),
+                obsidian_daily_note_config
+                    .format
+                    .unwrap_or("%Y-%m-%d".to_string()),
             )?
             .set_default("heading_completions", true)?
             .set_default("unresolved_diagnostics", true)?
@@ -102,22 +103,21 @@ impl Settings {
     }
 }
 
-fn obsidian_dailynote_details(root_dir: &Path) -> (Option<String>, Option<String>) {
+#[derive(Deserialize, Debug, Default)]
+struct ObsidianDailyNoteConfig {
+    folder: Option<String>,
+    format: Option<String>,
+}
+
+fn obsidian_daily_note_config(root_dir: &Path) -> Option<ObsidianDailyNoteConfig> {
     let daily_notes_config_file = root_dir.join(".obsidian").join("daily-notes.json");
-    let file = std::fs::read(daily_notes_config_file).ok();
-    let config: Option<HashMap<String, String>> =
-        file.and_then(|file| serde_json::from_slice(&file).ok());
-    let daily_note = config.as_ref().and_then(|config| {
-        config
-            .get("format")
-            .map(|format| convert_momentjs_to_chrono_format(format))
-    });
+    let file = std::fs::read_to_string(daily_notes_config_file).ok()?;
+    let config: ObsidianDailyNoteConfig = serde_json::from_str(&file).ok()?;
 
-    let daily_notes_folder = config
-        .as_ref()
-        .and_then(|config| config.get("folder").cloned());
-
-    (daily_note, daily_notes_folder)
+    Some(ObsidianDailyNoteConfig {
+        folder: config.folder,
+        format: config.format.map(|x| convert_momentjs_to_chrono_format(&x)),
+    })
 }
 
 fn obsidian_new_file_folder_path(root_dir: &Path) -> Option<String> {
@@ -186,12 +186,40 @@ fn convert_momentjs_to_chrono_format(moment_format: &str) -> String {
 #[cfg(test)]
 mod test {
 
-    use crate::config::convert_momentjs_to_chrono_format;
+    use std::path::PathBuf;
+
+    use crate::config::{
+        convert_momentjs_to_chrono_format, obsidian_daily_note_config,
+        obsidian_new_file_folder_path,
+    };
 
     #[test]
     fn test_format_conversion() {
         let moment_format = "YYYY-MM-DD";
         let chrono_format = convert_momentjs_to_chrono_format(moment_format);
         assert_eq!(chrono_format, "%Y-%m-%d");
+    }
+
+    #[test]
+    fn test_daily_note_config() {
+        let daily_notes_config = obsidian_daily_note_config(&root_dir()).unwrap();
+        assert_eq!(daily_notes_config.format, Some("%Y-%m-%d".to_string()));
+        assert_eq!(
+            daily_notes_config.folder,
+            Some("the-daily-notes-folder".to_string())
+        );
+    }
+
+    #[test]
+    fn test_new_file_folder_path() {
+        let new_file_folder_path = obsidian_new_file_folder_path(&root_dir());
+        assert_eq!(
+            new_file_folder_path,
+            Some("the-new-file-folder".to_string())
+        );
+    }
+
+    fn root_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("TestFiles")
     }
 }
