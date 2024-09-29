@@ -5,7 +5,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use derive_deref::Deref;
 use md_parser::Document;
 use rayon::iter::{IntoParallelIterator, ParallelBridge};
@@ -13,11 +13,11 @@ use ropey::Rope;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, instrument, trace};
 
-type MemFSValue = (Rope, md_parser::Document);
+type MemFSValue = (Rope, std::time::SystemTime);
 type MemFSMap = HashMap<Arc<Path>, MemFSValue>;
 
 /// Snapshot of the FS; cheap to clone; safe to cache
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deref)]
 pub struct Snapshot(Arc<MemFSMap>);
 
 impl Snapshot {
@@ -59,12 +59,13 @@ impl MemFS {
             .map(|entry| {
                 let path = entry.path();
                 let contents = std::fs::read_to_string(path)?;
-                let document = Document::new(&contents).map_err(|e| {
-                    error!("Failed to parse document {path:?}: {e:?}");
-                    e
-                })?;
                 let rope = Rope::from_str(&contents);
-                anyhow::Ok((Arc::from(path), (rope, document)))
+                let last_modified = path
+                    .metadata()
+                    .context("Getting metadata")?
+                    .modified()
+                    .context("Getting system time")?;
+                anyhow::Ok((Arc::from(path), (rope, last_modified)))
             })
             .flatten()
             .collect::<HashMap<_, _>>();

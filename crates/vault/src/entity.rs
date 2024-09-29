@@ -9,6 +9,7 @@ use std::borrow::Cow;
 use std::path::Path;
 
 use std::sync::Arc;
+use std::time::SystemTime;
 
 #[derive(Debug)]
 pub enum EntityObject {
@@ -32,38 +33,50 @@ impl EntityObject {
     pub fn from_parsed_file(
         parsed_file: md::ParsedFile,
         path: Arc<Path>,
+        time: SystemTime,
         snapshot: mem_fs::Snapshot,
     ) -> Vec<Self> {
         let md::ParsedFile(file, headings, blocks) = parsed_file;
 
-        std::iter::once(Self::from_file(file, path.clone(), snapshot.clone()))
+        std::iter::once(Self::from_file(file, path.clone(), snapshot.clone(), time))
             .chain(
-                headings
-                    .into_iter()
-                    .map(|heading| Self::from_heading(heading, path.clone(), snapshot.clone())),
+                headings.into_iter().map(|heading| {
+                    Self::from_heading(heading, path.clone(), snapshot.clone(), time)
+                }),
             )
             .chain(
                 blocks
                     .into_iter()
-                    .map(|block| Self::from_block(block, path.clone(), snapshot.clone())),
+                    .map(|block| Self::from_block(block, path.clone(), snapshot.clone(), time)),
             )
             .collect()
     }
 
-    pub fn from_file(entity: Arc<md::File>, path: Arc<Path>, snapshot: mem_fs::Snapshot) -> Self {
-        EntityObject::File(GenericEntityObject::from(entity, path, snapshot))
+    pub fn from_file(
+        entity: Arc<md::File>,
+        path: Arc<Path>,
+        snapshot: mem_fs::Snapshot,
+        time: std::time::SystemTime,
+    ) -> Self {
+        EntityObject::File(GenericEntityObject::from(entity, path, snapshot, time))
     }
 
     pub fn from_heading(
         entity: Arc<md::Heading>,
         path: Arc<Path>,
         snapshot: mem_fs::Snapshot,
+        time: std::time::SystemTime,
     ) -> Self {
-        EntityObject::Heading(GenericEntityObject::from(entity, path, snapshot))
+        EntityObject::Heading(GenericEntityObject::from(entity, path, snapshot, time))
     }
 
-    pub fn from_block(entity: Arc<md::Block>, path: Arc<Path>, snapshot: mem_fs::Snapshot) -> Self {
-        EntityObject::Block(GenericEntityObject::from(entity, path, snapshot))
+    pub fn from_block(
+        entity: Arc<md::Block>,
+        path: Arc<Path>,
+        snapshot: mem_fs::Snapshot,
+        time: std::time::SystemTime,
+    ) -> Self {
+        EntityObject::Block(GenericEntityObject::from(entity, path, snapshot, time))
     }
 }
 
@@ -93,6 +106,7 @@ pub(crate) struct GenericEntityObject<E: Entity> {
     pub(crate) data: Arc<E>,
     pub(crate) path: Arc<Path>,
     pub(crate) mem_fs_snapshot: mem_fs::Snapshot,
+    pub(crate) time: SystemTime,
 }
 
 pub trait EntityObjectInterface {
@@ -128,11 +142,17 @@ impl<E: Entity> EntityObjectInterface for GenericEntityObject<E> {
 }
 
 impl<E: Entity> GenericEntityObject<E> {
-    pub fn from(entity: Arc<E>, path: Arc<Path>, snapshot: mem_fs::Snapshot) -> Self {
+    pub fn from(
+        entity: Arc<E>,
+        path: Arc<Path>,
+        snapshot: mem_fs::Snapshot,
+        time: SystemTime,
+    ) -> Self {
         Self {
             data: entity,
             path,
             mem_fs_snapshot: snapshot,
+            time,
         }
     }
 

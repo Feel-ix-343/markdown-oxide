@@ -1,5 +1,6 @@
 use std::{path::Path, sync::Arc};
 
+use anyhow::{anyhow, Context};
 use md_parser::{DocBlock, Document, ListBlock};
 use serde::{Deserialize, Serialize};
 
@@ -33,10 +34,13 @@ struct ContextRange {
 pub struct ParsedFile(pub Arc<File>, pub Vec<Arc<Heading>>, pub Vec<Arc<Block>>);
 
 impl ParsedFile {
-    pub fn construct(path: &Path, rope: &ropey::Rope, document: &Document) -> anyhow::Result<Self> {
+    pub fn construct(path: &Path, rope: &ropey::Rope) -> anyhow::Result<Self> {
         let file = Arc::new(File {
             content_range: 0..rope.len_lines(),
         });
+
+        let document = md_parser::Document::new(&rope.slice(..).to_string())
+            .context(format!("Parsing document {path:?}"))?;
 
         let headings = document
             .sections()

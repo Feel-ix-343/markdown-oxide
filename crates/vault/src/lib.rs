@@ -1,54 +1,91 @@
-use std::{path::Path, sync::Arc};
+use std::{collections::HashSet, path::Path, sync::Arc, time::SystemTime};
 
 use anyhow::anyhow;
 use embedder::Embeddable;
-use entity::EntityObject;
-use index::{Index, IndexValue};
+use index::Index;
 use itertools::Itertools;
 use md::ParsedFile;
 use mem_fs::MemFS;
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
 
 use anyhow::{Context, Result};
-use tracing::instrument;
+use tracing::{debug, error, info, instrument};
 
 impl Vault {
     /// Initializes, updates, removes
+    #[instrument(skip(self))]
     pub async fn sync(&self) -> anyhow::Result<()> {
+        // memfs sync
         let snapshot = self.mem_fs.read().await?;
-        let parsed_files = snapshot
+
+        let paths = self
+            .index
+            .map(|relative_path, value| Ok((relative_path.clone().into_owned(), value.0)))?
+            .into_iter()
+            .flatten() // flatten the option
+            .map(|(path, time)| {
+                let full_path = format!("{}/{path}", self.root_dir.to_str().unwrap());
+                (full_path, time)
+            })
+            .collect::<HashSet<_>>();
+
+        let modified_paths = snapshot
             .iter()
-            .map(|(path, (rope, document))| {
-                Ok((
+            .filter(|(path, (_rope, time))| {
+                let kv = (path.to_str().unwrap().to_string(), *time);
+                !paths.contains(&kv)
+            })
+            .collect::<Vec<_>>();
+
+        info!("Num Modified paths: {:?}", modified_paths.len());
+
+        let parsed_files = modified_paths
+            .into_iter()
+            .flat_map(|(path, (rope, last_modified))| {
+                anyhow::Ok((
                     path.clone(),
-                    md::ParsedFile::construct(&path, rope, document)?,
+                    last_modified,
+                    md::ParsedFile::construct(&path, rope).map_err(|e| {
+                        error!("Failed to consturct document: {e:?}");
+                        e
+                    })?,
                 ))
             })
-            .collect::<anyhow::Result<Vec<_>>>()?;
+            .collect::<Vec<_>>();
+
+        if parsed_files.is_empty() {
+            info!("No new files to parse");
+            return Ok(());
+        }
 
         let entities = parsed_files
             .into_iter()
-            .map(|(path, parsed_file)| {
+            .flat_map(|(path, last_modified, parsed_file)| {
                 let ParsedFile(file, headings, blocks) = parsed_file;
                 std::iter::once(entity::EntityObject::from_file(
                     file.clone(),
                     path.clone(),
                     snapshot.clone(),
+                    *last_modified,
                 ))
                 .chain(headings.into_iter().map(|heading| {
                     entity::EntityObject::from_heading(
                         heading.clone(),
                         path.clone(),
                         snapshot.clone(),
+                        *last_modified,
                     )
                 }))
                 .chain(blocks.into_iter().map(|block| {
-                    entity::EntityObject::from_block(block.clone(), path.clone(), snapshot.clone())
+                    entity::EntityObject::from_block(
+                        block.clone(),
+                        path.clone(),
+                        snapshot.clone(),
+                        *last_modified,
+                    )
                 }))
                 .collect::<Vec<_>>()
             })
-            .flatten()
             .collect::<Vec<_>>();
 
         let embeddings = self
@@ -56,22 +93,20 @@ impl Vault {
             .embed(&entities.iter().collect::<Vec<_>>())
             .await?;
 
-        let organized_arcs = entities
-            .into_iter()
-            .map(move |entity| {
-                let embedding = embeddings
-                    .get(&entity.id())
-                    .ok_or(anyhow!("Embedding should exist"))?
-                    .clone();
-                let path = entity.path();
-                anyhow::Ok((path, embedding, entity))
-            })
-            .flatten();
+        let organized_arcs = entities.into_iter().flat_map(move |entity| {
+            let embedding = embeddings
+                .get(&entity.id())
+                .ok_or(anyhow!("Embedding should exist"))?
+                .clone();
+            let path = entity.path();
+            anyhow::Ok((path, embedding, entity))
+        });
 
         let values = organized_arcs
             .into_group_map_by(|i| i.0.clone())
             .into_iter()
             .map(|(key, value)| {
+                let last_modified = snapshot.get(&key).unwrap().1;
                 let (file, headings, blocks) = value.into_iter().fold(
                     (None, Vec::new(), Vec::new()),
                     |(mut file, mut headings, mut blocks), (_, embedding, entity)| {
@@ -104,7 +139,12 @@ impl Vault {
                         .to_owned(),
                 );
 
-                Ok((relative_path, Some(Value(file, headings, blocks))))
+                info!("Relative Path: {:?}", relative_path);
+
+                Ok((
+                    relative_path,
+                    Some(Value(last_modified, file, headings, blocks)),
+                ))
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
 
@@ -145,6 +185,7 @@ pub struct Vault {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Value(
+    SystemTime, // last modified
     Option<(md::File, embedder::Embedding)>,
     Vec<(md::Heading, embedder::Embedding)>,
     Vec<(md::Block, embedder::Embedding)>,
@@ -171,7 +212,7 @@ mod mem_fs;
 
 #[cfg(test)]
 mod tests {
-    use tracing_subscriber::{fmt::format::FmtSpan, EnvFilter, Layer};
+    use tracing_subscriber::{fmt::format::FmtSpan, EnvFilter};
 
     use super::*;
     use std::path::PathBuf;

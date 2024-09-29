@@ -6,6 +6,7 @@ use std::{
 };
 
 use anyhow::Context;
+use derive_deref::Deref;
 use redb::{Database, ReadableTable, TableDefinition, Value};
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
@@ -44,14 +45,18 @@ impl<V: IndexValue> Index<V> {
         Ok(())
     }
 
-    pub fn map<F, R>(&self, f: F) -> anyhow::Result<Vec<R>>
+    pub fn map<F, R>(&self, f: F) -> anyhow::Result<Option<Vec<R>>>
     where
         F: Fn(Key<'_>, V) -> anyhow::Result<R>,
     {
         let read_txn = self.db.begin_read()?;
-        let table = read_txn.open_table(self.table)?;
+        let table = match read_txn.open_table(self.table) {
+            Ok(t) => t,
+            Err(redb::TableError::TableDoesNotExist(_e)) => return Ok(None),
+            Err(e) => return Err(e.into()),
+        };
 
-        table
+        let iter_result = table
             .iter()
             .context("Getting table iterator")?
             .map(|item| {
@@ -61,7 +66,9 @@ impl<V: IndexValue> Index<V> {
 
                 f(key, value)
             })
-            .collect()
+            .collect::<anyhow::Result<Vec<_>>>()?;
+
+        Ok(Some(iter_result))
     }
 
     pub fn fold_left<F, R>(&self, init: R, f: F) -> anyhow::Result<R>
@@ -105,8 +112,8 @@ pub(crate) struct Index<V: IndexValue> {
     table: TableDefinition<'static, Key<'static>, ValueWrapper<V>>, // the lifetime here doesn't matter
 }
 
-#[derive(Debug)]
-struct Key<'a>(Cow<'a, str>);
+#[derive(Debug, Deref)]
+pub struct Key<'a>(Cow<'a, str>);
 
 impl<'a> Key<'a> {
     pub fn from_str(s: &'a str) -> Self {
