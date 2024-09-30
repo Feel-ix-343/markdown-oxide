@@ -3,58 +3,24 @@ use itertools::Itertools;
 use tracing::{debug, info, instrument};
 
 use crate::embedder::Embeddable;
+use crate::md::ContextRange;
 use crate::{md, mem_fs};
 
 use std::borrow::Cow;
-use std::path::Path;
 
-use std::sync::Arc;
 use std::time::SystemTime;
 
 #[derive(Debug)]
-pub enum EntityObject {
-    File(GenericEntityObject<md::File>),
-    Heading(GenericEntityObject<md::Heading>),
-    Block(GenericEntityObject<md::Block>),
+pub enum EntityObject<'a> {
+    File(GenericEntityObject<'a, md::File>),
+    Heading(GenericEntityObject<'a, md::Heading>),
+    Block(GenericEntityObject<'a, md::Block>),
 }
 
-pub type Id = (Arc<Path>, EntityLocation);
-
-impl Embeddable<Id> for EntityObject {
-    fn content(&self) -> anyhow::Result<Cow<str>> {
-        self.entity_content()
-    }
-    fn id(&self) -> Id {
-        self.entity_id()
-    }
-}
-
-impl EntityObject {
-    pub fn from_parsed_file(
-        parsed_file: md::ParsedFile,
-        path: Arc<Path>,
-        time: SystemTime,
-        snapshot: mem_fs::Snapshot,
-    ) -> Vec<Self> {
-        let md::ParsedFile(file, headings, blocks) = parsed_file;
-
-        std::iter::once(Self::from_file(file, path.clone(), snapshot.clone(), time))
-            .chain(
-                headings.into_iter().map(|heading| {
-                    Self::from_heading(heading, path.clone(), snapshot.clone(), time)
-                }),
-            )
-            .chain(
-                blocks
-                    .into_iter()
-                    .map(|block| Self::from_block(block, path.clone(), snapshot.clone(), time)),
-            )
-            .collect()
-    }
-
+impl<'a> EntityObject<'a> {
     pub fn from_file(
-        entity: Arc<md::File>,
-        path: Arc<Path>,
+        entity: &'a md::File,
+        path: &'a str,
         snapshot: mem_fs::Snapshot,
         time: std::time::SystemTime,
     ) -> Self {
@@ -62,8 +28,8 @@ impl EntityObject {
     }
 
     pub fn from_heading(
-        entity: Arc<md::Heading>,
-        path: Arc<Path>,
+        entity: &'a md::Heading,
+        path: &'a str,
         snapshot: mem_fs::Snapshot,
         time: std::time::SystemTime,
     ) -> Self {
@@ -71,8 +37,8 @@ impl EntityObject {
     }
 
     pub fn from_block(
-        entity: Arc<md::Block>,
-        path: Arc<Path>,
+        entity: &'a md::Block,
+        path: &'a str,
         snapshot: mem_fs::Snapshot,
         time: std::time::SystemTime,
     ) -> Self {
@@ -80,8 +46,8 @@ impl EntityObject {
     }
 }
 
-impl std::ops::Deref for EntityObject {
-    type Target = dyn EntityObjectInterface;
+impl<'a> std::ops::Deref for EntityObject<'a> {
+    type Target = dyn EntityObjectInterface + 'a;
 
     fn deref(&self) -> &Self::Target {
         match self {
@@ -102,48 +68,36 @@ pub(crate) trait Entity {
 }
 
 #[derive(Debug)]
-pub(crate) struct GenericEntityObject<E: Entity> {
-    pub(crate) data: Arc<E>,
-    pub(crate) path: Arc<Path>,
+pub(crate) struct GenericEntityObject<'a, E: Entity> {
+    pub(crate) data: &'a E,
+    pub(crate) path: &'a str,
     pub(crate) mem_fs_snapshot: mem_fs::Snapshot,
     pub(crate) time: SystemTime,
 }
 
 pub trait EntityObjectInterface {
-    fn entity_id(&self) -> Id;
     fn entity_content(&self) -> anyhow::Result<Cow<str>>;
-    fn path(&self) -> Arc<Path>;
+    fn path(&self) -> &str;
 }
 
-impl<E: Entity> EntityObjectInterface for GenericEntityObject<E> {
-    fn entity_id(&self) -> Id {
-        (self.path.clone(), self.data.location())
-    }
+impl<'a, E: Entity> EntityObjectInterface for GenericEntityObject<'a, E> {
     fn entity_content(&self) -> anyhow::Result<Cow<str>> {
         let range = self.data.location();
-        let (rope, _) = self.mem_fs_snapshot.get(&self.path)?;
+        let (_, file) = self.mem_fs_snapshot.get(self.path)?;
 
         match range {
-            EntityLocation::File => Ok(Cow::Owned(rope.to_string())),
-            EntityLocation::Range(range) => {
-                let start_byte = rope.line_to_char(range.start);
-                let end_byte = rope.line_to_char(range.end);
-                Ok(Cow::Owned(
-                    rope.get_slice(start_byte..end_byte)
-                        .expect("Get slice should not panic")
-                        .to_string(),
-                ))
-            }
+            EntityLocation::File => Ok(file.text()),
+            EntityLocation::Range(range) => file.get_lines(range.start..range.end),
         }
     }
-    fn path(&self) -> Arc<Path> {
-        self.path.clone()
+    fn path(&self) -> &str {
+        self.path
     }
 }
 
-impl GenericEntityObject<md::Heading> {
-    pub fn heading_name(&self) -> anyhow::Result<String> {
-        Ok(self.data.title.clone())
+impl<'a> GenericEntityObject<'a, md::Heading> {
+    pub fn heading_name(&self) -> anyhow::Result<&str> {
+        Ok(&self.data.title)
     }
 
     pub fn heading_content(&self) -> anyhow::Result<String> {
@@ -151,15 +105,12 @@ impl GenericEntityObject<md::Heading> {
     }
 }
 
-impl GenericEntityObject<md::File> {
-    pub fn file_name(&self) -> anyhow::Result<String> {
-        Ok(self
-            .path
-            .file_name()
-            .ok_or_else(|| anyhow!("Invalid file path"))?
-            .to_str()
-            .ok_or_else(|| anyhow!("Invalid UTF-8 in file name"))?
-            .to_string())
+impl<'a> GenericEntityObject<'a, md::File> {
+    pub fn file_name(&self) -> anyhow::Result<&str> {
+        self.path
+            .rsplit('/')
+            .next()
+            .ok_or_else(|| anyhow!("Invalid file name"))
     }
 
     pub fn file_content(&self) -> anyhow::Result<String> {
@@ -167,16 +118,16 @@ impl GenericEntityObject<md::File> {
     }
 }
 
-impl GenericEntityObject<md::Block> {
+impl<'a> GenericEntityObject<'a, md::Block> {
     pub fn block_content(&self) -> anyhow::Result<String> {
         self.entity_content().map(|cow| cow.into_owned())
     }
 }
 
-impl<E: Entity> GenericEntityObject<E> {
+impl<'a, E: Entity> GenericEntityObject<'a, E> {
     pub fn from(
-        entity: Arc<E>,
-        path: Arc<Path>,
+        entity: &'a E,
+        path: &'a str,
         snapshot: mem_fs::Snapshot,
         time: SystemTime,
     ) -> Self {
@@ -186,12 +137,6 @@ impl<E: Entity> GenericEntityObject<E> {
             mem_fs_snapshot: snapshot,
             time,
         }
-    }
-
-    pub fn into_inner(self) -> anyhow::Result<E> {
-        let data = self.data.clone();
-        drop(self);
-        Arc::into_inner(data).ok_or(anyhow!("Failed to convert arc into inner"))
     }
 }
 
@@ -209,6 +154,24 @@ impl Entity for md::Heading {
 
 impl Entity for md::Block {
     fn location(&self) -> EntityLocation {
-        EntityLocation::Range(self.range.clone())
+        EntityLocation::Range(match &self.context_range {
+            Some(ContextRange {
+                children: Some(range),
+                parent: Some(par_range),
+            }) => par_range.start..range.end,
+            Some(ContextRange {
+                children: Some(range),
+                parent: None,
+            }) => self.range.start..range.end,
+            Some(ContextRange {
+                children: None,
+                parent: Some(range),
+            }) => range.start..self.range.end,
+            Some(ContextRange {
+                children: None,
+                parent: None,
+            }) => self.range.clone(),
+            None => self.range.clone(),
+        })
     }
 }

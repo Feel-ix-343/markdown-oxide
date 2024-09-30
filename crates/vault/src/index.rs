@@ -29,12 +29,12 @@ impl<V: IndexValue> Index<V> {
     }
 
     /// Creates, updates, or deletes data stored in files
-    pub async fn sync_files(&self, data: Vec<(Cow<'_, str>, Option<V>)>) -> anyhow::Result<()> {
+    pub async fn sync_files(&self, data: Vec<(&str, Option<V>)>) -> anyhow::Result<()> {
         let write_txn = self.db.begin_write()?;
         {
             let mut table = write_txn.open_table(self.table)?;
             for (key, value) in data {
-                let key = Key(key);
+                let key = Key(key.into());
                 match value {
                     Some(v) => table.insert(key, &ValueWrapper(v))?,
                     None => table.remove(key)?,
@@ -113,6 +113,7 @@ pub(crate) struct Index<V: IndexValue> {
 }
 
 #[derive(Debug, Deref)]
+/// Id: relative path of file
 pub struct Key<'a>(Cow<'a, str>);
 
 impl<'a> Key<'a> {

@@ -9,9 +9,7 @@ use crate::mem_fs;
 pub type Line = usize;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct File {
-    pub content_range: std::ops::Range<Line>,
-}
+pub struct File {}
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Heading {
     pub title: String,
@@ -26,80 +24,74 @@ pub struct Block {
     pub context_range: Option<ContextRange>,
 }
 #[derive(Serialize, Deserialize, Debug)]
-struct ContextRange {
+pub struct ContextRange {
     pub parent: Option<std::ops::Range<Line>>,
     pub children: Option<std::ops::Range<Line>>,
 }
 
-pub struct ParsedFile(pub Arc<File>, pub Vec<Arc<Heading>>, pub Vec<Arc<Block>>);
+pub fn parse_file(
+    relative_path: &str,
+    fs_file: &mem_fs::FsFile,
+) -> anyhow::Result<(File, Vec<Heading>, Vec<Block>)> {
+    let file = File {};
 
-impl ParsedFile {
-    pub fn construct(path: &Path, rope: &ropey::Rope) -> anyhow::Result<Self> {
-        let file = Arc::new(File {
-            content_range: 0..rope.len_lines(),
+    let document = md_parser::Document::new(&fs_file.text())
+        .context(format!("Parsing document {relative_path:?}"))?;
+
+    let headings = document
+        .sections()
+        .filter_map(|section| {
+            section.heading.as_ref().map(|heading| Heading {
+                title: heading.text.to_string(),
+                range: heading.range.start_point.row..heading.range.end_point.row,
+                full_range: section.range.start_point.row..section.range.end_point.row,
+            })
+        })
+        .collect::<Vec<_>>();
+
+    fn recurse_list_block<'a>(
+        block: &'a ListBlock,
+        parent: Option<&ListBlock>,
+    ) -> Box<dyn Iterator<Item = Block> + 'a> {
+        let parent_range = parent
+            .map(|block| block.content.range.start_point.row..block.content.range.end_point.row);
+        let children_range = block.children.as_ref().and_then(|children| {
+            let first = children.first()?;
+            let last = children.last()?;
+            Some(first.range.start_point.row..last.range.end_point.row)
         });
 
-        let document = md_parser::Document::new(&rope.slice(..).to_string())
-            .context(format!("Parsing document {path:?}"))?;
+        let md_block = Block {
+            range: block.range.start_point.row..block.range.end_point.row,
+            context_range: Some(ContextRange {
+                parent: parent_range,
+                children: children_range,
+            }),
+        };
 
-        let headings = document
-            .sections()
-            .filter_map(|section| {
-                section.heading.as_ref().map(|heading| {
-                    Arc::new(Heading {
-                        title: heading.text.to_string(),
-                        range: heading.range.start_point.row..heading.range.end_point.row,
-                        full_range: section.range.start_point.row..section.range.end_point.row,
-                    })
-                })
-            })
-            .collect();
-
-        fn recurse_list_block<'a>(
-            block: &'a ListBlock,
-            parent: Option<&ListBlock>,
-        ) -> Box<dyn Iterator<Item = Arc<Block>> + 'a> {
-            let parent_range = parent.map(|block| {
-                block.content.range.start_point.row..block.content.range.end_point.row
-            });
-            let children_range = block.children.as_ref().and_then(|children| {
-                let first = children.first()?;
-                let last = children.last()?;
-                Some(first.range.start_point.row..last.range.end_point.row)
-            });
-
-            let md_block = Block {
-                range: block.range.start_point.row..block.range.end_point.row,
-                context_range: Some(ContextRange {
-                    parent: parent_range,
-                    children: children_range,
-                }),
-            };
-
-            let children_blocks = block
-                .children
-                .iter()
-                .flatten()
-                .map(|child| recurse_list_block(child, Some(block)))
-                .flatten();
-
-            Box::new(std::iter::once(Arc::new(md_block)).chain(children_blocks))
-        }
-
-        let blocks = document
-            .sections()
-            .map(|section| section.top_level_blocks())
+        let children_blocks = block
+            .children
+            .iter()
             .flatten()
-            .map(|block| match block {
-                DocBlock::ListBlock(block) => recurse_list_block(block, None),
-                DocBlock::ParagraphBlock(block) => Box::new(std::iter::once(Arc::new(Block {
-                    context_range: None,
-                    range: block.content.range.start_point.row..block.content.range.end_point.row,
-                }))),
-            })
-            .flatten()
-            .collect();
+            .map(|child| recurse_list_block(child, Some(block)))
+            .flatten();
 
-        Ok(ParsedFile(file, headings, blocks))
+        Box::new(std::iter::once(md_block).chain(children_blocks))
     }
+
+    let blocks = document
+        .sections()
+        .map(|section| section.top_level_blocks())
+        .flatten()
+        .map(|block| match block {
+            DocBlock::ListBlock(block) => recurse_list_block(block, None),
+            DocBlock::ParagraphBlock(block) => Box::new(std::iter::once(Block {
+                context_range: None,
+                range: block.content.range.start_point.row..block.content.range.end_point.row,
+            })),
+        })
+        .flatten()
+        .collect::<Vec<_>>();
+
+    Ok((file, headings, blocks))
 }

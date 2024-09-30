@@ -1,7 +1,9 @@
 use std::{borrow::Cow, collections::HashMap, hash::Hash, ops::Not, sync::Arc};
 
+use anyhow::anyhow;
 use async_openai::config::{Config, OpenAIConfig};
 use derive_deref::Deref;
+use itertools::Itertools;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use tiktoken_rs::tokenizer::Tokenizer;
@@ -12,11 +14,6 @@ use crate::entity;
 #[derive(Serialize, Deserialize, Debug, Deref)]
 pub struct Embedding(pub Vec<f32>);
 
-pub trait Embeddable<Id: Eq + Hash> {
-    fn content(&self) -> anyhow::Result<Cow<str>>;
-    fn id(&self) -> Id;
-}
-
 #[derive(Debug)]
 pub struct Embedder {
     openai_client: async_openai::Client<OpenAIConfig>,
@@ -24,6 +21,9 @@ pub struct Embedder {
 }
 
 use std::fmt::Debug;
+
+const OPENAI_MODEL: &str = "text-embedding-3-small";
+
 impl Embedder {
     /// Reads from the OPENAI_API_KEY env var to construct
     #[instrument]
@@ -40,7 +40,7 @@ impl Embedder {
     #[instrument(skip(self))]
     pub async fn embed_query(&self, query: &str) -> anyhow::Result<Embedding> {
         let request = async_openai::types::CreateEmbeddingRequestArgs::default()
-            .model("text-embedding-3-large")
+            .model(OPENAI_MODEL)
             .input(query)
             .build()
             .map_err(|e| anyhow::anyhow!("Failed to build embedding request: {}", e))?;
@@ -53,17 +53,31 @@ impl Embedder {
 
         Ok(Embedding(response.data[0].embedding.clone()))
     }
+}
 
+pub trait Embeddable {
+    fn content(&self) -> anyhow::Result<String>;
+}
+
+impl Embedder {
     #[instrument(skip(self, items))]
-    pub async fn embed<Id: Send + Eq + Hash + Debug, E: Embeddable<Id> + Sync>(
+    /// Returns all embeddings in order
+    pub async fn embed<E: Embeddable + Send + Sync>(
         &self,
-        items: &[&E],
-    ) -> anyhow::Result<HashMap<Id, Arc<Embedding>>> {
+        items: Vec<E>,
+    ) -> anyhow::Result<Vec<(E, anyhow::Result<Embedding>)>> {
         use futures::stream::{self, StreamExt};
 
-        let chunks: Vec<_> = items.chunks(2048).collect();
+        // im cheating; optimize this if necessary TODO
+
+        let items = items
+            .into_iter()
+            .map(|item| Arc::new(item))
+            .collect::<Vec<_>>();
+        let chunks: Vec<_> = items.chunks(2048).into_iter().collect();
         let total_chunks = chunks.len();
-        Ok(stream::iter(chunks.into_iter().enumerate())
+
+        let result_arcs = stream::iter(chunks.into_iter().enumerate())
             .map(|(i, chunk)| async move {
                 info!(
                     "Embedding chunk {}/{total_chunks} of {} items",
@@ -72,59 +86,136 @@ impl Embedder {
                 );
 
                 // filtered chunk
-                let filtered_chunks = chunk
-                    .par_iter()
-                    .map(|chunk| anyhow::Ok((chunk, chunk.content()?)))
-                    .flatten()
-                    .filter(|(_, content)| !content.is_empty())
+                let filtered_embeddables = chunk
+                    .into_par_iter()
+                    .map(|e| (e, e.content()))
+                    .map(|(e, content)| {
+                        (
+                            e,
+                            content.and_then(|content| {
+                                if content.is_empty() {
+                                    Err(anyhow!("Cannot embed, content empty"))
+                                } else {
+                                    anyhow::Ok(content)
+                                }
+                            }),
+                        )
+                    })
                     .collect::<Vec<_>>();
 
                 info!("Getting contents");
-                let contents = filtered_chunks
+                let contents = filtered_embeddables
                     .par_iter()
-                    .map(|(item, content)| (item.id(), content))
-                    .map(|(id, content)| {
+                    .map(|item| &item.1)
+                    .flatten()
+                    .map(|content| {
                         let tokens = self.tokenizer.encode_ordinary(&content);
                         if tokens.len() > 8192 {
-                            info!("{id:?}: Truncating content to 8192 tokens");
+                            info!(
+                                "Truncating content to 8192 tokens: {:?}...",
+                                content.get(0..100)
+                            );
                         }
                         let truncated_tokens = tokens.into_iter().take(8192).collect::<Vec<_>>();
-                        (id, self.tokenizer.decode(truncated_tokens).unwrap())
+                        self.tokenizer.decode(truncated_tokens).unwrap()
                     })
                     .collect::<Vec<_>>();
 
                 info!("Making request");
                 let request = async_openai::types::CreateEmbeddingRequestArgs::default()
-                    .model("text-embedding-3-large")
-                    .input(
-                        contents
-                            .iter()
-                            .map(|(_, content)| content.as_str())
-                            .collect::<Vec<_>>(),
-                    )
+                    .model(OPENAI_MODEL)
+                    .input(contents)
                     .build()
                     .map_err(|e| anyhow::anyhow!("Failed to build embedding request: {}", e))?;
 
                 let response = self.openai_client.embeddings().create(request).await?;
 
-                anyhow::Ok(
-                    filtered_chunks
-                        .iter()
-                        .map(|(item, _)| item)
-                        .zip(response.data.into_iter())
-                        .map(|(item, embedding)| {
-                            (item.id(), Arc::new(Embedding(embedding.embedding)))
-                        })
-                        .collect::<Vec<_>>(),
-                )
+                let mut response_data_iter = response.data.into_iter();
+
+                let embeddings = filtered_embeddables
+                    .into_iter()
+                    .map(|(e, validated_content)| match validated_content {
+                        Ok(_) => {
+                            let embedding = response_data_iter.next();
+                            let embedding = embedding.expect("Next embedding should exist");
+                            (e.clone(), Ok(Embedding(embedding.embedding)))
+                        }
+                        Err(error) => (e.clone(), Err(error)),
+                    })
+                    .collect::<Vec<_>>();
+
+                Ok(embeddings)
             })
-            .buffer_unordered(5)
+            .buffered(3)
             .collect::<Vec<_>>()
             .await
             .into_iter()
             .collect::<anyhow::Result<Vec<_>>>()?
             .into_iter()
             .flatten()
+            .collect::<Vec<_>>();
+
+        drop(items);
+
+        let results = result_arcs
+            .into_iter()
+            .map(|(arc_e, res)| {
+                let e = Arc::into_inner(arc_e).expect("Failed to unwrap Arc");
+                (e, res)
+            })
+            .collect::<Vec<_>>();
+
+        Ok(results)
+    }
+}
+
+pub trait EmbeddableStructure<T> {
+    fn into_content(&self) -> Vec<anyhow::Result<String>>;
+    fn into(self, embeddings: Vec<anyhow::Result<Embedding>>) -> T;
+}
+
+impl Embeddable for anyhow::Result<String> {
+    fn content(&self) -> anyhow::Result<String> {
+        match self {
+            Ok(string) => Ok(string.to_string()),
+            Err(e) => Err(anyhow!(e.to_string())), // todo handle this without cloning
+        }
+    }
+}
+
+impl Embedder {
+    /// Constructs a list of embedded structures given a list of structures capable of being embedded
+    #[instrument(skip(self, items))]
+    pub async fn embed_structures<T, F: EmbeddableStructure<T> + Sync>(
+        &self,
+        items: Vec<F>,
+    ) -> anyhow::Result<Vec<T>> {
+        let (structure_contents, lengths): (Vec<_>, Vec<_>) = items
+            .iter()
+            .map(|item| {
+                let contents = item.into_content();
+                let length = contents.len();
+                (contents, length)
+            })
+            .unzip();
+
+        let embeddings = self
+            .embed(structure_contents.into_iter().flatten().collect::<Vec<_>>())
+            .await?
+            .into_iter()
+            .map(|(_, result)| result);
+
+        let mut embeddings_vec = embeddings.collect::<Vec<_>>();
+
+        let grouped_embeddings = lengths
+            .iter()
+            .map(|length| embeddings_vec.drain(..length).collect::<Vec<_>>())
+            .collect::<Vec<_>>();
+
+        Ok(items
+            .into_iter()
+            .zip(grouped_embeddings)
+            .map(|(structure, embeddings)| structure.into(embeddings))
             .collect())
     }
 }

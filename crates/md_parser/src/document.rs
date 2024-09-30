@@ -578,20 +578,31 @@ pub(crate) mod tests {
 
     #[test]
     fn test_parse() {
-        let file_text = r#"
+        let file_text = r#"# Baker v Carr
+[[Members of Congress#Redistricting]]
 
-test
-
-# Test
-
-- [ ] Block [[Link|Display]] [NormalLink](Link)
-    - #tag Sub Block #tag
-
-Make a *function* for tree-sitter to work with rust well #LATER more text [[Link#HEad]]
-
-- f dj [MarkdownLink](Link)
-
-    "#;
+One person one vote: [[Baker v Carr#^baa84a]]
+## Facts
+- Tennessee citizens (Baker was alphabetically first in this list of citizens) thought that Tennessee's districting, which was set up based on the distribution of population in 1901, was unfair to current population shifts; they were based on geography instead of population and were thought to be unfair bu the legislatures did not want to lose their seats though fairer redistricting
+	- Rural parts of states would have the same representation as a largely populated city
+	- Rural parts of states would take over the legislatures while there was much more population in the cities
+		- The population in 1901 must have been much more spread out, then became compressed as time passed
+		- **As time passed, the legislature who had been elected there at the time did not want to lose their seats by redistricting, so they did nto do it**
+	- **Districts did not have equal populations, and therefore, the votes of each person were unequal**
+- Prior to this trial, the supreme court had refused to intervine in apportionment cases
+	- I am guessing that these cases would be for a similar topic
+	- Supreme court thought that these cases were not coverable under the constitution; it did not have anything to say about them
+	- Reversed this decision for this case (Q1: is this something under the power of the constitution)
+## Question
+- Did the supreme court have jurisdiction over questions of legislative apportiontmentp
+- Should all votes should be represented equally
+	- Gerrymandering changes the ratios of voters of parties to the actual districts made; dilutes
+## Majority Opinion and Reasoning
+- Favor of Baker: The supreme court ruile dthat they coukld review state redistricting issues and that all districts should be proportionately represented
+### Reasoning
+- Cited the **equal protection clause** (14th ammendment) gave citizens an equal vote that should not be based on geography
+	- Answering Q1: [**IMPACT**] this means that redistricting cases are **justiciable**; other cases were held
+	- Answering Q2: The districts can't undermine equality; ruled in favor of baker; in future cases, "one person, one vote" was required by the constitution ^baa84a"#;
 
         println!("{:#?}", Document::new(file_text).unwrap())
 
