@@ -8,22 +8,22 @@ use crate::mem_fs;
 
 pub type Line = usize;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct File {}
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Heading {
     pub title: String,
     pub range: std::ops::Range<Line>,
     /// Full range of the section that heading belongs to
     pub full_range: std::ops::Range<Line>,
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Block {
     pub range: std::ops::Range<Line>,
     /// Range of sub-blocks, if any
     pub context_range: Option<ContextRange>,
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ContextRange {
     pub parent: Option<std::ops::Range<Line>>,
     pub children: Option<std::ops::Range<Line>>,

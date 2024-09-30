@@ -17,13 +17,6 @@ use anyhow::{Context, Result};
 use tracing::{debug, error, info, instrument};
 
 impl Vault {
-    // pub fn semantic_search(&self, query: &str) -> _ {
-    //     todo!()
-    // }
-
-    // pub fn similarity_search(&self, entity_reference: E) -> _ {
-    //     todo!()
-    // }
     #[instrument]
     pub async fn init(root_dir: &'static Path) -> Result<Self> {
         let index = Index::new(&root_dir.join("oxide.db"))
@@ -36,85 +29,49 @@ impl Vault {
             mem_fs,
             root_dir,
             embedder,
+            snapshot: None,
         })
     }
 
-    // #[instrument(skip(self))]
-    // pub async fn embeddings_search(
-    //     &self,
-    //     query: &str,
-    // ) -> anyhow::Result<Vec<(f32, entity::EntityObject)>> {
-    //     let query_embedding = self.embedder.embed_query(query).await?;
+    #[instrument(skip(self))]
+    pub async fn semantic_search(
+        &self,
+        query: &str,
+        k: usize,
+    ) -> anyhow::Result<Vec<(f32, entity::EntityObject)>> {
+        let Some(snapshot) = self.snapshot.as_ref() else {
+            return Err(anyhow!("Vault must be synced before searched"));
+        };
 
-    //     let snapshot: Snapshot = self.mem_fs.read().await?;
+        let query_embedding = self.embedder.embed_query(query).await?;
 
-    //     let all_entities_and_embeddings = self
-    //         .index
-    //         .map(|key, value| {
-    //             let path = PathBuf::from(format!(
-    //                 "{}/{}",
-    //                 self.root_dir.to_str().unwrap(),
-    //                 key.to_owned()
-    //             ));
-    //             let Value(last_modified, file, headings, blocks) = value;
+        let entities_embedings = self
+            .index
+            .map(|key, value| {
+                let entities = value.get_entity_objects_with_embeddings(key.as_ref(), snapshot);
+                Ok(entities)
+            })?
+            .into_iter()
+            .flatten() // flatten option: no index
+            .flatten()
+            .flat_map(|(obj, embedding)| Some((obj, embedding?)))
+            .collect::<Vec<_>>();
 
-    //             let mut entities_and_embeddings = Vec::new();
+        let mut entity_scores: Vec<(f32, entity::EntityObject)> = entities_embedings
+            .into_par_iter()
+            .map(|(entity, embedding)| {
+                let similarity = Self::cosine_similarity(&query_embedding.0, &embedding.0);
+                (similarity, entity)
+            })
+            .collect();
 
-    //             if let Some((f, embedding)) = file {
-    //                 entities_and_embeddings.push((
-    //                     entity::EntityObject::from_file(
-    //                         Arc::new(f),
-    //                         Arc::from(path.clone()),
-    //                         snapshot.clone(),
-    //                         last_modified,
-    //                     ),
-    //                     embedding,
-    //                 ));
-    //             }
+        // this can be faster
 
-    //             entities_and_embeddings.extend(headings.into_iter().map(|(h, embedding)| {
-    //                 (
-    //                     entity::EntityObject::from_heading(
-    //                         Arc::new(h),
-    //                         Arc::from(path.clone()),
-    //                         snapshot.clone(),
-    //                         last_modified,
-    //                     ),
-    //                     embedding,
-    //                 )
-    //             }));
+        entity_scores.sort_unstable_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+        entity_scores.truncate(k);
 
-    //             entities_and_embeddings.extend(blocks.into_iter().map(|(b, embedding)| {
-    //                 (
-    //                     entity::EntityObject::from_block(
-    //                         Arc::new(b),
-    //                         Arc::from(path.clone()),
-    //                         snapshot.clone(),
-    //                         last_modified,
-    //                     ),
-    //                     embedding,
-    //                 )
-    //             }));
-
-    //             Ok(entities_and_embeddings)
-    //         })?
-    //         .unwrap()
-    //         .into_iter()
-    //         .flatten()
-    //         .collect::<Vec<_>>();
-
-    //     let mut entity_scores: Vec<(f32, entity::EntityObject)> = all_entities_and_embeddings
-    //         .into_par_iter()
-    //         .map(|(entity, embedding)| {
-    //             let similarity = Self::cosine_similarity(&query_embedding.0, &embedding.0);
-    //             (similarity, entity)
-    //         })
-    //         .collect();
-
-    //     entity_scores.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
-
-    //     Ok(entity_scores.into_iter().collect())
-    // }
+        Ok(entity_scores)
+    }
 
     fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
         let dot_product: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
@@ -129,13 +86,12 @@ pub struct Vault {
     mem_fs: MemFS,
     root_dir: &'static Path,
     embedder: embedder::Embedder,
+    snapshot: Option<Snapshot>,
 }
 
 impl Vault {
-    /// Initializes, updates, removes
     #[instrument(skip(self))]
-    pub async fn sync(&self) -> anyhow::Result<()> {
-        // memfs sync
+    pub async fn sync(self) -> anyhow::Result<Self> {
         let snapshot: Snapshot = self.mem_fs.read().await?;
 
         let indexed_files: HashSet<(String, SystemTime)> = self
@@ -144,14 +100,13 @@ impl Vault {
                 Ok((relative_path.clone().into_owned(), value.0.last_modified))
             })?
             .into_iter()
-            .flatten() // flatten the option
+            .flatten()
             .collect::<HashSet<_>>();
 
-        // INdex update actions
         let index_updates = snapshot
             .iter()
             .filter(|(relative_path, (metadata, _))| {
-                let file_state = (relative_path.to_string(), metadata.last_modified); // optimize if necessary
+                let file_state = (relative_path.to_string(), metadata.last_modified);
                 !indexed_files.contains(&file_state)
             })
             .collect::<Vec<_>>();
@@ -166,7 +121,7 @@ impl Vault {
                     path,
                     meta,
                     md::parse_file(path, file).map_err(|e| {
-                        error!("Failed to consturct document: {e:?}");
+                        error!("Failed to construct document: {e:?}");
                         e
                     })?,
                 ))
@@ -176,12 +131,12 @@ impl Vault {
         let structures = parsed_files
             .map(|(path, metadata, (file, headings, blocks))| {
                 (
-                    file,
-                    headings,
-                    blocks,
+                    Arc::new(file),
+                    headings.into_iter().map(Arc::new).collect(),
+                    blocks.into_iter().map(Arc::new).collect(),
                     path.as_str(),
                     snapshot.clone(),
-                    metadata.clone(), // optimize this if necessary
+                    metadata.clone(),
                 )
             })
             .collect::<Vec<_>>();
@@ -197,15 +152,22 @@ impl Vault {
             )
             .await?;
 
-        Ok(())
+        Ok(self.with_snapshot(snapshot))
+    }
+
+    pub fn with_snapshot(mut self, snapshot: Snapshot) -> Self {
+        if self.snapshot.is_none() {
+            self.snapshot = Some(snapshot);
+        }
+        self
     }
 }
 
 impl<'a> EmbeddableStructure<(&'a str, Value)>
     for (
-        md::File,
-        Vec<md::Heading>,
-        Vec<md::Block>,
+        Arc<md::File>,
+        Vec<Arc<md::Heading>>,
+        Vec<Arc<md::Block>>,
         &'a str,
         Snapshot,
         Metadata,
@@ -213,6 +175,17 @@ impl<'a> EmbeddableStructure<(&'a str, Value)>
 {
     fn into(self, embeddings: Vec<anyhow::Result<Embedding>>) -> (&'a str, Value) {
         let (file, headings, blocks, path, _snapshot, metadata) = self;
+
+        let file = Arc::into_inner(file).expect("Failed to unwrap Arc<md::File>");
+        let headings = headings
+            .into_iter()
+            .map(|h| Arc::into_inner(h).expect("Failed to unwrap Arc<md::Heading>"))
+            .collect::<Vec<_>>();
+        let blocks = blocks
+            .into_iter()
+            .map(|b| Arc::into_inner(b).expect("Failed to unwrap Arc<md::Block>"))
+            .collect::<Vec<_>>();
+
         let mut embedding_iter = embeddings.into_iter();
 
         let file_embedding = embedding_iter
@@ -277,23 +250,23 @@ impl<'a> EmbeddableStructure<(&'a str, Value)>
     fn into_content(&self) -> Vec<anyhow::Result<String>> {
         let (file, headings, blocks, relative_path, snapshot, ..) = self;
         let entities = std::iter::once(entity::EntityObject::from_file(
-            file,
-            relative_path,
+            file.clone(),
+            Arc::from(*relative_path),
             snapshot.clone(),
             SystemTime::now(),
         ))
         .chain(headings.iter().map(|heading| {
             entity::EntityObject::from_heading(
-                heading,
-                relative_path,
+                heading.clone(),
+                Arc::from(*relative_path),
                 snapshot.clone(),
                 SystemTime::now(),
             )
         }))
         .chain(blocks.iter().map(|block| {
             entity::EntityObject::from_block(
-                block,
-                relative_path,
+                block.clone(),
+                Arc::from(*relative_path),
                 snapshot.clone(),
                 SystemTime::now(),
             )
@@ -313,6 +286,48 @@ struct Value(
     Vec<(md::Block, Option<embedder::Embedding>)>,
 );
 
+impl Value {
+    pub fn get_entity_objects_with_embeddings(
+        &self,
+        path: &str,
+        snapshot: &Snapshot,
+    ) -> Vec<(entity::EntityObject, Option<embedder::Embedding>)> {
+        let Value(metadata, (file, file_embedding), headings, blocks) = self;
+
+        std::iter::once((
+            entity::EntityObject::from_file(
+                Arc::new(file.clone()), // this is so crap; optimize if necessary
+                Arc::from(path.to_string()),
+                snapshot.clone(),
+                metadata.last_modified,
+            ),
+            file_embedding.clone(),
+        ))
+        .chain(headings.iter().map(|(heading, embedding)| {
+            (
+                entity::EntityObject::from_heading(
+                    Arc::new(heading.clone()),
+                    Arc::from(path.to_string()),
+                    snapshot.clone(),
+                    metadata.last_modified,
+                ),
+                embedding.clone(),
+            )
+        }))
+        .chain(blocks.iter().map(|(block, embedding)| {
+            (
+                entity::EntityObject::from_block(
+                    Arc::new(block.clone()),
+                    Arc::from(path.to_string()),
+                    snapshot.clone(),
+                    metadata.last_modified,
+                ),
+                embedding.clone(),
+            )
+        }))
+        .collect()
+    }
+}
 impl index::IndexValue for Value {
     fn as_bytes(&self) -> Vec<u8> {
         bincode::serialize(self).unwrap()
@@ -355,9 +370,7 @@ mod tests {
 
         assert_eq!(vault.root_dir, root_dir);
         assert!(vault.mem_fs.read().await.is_ok());
-        // Additional assertions can be added here to check other properties of the initialized Vault
 
-        // Test synchronization
         vault.sync().await.unwrap();
     }
 
@@ -374,9 +387,6 @@ mod tests {
         let root_dir = Box::leak(Box::new(PathBuf::from("/home/felix/notes")));
         let vault = Vault::init(root_dir).await.unwrap();
 
-        // Ensure the vault is synced before searching
-        // vault.sync().await.unwrap();
-
         let queries = vec![
             "Software Engineering",
             "My personal perspective on drinking coffee",
@@ -390,29 +400,36 @@ mod tests {
                 * the diagnosis is that you did not in fact accomplish anything that whole time."
         ];
 
+        let vault = vault.sync().await.unwrap();
+
         for query in queries {
-            // let results = vault.embeddings_search(query).await.unwrap();
+            info!("Running query: {}", query);
+            let results = vault.semantic_search(query, 10).await.unwrap();
 
-            // println!("Top results for query: '{}'", query);
-            // for (i, (score, result)) in results.iter().enumerate().take(10) {
-            //     println!("{}. score: {}", i + 1, score);
-            //     match result {
-            //         entity::EntityObject::File(f) => {
-            //             println!("{}. file {:?}", i + 1, f.path(),);
-            //         }
-            //         entity::EntityObject::Heading(h) => {
-            //             println!("{}. {:?} heading {:?}", i + 1, h.path(), h.heading_name());
-            //         }
-            //         entity::EntityObject::Block(b) => {
-            //             println!("{}. block {:?}", i + 1, b.path(),);
-            //         }
-            //     }
-
-            //     // println!("{:?}", result.content())
-            // }
-
-            // Add more specific assertions here if needed, e.g.:
-            // assert!(results[0].content().unwrap().contains(query), "Top result should contain the query");
+            for (i, (score, entity)) in results.iter().enumerate() {
+                info!("Result {}: Score {}", i + 1, score);
+                match entity {
+                    entity::EntityObject::File(file) => {
+                        info!("  Type: File");
+                        info!("  Path: {}", file.path());
+                        info!("  File name: {}", file.file_name().unwrap());
+                        info!("  Content: {}", file.file_content().unwrap());
+                    }
+                    entity::EntityObject::Heading(heading) => {
+                        info!("  Type: Heading");
+                        info!("  Path: {}", heading.path());
+                        info!("  Heading name: {}", heading.heading_name().unwrap());
+                        info!("  Content: {}", heading.heading_content().unwrap());
+                    }
+                    entity::EntityObject::Block(block) => {
+                        info!("  Type: Block");
+                        info!("  Path: {}", block.path());
+                        let content = block.block_content().unwrap();
+                        info!("  Content preview: {}", content);
+                    }
+                }
+            }
+            info!("---------------------------");
         }
     }
 }

@@ -11,7 +11,7 @@ use tracing::{error, info, instrument};
 
 use crate::entity;
 
-#[derive(Serialize, Deserialize, Debug, Deref)]
+#[derive(Clone, Serialize, Deserialize, Debug, Deref)]
 pub struct Embedding(pub Vec<f32>);
 
 #[derive(Debug)]
