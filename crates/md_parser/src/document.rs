@@ -363,6 +363,7 @@ impl Debug for ListBlock {
             .field("content", &self.content)
             .field("children", &self.children)
             .field("checkbox", &self.checkbox)
+            .field("range", &self.range)
             .finish()
     }
 }
@@ -371,6 +372,7 @@ impl Debug for ParagraphBlock {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ParagraphBlock")
             .field("content", &self.content)
+            .field("range", &self.range)
             .finish()
     }
 }
@@ -445,6 +447,7 @@ impl Debug for BlockContent {
             .field("tags", &self.tags)
             .field("wiki_links", &self.wiki_links)
             .field("md_links", &self.md_links)
+            .field("range", &self.range)
             .finish()
     }
 }
@@ -539,6 +542,7 @@ impl Debug for Heading {
         f.debug_struct("Heading")
             .field("text", &self.text)
             .field("level", &self.level)
+            .field("range", &self.range)
             .finish()
     }
 }

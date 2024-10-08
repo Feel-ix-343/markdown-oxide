@@ -23,7 +23,7 @@ impl Vault {
             .await
             .context("Failed to create index")?;
         let mem_fs = MemFS::new(root_dir).context("Failed to create MemFS")?;
-        let embedder = embedder::Embedder::new();
+        let embedder = embedder::Engine::new();
         Ok(Vault {
             index,
             mem_fs,
@@ -85,7 +85,7 @@ pub struct Vault {
     index: index::Index<Value>,
     mem_fs: MemFS,
     root_dir: &'static Path,
-    embedder: embedder::Embedder,
+    embedder: embedder::Engine,
     snapshot: Option<Snapshot>,
 }
 
@@ -388,16 +388,18 @@ mod tests {
         let vault = Vault::init(root_dir).await.unwrap();
 
         let queries = vec![
-            "Software Engineering",
-            "My personal perspective on drinking coffee",
-            "Thoughts about programming with the aid of LLMs",
-            "Thoughts about the purpose of Exa",
-            "high inflation and economic crisis in latin america",
-            "My notes on modern african civilizations",
-            "continuities and changes in russia throughout history",
-            "fundemental principals of government",
-            "- The issue you have noticed for the past for months is a wavering motivation, which was different than that of the months prior, in developing oxide initial version.
-                * the diagnosis is that you did not in fact accomplish anything that whole time."
+            // "Software Engineering",
+            // "My personal perspective on drinking coffee",
+            // "Thoughts about programming with the aid of LLMs",
+            // "Thoughts about the purpose of Exa",
+            // "high inflation and economic crisis in latin america",
+            // "My notes on modern african civilizations",
+            // "continuities and changes in russia throughout history",
+            // "fundemental principals of government",
+            // "- The issue you have noticed for the past for months is a wavering motivation, which was different than that of the months prior, in developing oxide initial version.
+            //     * the diagnosis is that you did not in fact accomplish anything that whole time.",
+            // "my notes on keyword search algorithms and BM25",
+            "specific feature or task for oxidemd v1",
         ];
 
         let vault = vault.sync().await.unwrap();

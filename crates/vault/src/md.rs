@@ -13,20 +13,20 @@ pub struct File {}
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Heading {
     pub title: String,
-    pub range: std::ops::Range<Line>,
+    pub range: std::ops::RangeInclusive<Line>,
     /// Full range of the section that heading belongs to
     pub full_range: std::ops::Range<Line>,
 }
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Block {
-    pub range: std::ops::Range<Line>,
+    pub range: std::ops::RangeInclusive<Line>,
     /// Range of sub-blocks, if any
     pub context_range: Option<ContextRange>,
 }
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ContextRange {
-    pub parent: Option<std::ops::Range<Line>>,
-    pub children: Option<std::ops::Range<Line>>,
+    pub parent: Option<std::ops::RangeInclusive<Line>>,
+    pub children: Option<std::ops::RangeInclusive<Line>>,
 }
 
 pub fn parse_file(
@@ -43,7 +43,7 @@ pub fn parse_file(
         .filter_map(|section| {
             section.heading.as_ref().map(|heading| Heading {
                 title: heading.text.to_string(),
-                range: heading.range.start_point.row..heading.range.end_point.row,
+                range: heading.range.start_point.row..=heading.range.end_point.row,
                 full_range: section.range.start_point.row..section.range.end_point.row,
             })
         })
@@ -54,15 +54,15 @@ pub fn parse_file(
         parent: Option<&ListBlock>,
     ) -> Box<dyn Iterator<Item = Block> + 'a> {
         let parent_range = parent
-            .map(|block| block.content.range.start_point.row..block.content.range.end_point.row);
+            .map(|block| block.content.range.start_point.row..=block.content.range.end_point.row);
         let children_range = block.children.as_ref().and_then(|children| {
             let first = children.first()?;
             let last = children.last()?;
-            Some(first.range.start_point.row..last.range.end_point.row)
+            Some(first.range.start_point.row..=last.range.end_point.row)
         });
 
         let md_block = Block {
-            range: block.range.start_point.row..block.range.end_point.row,
+            range: block.content.range.start_point.row..=block.content.range.end_point.row,
             context_range: Some(ContextRange {
                 parent: parent_range,
                 children: children_range,
@@ -87,7 +87,7 @@ pub fn parse_file(
             DocBlock::ListBlock(block) => recurse_list_block(block, None),
             DocBlock::ParagraphBlock(block) => Box::new(std::iter::once(Block {
                 context_range: None,
-                range: block.content.range.start_point.row..block.content.range.end_point.row,
+                range: block.content.range.start_point.row..=block.content.range.end_point.row,
             })),
         })
         .flatten()

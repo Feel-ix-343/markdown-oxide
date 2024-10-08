@@ -62,7 +62,7 @@ impl std::ops::Deref for EntityObject {
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum EntityLocation {
     File,
-    Range(std::ops::Range<md::Line>),
+    RangeInclusive(std::ops::RangeInclusive<md::Line>),
 }
 pub(crate) trait Entity {
     fn location(&self) -> EntityLocation;
@@ -88,7 +88,7 @@ impl<E: Entity> EntityObjectInterface for GenericEntityObject<E> {
 
         match range {
             EntityLocation::File => Ok(file.text()),
-            EntityLocation::Range(range) => file.get_lines(range.start..range.end),
+            EntityLocation::RangeInclusive(range) => file.get_lines(range),
         }
     }
     fn path(&self) -> &str {
@@ -149,25 +149,25 @@ impl Entity for md::File {
 
 impl Entity for md::Heading {
     fn location(&self) -> EntityLocation {
-        EntityLocation::Range(self.full_range.clone())
+        EntityLocation::RangeInclusive(self.full_range.start..=self.full_range.end - 1)
     }
 }
 
 impl Entity for md::Block {
     fn location(&self) -> EntityLocation {
-        EntityLocation::Range(match &self.context_range {
+        EntityLocation::RangeInclusive(match &self.context_range {
             Some(ContextRange {
                 children: Some(range),
                 parent: Some(par_range),
-            }) => par_range.start..range.end,
+            }) => *par_range.start()..=*range.end(),
             Some(ContextRange {
                 children: Some(range),
                 parent: None,
-            }) => self.range.start..range.end,
+            }) => *self.range.start()..=*range.end(),
             Some(ContextRange {
                 children: None,
                 parent: Some(range),
-            }) => range.start..self.range.end,
+            }) => *range.start()..=*self.range.end(),
             Some(ContextRange {
                 children: None,
                 parent: None,

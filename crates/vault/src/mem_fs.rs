@@ -116,15 +116,15 @@ impl FsFile {
     }
 
     /// Get lines inclusive
-    pub fn get_lines(&self, range: std::ops::Range<usize>) -> anyhow::Result<Cow<str>> {
-        let start = range.start;
-        let end = range.end;
+    pub fn get_lines(&self, range: std::ops::RangeInclusive<usize>) -> anyhow::Result<Cow<str>> {
+        let start = range.start();
+        let end = range.end();
         if start > end {
             return Err(anyhow!("Invalid range: start > end"));
         }
         let slice = self
             .0
-            .get_slice(self.0.line_to_char(start)..self.0.line_to_char(end + 1))
+            .get_slice(self.0.line_to_char(*start)..self.0.line_to_char(end + 1))
             .ok_or_else(|| anyhow!("Failed to get slice"))?;
         Ok(slice.into())
     }
