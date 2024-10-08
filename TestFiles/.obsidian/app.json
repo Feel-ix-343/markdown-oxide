@@ -1,0 +1,13 @@
+{
+  "alwaysUpdateLinks": true,
+  "promptDelete": false,
+  "legacyEditor": false,
+  "livePreview": true,
+  "vimMode": true,
+  "foldIndent": true,
+  "foldHeading": true,
+  "attachmentFolderPath": "media",
+  "newFileLocation": "folder",
+  "newFileFolderPath": "the-new-file-folder"
+}
+
