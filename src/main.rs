@@ -817,8 +817,15 @@ async fn jump_to_specific(
     commands::jump(client, root_dir, settings, Some(day)).await
 }
 
+use std::env;
+
 #[tokio::main]
 async fn main() {
+    if env::args().any(|arg| arg == "--version" || arg == "-v") {
+        println!("markdown-oxide v{}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
+
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
