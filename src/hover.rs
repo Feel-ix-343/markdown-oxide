@@ -28,12 +28,6 @@ pub fn hover(
             contents: HoverContents::Markup(markup),
             range: None,
         }),
-        (None, Some(referenceable)) => {
-            preview_referenceable(vault, &referenceable).map(|markup| Hover {
-                contents: HoverContents::Markup(markup),
-                range: None,
-            })
-        }
         _ => None,
     }
 }
