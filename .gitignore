@@ -2,3 +2,4 @@
 Session.vim
 .idea
 *.redb
+.aider*

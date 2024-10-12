@@ -1,6 +1,6 @@
 trait Embedder {}
 
-trait Data<T: Embedder> {}
+trait Data<T: Embedder>: Sized {}
 
 pub struct Engine<T: Embedder>(T);
 
@@ -19,7 +19,7 @@ impl<T: Embedder> Engine<T> {
 
 trait EmbeddableData<T: Embedder> {}
 
-pub trait EmbeddableStructure<T: Embedder, D: Data<T>> {
+pub trait EmbeddableStructure<T: Embedder, D: Data<T>>: Sized {
     fn to_data(&self) -> anyhow::Result<Vec<D>>;
 }
 
