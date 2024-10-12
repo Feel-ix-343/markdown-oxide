@@ -48,6 +48,7 @@ impl Settings {
         let obsidian_new_file_folder_path = obsidian_new_file_folder_path(root_dir);
         let expanded = shellexpand::tilde("~/.config/moxide/settings");
         let settings = Config::builder()
+            .add_source(File::with_name(&expanded).required(false))
             .add_source(
                 File::with_name(&format!(
                     "{}/.moxide",
@@ -57,7 +58,6 @@ impl Settings {
                 ))
                 .required(false),
             )
-            .add_source(File::with_name(&expanded).required(false))
             .set_default(
                 "new_file_folder_path",
                 obsidian_new_file_folder_path.unwrap_or("".to_string()),
