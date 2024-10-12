@@ -28,18 +28,12 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                     })],
                 });
 
-                let name = Referenceable::Heading(
-                    path,
-                    &MDHeading {
-                        heading_text: params.new_name.clone(),
-                        ..heading.clone()
-                    },
-                )
-                .get_refname(vault.root_dir())?;
+                // {path name}#{new name}
+                let name = format!("{}#{}", path.file_stem()?.to_string_lossy().to_owned(), params.new_name);
 
                 (Some(change_op), name.to_string())
             }
-            Referenceable::File(path, file) => {
+            Referenceable::File(path, _file) => {
                 let new_path = path.with_file_name(&params.new_name).with_extension("md");
 
                 let change_op = DocumentChangeOperation::Op(ResourceOp::Rename(RenameFile {
@@ -49,9 +43,9 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                     annotation_id: None,
                 }));
 
-                let name = Referenceable::File(&new_path, file).get_refname(vault.root_dir())?;
+                let name = params.new_name.clone();
 
-                (Some(change_op), name.to_string())
+                (Some(change_op), name)
             }
             Referenceable::Tag(_path, _tag) => {
                 let new_ref_name = params.new_name.clone();
