@@ -15,6 +15,7 @@ async-openai = "0.24.0"
 tiktoken-rs = "*"
 tokio = { version = "*", features = ["full"] }
 futures = "0.3.30"
+tempfile = "*"
 
 num_cpus = "1.13.1"
 
@@ -23,3 +24,4 @@ walkdir.workspace = true
 derive_deref.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+util.workspace = true

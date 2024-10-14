@@ -2,7 +2,7 @@
 [workspace]
 resolver = "2"
 
-members = ["crates/md_parser", "crates/vault"]
+members = ["crates/md_parser", "crates/util", "crates/vault"]
 
 [workspace.dependencies]
 
@@ -16,3 +16,4 @@ anyhow = "*"
 derive_deref = "*"
 tracing = "*"
 tracing-subscriber = { version = "*", features = ["env-filter"] }
+util = { path = "crates/util" }
