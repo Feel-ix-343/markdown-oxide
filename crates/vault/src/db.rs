@@ -139,9 +139,9 @@ impl<I, V: redb::Value> MSync<I, V> {
     }
 }
 
-impl<'a, I: redb::Value + 'static> MSync<I, I>
+impl<I: 'static> MSync<I, I>
 where
-    (FileState, Vec<I>): Borrow<(FileState, Vec<<I as redb::Value>::SelfType<'a>>)>
+    I: for<'a> redb::Value<SelfType<'a> = I>
 {
     pub async fn run(self) -> anyhow::Result<FileDB<I>> {
         let MSync {
@@ -165,10 +165,14 @@ where
 }
 
 // yes this is a wacky trait bound but seems to be necessary for redb given our configuration.
-impl<'a, T: redb::Value + 'static> FileDB<T>
+impl<T: 'static> FileDB<T>
 where
-    (FileState, Vec<T>): Borrow<(FileState, Vec<<T as redb::Value>::SelfType<'a>>)>
+    T: for<'a> redb::Value<SelfType<'a> = T>
 {
+    const TABLE: TableDefinition<'static, String, (FileState, Vec<T>)> =
+        TableDefinition::new("main-table");
+
+
     pub fn new(dir: &'static Path) -> Self {
         Self {
             dir,
@@ -225,8 +229,6 @@ where
         })
     }
 
-    const TABLE: TableDefinition<'static, String, (FileState, Vec<T>)> =
-        TableDefinition::new("main-table");
 
     fn apply_sync(
         self,
@@ -283,6 +285,44 @@ where
             .collect();
 
         Ok(Some(result))
+    }
+
+    pub fn fold<B, F>(&self, init: B, mut f: F) -> anyhow::Result<B>
+    where
+        F: FnMut(B, &str, &T) -> B,
+    {
+        let db = Database::open("oxide.db")?;
+        let read_txn = db.begin_read()?;
+        let table = read_txn.open_table(Self::TABLE)?;
+
+        table.iter()?
+            .flatten_results_and_log()
+            .try_fold(init, |acc, (key_guard, value_guard)| {
+                let key = key_guard.value();
+                let (_, values) = value_guard.value();
+                values.iter().try_fold(acc, |inner_acc, value| {
+                    let value: &T = value;
+                    Ok(f(inner_acc, &key, value))
+                })
+            })
+    }
+
+    pub fn map<U, F: Copy>(&self, f: F) -> anyhow::Result<Vec<U>>
+    where
+        F: FnOnce(&str, &T) -> U,
+    {
+        let db = Database::open("oxide.db")?;
+        let read_txn = db.begin_read()?;
+        let table = read_txn.open_table(Self::TABLE)?;
+
+        table.iter()?
+            .flatten_results_and_log()
+            .flat_map(|(key_guard, value_guard)| {
+                let key = key_guard.value();
+                let (_, values) = value_guard.value();
+                values.iter().map(|value| Ok(f(key.as_str(), value))).collect::<Vec<_>>()
+            })
+            .collect()
     }
 }
 
