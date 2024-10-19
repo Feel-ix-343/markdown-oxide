@@ -1,24 +1,23 @@
 use std::{
-    borrow::{Borrow, Cow},
-    collections::{HashMap, HashSet},
-    convert::TryInto,
-    hash::{DefaultHasher, Hash, Hasher},
-    path::Path,
-    time::{SystemTime, UNIX_EPOCH},
-    u128,
+    collections::HashSet, convert::TryInto, hash::Hash, path::{Path, PathBuf}, process::Output, sync::Arc, time::{SystemTime, UNIX_EPOCH}, u128
 };
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use futures::Future;
 use itertools::Itertools;
-use rayon::iter::IntoParallelIterator;
-use redb::{Database, ReadableTable, TableDefinition, TypeName, Value};
+use redb::{Database, ReadableTable, TableDefinition, TypeName};
 use serde::{Deserialize, Serialize};
-use tracing::error;
 use walkdir::WalkDir;
 
 /// File-synchronized database for arbitrary collections derived from file contents
-pub struct FileDB<T: redb::Value> {
+///
+/// The generic type is the value type in these collections. It must be serializable and deserializable. 
+///
+/// Data is stored in KV stores in the form (FileKey, Vec<T>)
+pub struct FileDB<T> 
+where 
+    T: Serialize + for<'a> Deserialize<'a> + 'static
+{
     dir: &'static Path,
     _t: std::marker::PhantomData<T>,
 }
@@ -39,9 +38,16 @@ struct FileState(u128);
 ///
 /// Treat and sync the data like a flat collection, even if it chunked up by file for storage.
 ///
-/// When the Item type is the same as the DB storage type, there is the run function. Know that this type has to be a simple type so that it
-/// can be stored in the db with close to zero copy. No structs!
-pub struct MSync<Item, DBValue: redb::Value> {
+/// When the item type can be updated to the DB, the run function will be available to perform this update.
+/// The item type can be updated to the DB when the item type is the same as the DB type, where the DB type is the
+/// is the value type of values stored in collections associate with files.
+///
+/// MSync manages grouping these values to files for you! so take your initial, file-based data (file contents), parse it, flatmap it,
+/// ... and don't worry about the grouping. 
+pub struct MSync<Item, DBValue> 
+where 
+    DBValue: Serialize + for<'a> Deserialize<'a> + 'static
+{
     db: FileDB<DBValue>,
     updates: Vec<(FileKey, FileState, Item)>,
     deletes: Vec<FileKey>,
@@ -49,20 +55,27 @@ pub struct MSync<Item, DBValue: redb::Value> {
 
 use util::ResultIteratorExt;
 
-type FileContent<'a> = &'a str;
+type FileContent = Arc<str>;
 
-impl<V: redb::Value> MSync<(), V> {
-    pub async fn async_populate<I: std::fmt::Debug, F: Future<Output = I>>(
+
+impl<V> MSync<(), V> 
+where 
+    V: Serialize + for<'a> Deserialize<'a> + 'static
+{
+    pub async fn async_populate<I, F: Future<Output = I>>(
         self,
-        f: impl Fn(&FileKey, FileContent) -> F + Copy,
-    ) -> MSync<I, V> {
+        f: impl for<'a> Fn(&'a FileKey, FileContent) -> F + Copy,
+    ) -> MSync<I, V> 
+    where
+        I: std::fmt::Debug
+    {
         let dir = self.db.dir;
         let futures = self.updates.into_iter().map(|(it, state, _)| async move {
             let key: FileKey = it;
             let root_dir = dir;
             let path = root_dir.join(&key);
             let content = tokio::fs::read_to_string(&path).await?;
-            let item = f(&key, &content).await;
+            let item = f(&key, Arc::from(content)).await;
 
             anyhow::Ok((key, state, item))
         });
@@ -81,7 +94,11 @@ impl<V: redb::Value> MSync<(), V> {
     }
 }
 
-impl<I, V: redb::Value> MSync<I, V> {
+impl<I, V> MSync<I, V> 
+where 
+    V: Serialize + for<'a> Deserialize<'a> + 'static
+{
+
     pub fn map<IP>(self, f: impl Fn(I) -> IP) -> MSync<IP, V> {
         MSync {
             db: self.db,
@@ -93,10 +110,8 @@ impl<I, V: redb::Value> MSync<I, V> {
                 .collect(),
         }
     }
-}
 
-impl<I, V: redb::Value> MSync<I, V> {
-    pub fn flat_map<IP>(self, f: impl Fn(I) -> Vec<IP>) -> MSync<IP, V> {
+    pub fn flat_map<IP, C: IntoIterator<Item = IP>>(self, f: impl Fn(&I) -> C) -> MSync<IP, V> {
         MSync {
             db: self.db,
             deletes: self.deletes,
@@ -104,15 +119,12 @@ impl<I, V: redb::Value> MSync<I, V> {
                 .updates
                 .into_iter()
                 .flat_map(|(key, state, item)| {
-                    f(item).into_iter().map(move |it| (key.clone(), state, it))
+                    f(&item).into_iter().map(move |it| (key.clone(), state, it))
                 })
                 .collect(),
         }
     }
-}
 
-impl<I, V: redb::Value> MSync<I, V> {
-    /// External **one-to-one** mapping
     pub async fn external_async_map<IP, F: Future<Output = Vec<IP>>>(
         self,
         f: impl Fn(Vec<I>) -> F,
@@ -139,9 +151,26 @@ impl<I, V: redb::Value> MSync<I, V> {
     }
 }
 
-impl<I: 'static> MSync<I, I>
+// flatten
+impl<IP, I: IntoIterator<Item = IP>, V: Serialize + for<'a> Deserialize<'a>> MSync<I, V> {
+    pub fn flatten(self) -> MSync<IP, V> {
+        MSync {
+            db: self.db,
+            deletes: self.deletes,
+            updates: self
+                .updates
+                .into_iter()
+                .flat_map(|(key, state, items)| 
+                    items.into_iter().map(move |item| (key.clone(), state, item))
+                )
+                .collect(),
+        }
+    }
+}
+
+impl<I> MSync<I, I>
 where
-    I: for<'a> redb::Value<SelfType<'a> = I>
+    I: Serialize + for<'a> Deserialize<'a> + 'static,
 {
     pub async fn run(self) -> anyhow::Result<FileDB<I>> {
         let MSync {
@@ -155,23 +184,28 @@ where
             .into_group_map_by(|it| (it.0.clone(), it.1))
             .into_iter()
             .map(|it| (it.0, it.1.into_iter().map(|it| it.2).collect()))
-            .map(|it| (it.0.0, it.0.1, it.1))
+            .map(|it| (it.0 .0, it.0 .1, it.1))
             .collect();
-
-
 
         db.apply_sync(updates, deletes)
     }
 }
 
+const DB_NAME: &str = "oxide.db";
+
 // yes this is a wacky trait bound but seems to be necessary for redb given our configuration.
-impl<T: 'static> FileDB<T>
+impl<T> FileDB<T>
 where
-    T: for<'a> redb::Value<SelfType<'a> = T>
+    T: Serialize + for<'a> Deserialize<'a> + 'static,
 {
-    const TABLE: TableDefinition<'static, String, (FileState, Vec<T>)> =
+    /// Table definition: FileKey: String, then Value: (FileState, used for syncing, and then a Vec of binary serialized items, which make up the file-derived collection)
+    // if performance is bad, TODO try changing this to use zero copy.
+    const TABLE: TableDefinition<'static, FileKey, (FileState, Vec<Vec<u8>>)> =
         TableDefinition::new("main-table");
 
+    fn db_path(&self) -> PathBuf {
+        self.dir.join(DB_NAME)
+    }
 
     pub fn new(dir: &'static Path) -> Self {
         Self {
@@ -179,7 +213,6 @@ where
             _t: std::marker::PhantomData,
         }
     }
-       
 
     pub async fn new_msync(self) -> anyhow::Result<MSync<(), T>> {
         // recursively walk the file directory
@@ -229,24 +262,41 @@ where
         })
     }
 
-
     fn apply_sync(
         self,
         updates: Vec<(FileKey, FileState, Vec<T>)>,
         deletes: Vec<FileKey>,
     ) -> anyhow::Result<Self> {
-        let db = Database::create("oxide.db")?;
+        let db = Database::create(self.dir.join(DB_NAME))?;
 
         let write_txn = db.begin_write()?;
 
         {
             let mut table = write_txn.open_table(Self::TABLE)?;
-            for (key, state, value) in updates {
-                table.insert(key, (state, value))?;
-            }
-            for key in deletes {
-                table.remove(key)?;
-            }
+
+            let _ = updates.into_iter()
+                .map(|(key, state, collection)| {
+                    let serialized = collection
+                        .into_iter()
+                        .map(|it| bincode::serialize(&it)
+                            .map_err(|e| anyhow!("Failed to serialize item for key {} with error {e:?}", key.clone()))
+                        )
+                        .collect::<anyhow::Result<Vec<_>>>()?;
+
+                    anyhow::Ok((key, state, serialized))
+                })
+                .flatten_results_and_log()
+                .map(|(key, state, serialized)| {
+                    table.insert(key, (state, serialized))?;
+                    anyhow::Ok(())
+                })
+                .flatten_results_and_log()
+                .collect::<Vec<()>>();
+
+            let _ = deletes.into_iter()
+                .map(|key| table.remove(key).map(|_| ()))
+                .flatten_results_and_log()
+                .collect::<Vec<()>>();
         }
 
         write_txn.commit()?;
@@ -255,7 +305,7 @@ where
     }
 
     fn state(&self) -> anyhow::Result<Option<HashSet<(FileKey, FileState)>>> {
-        let db = match Database::open("oxide.db") {
+        let db = match Database::open(self.db_path()) {
             Ok(db) => db,
             Err(redb::DatabaseError::Storage(redb::StorageError::Io(io_error)))
                 if io_error.kind() == std::io::ErrorKind::NotFound =>
@@ -291,19 +341,22 @@ where
     where
         F: FnMut(B, &str, &T) -> B,
     {
-        let db = Database::open("oxide.db")?;
+        let db = Database::open(self.db_path())?;
         let read_txn = db.begin_read()?;
         let table = read_txn.open_table(Self::TABLE)?;
 
-        table.iter()?
+        table
+            .iter()?
             .flatten_results_and_log()
             .try_fold(init, |acc, (key_guard, value_guard)| {
                 let key = key_guard.value();
                 let (_, values) = value_guard.value();
+
                 values.iter().try_fold(acc, |inner_acc, value| {
-                    let value: &T = value;
-                    Ok(f(inner_acc, &key, value))
+                    let value: T = bincode::deserialize(value)?;
+                    Ok(f(inner_acc, &key, &value))
                 })
+
             })
     }
 
@@ -311,16 +364,20 @@ where
     where
         F: FnOnce(&str, &T) -> U,
     {
-        let db = Database::open("oxide.db")?;
+        let db = Database::open(self.db_path())?;
         let read_txn = db.begin_read()?;
         let table = read_txn.open_table(Self::TABLE)?;
 
-        table.iter()?
+        table
+            .iter()?
             .flatten_results_and_log()
             .flat_map(|(key_guard, value_guard)| {
                 let key = key_guard.value();
                 let (_, values) = value_guard.value();
-                values.iter().map(|value| Ok(f(key.as_str(), value))).collect::<Vec<_>>()
+                values
+                    .iter()
+                    .map(|value| Ok(f(key.as_str(), &bincode::deserialize(value)?)))
+                    .collect::<Vec<_>>()
             })
             .collect()
     }
@@ -364,5 +421,64 @@ impl redb::Value for FileState {
 
     fn type_name() -> redb::TypeName {
         TypeName::new("vault::FileState")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::{self, File};
+    use std::io::Write;
+    use tempfile::TempDir;
+
+    #[tokio::test]
+    async fn test_msync_workflow() -> anyhow::Result<()> {
+        // Create a temporary directory for our test files
+        let temp_dir = TempDir::new()?;
+        let temp_path = temp_dir.path();
+
+        // Create some test markdown files
+        let files = vec![
+            ("file1.md", "# Header 1\nContent 1"),
+            ("file2.md", "# Header 2\nContent 2"),
+            ("file3.md", "# Header 3\nContent 3"),
+        ];
+
+        for (filename, content) in &files {
+            let mut file = File::create(temp_path.join(filename))?;
+            file.write_all(content.as_bytes())?;
+        }
+
+        // Initialize FileDB
+        let db = FileDB::<String>::new(Box::leak(temp_path.to_path_buf().into_boxed_path()));
+
+        // Step 1: Populate the database using flatmap
+        let msync: MSync<(), String> = db.new_msync().await?;
+        let populated_db = msync
+            .async_populate(|_file_key, content| async move { content.to_string() })
+            .await
+            .flat_map(|content| {
+                content
+                    .lines()
+                    .map(|line| line.to_string())
+                    .collect::<Vec<_>>()
+            })
+            .run()
+            .await?;
+
+        // Step 2: Validate the population using the database map method
+        let lines: Vec<String> = populated_db.map(|_, line| line.to_string())?;
+        println!("{:?}", lines);
+        assert_eq!(lines.len(), 6); // 3 files, 2 lines each
+        assert!(lines.contains(&"# Header 1".to_string()));
+        assert!(lines.contains(&"Content 1".to_string()));
+        assert!(lines.contains(&"# Header 2".to_string()));
+        assert!(lines.contains(&"Content 2".to_string()));
+        assert!(lines.contains(&"# Header 3".to_string()));
+        assert!(lines.contains(&"Content 3".to_string()));
+
+        // Step 3: Clean up (this is handled automatically by TempDir when it goes out of scope)
+
+        Ok(())
     }
 }
