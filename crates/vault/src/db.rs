@@ -7,6 +7,7 @@ use futures::Future;
 use itertools::Itertools;
 use redb::{Database, ReadableTable, TableDefinition, TypeName};
 use serde::{Deserialize, Serialize};
+use tracing::{info, instrument};
 use walkdir::WalkDir;
 
 /// File-synchronized database for arbitrary collections derived from file contents
@@ -62,6 +63,7 @@ impl<V> MSync<(), V>
 where 
     V: Serialize + for<'a> Deserialize<'a> + 'static
 {
+    #[instrument(skip(self, f))]
     pub async fn async_populate<I, F: Future<Output = I>>(
         self,
         f: impl for<'a> Fn(&'a FileKey, FileContent) -> F + Copy,
@@ -85,6 +87,7 @@ where
             .into_iter()
             .flatten_results_and_log()
             .collect::<Vec<_>>();
+
 
         MSync {
             db: self.db,
@@ -125,17 +128,18 @@ where
         }
     }
 
-    pub async fn external_async_map<IP, F: Future<Output = Vec<IP>>>(
+    /// Map the full collection. The order must be maintained.
+    pub async fn external_async_map<IP, F: Future<Output = anyhow::Result<Vec<IP>>>>(
         self,
         f: impl Fn(Vec<I>) -> F,
-    ) -> MSync<IP, V> {
+    ) -> anyhow::Result<MSync<IP, V>> {
         let keys = self
             .updates
             .iter()
             .map(|it| (it.0.to_string(), it.1))
             .collect::<Vec<_>>();
         let old_values = self.updates.into_iter().map(|it| it.2).collect::<Vec<_>>();
-        let result = f(old_values).await;
+        let result = f(old_values).await?;
 
         let updates = keys
             .into_iter()
@@ -143,11 +147,11 @@ where
             .map(|it| (it.0 .0, it.0 .1, it.1))
             .collect::<Vec<_>>();
 
-        MSync {
+        Ok(MSync {
             db: self.db,
             deletes: self.deletes,
             updates,
-        }
+        })
     }
 }
 
@@ -214,6 +218,7 @@ where
         }
     }
 
+    #[instrument(skip(self))]
     pub async fn new_msync(self) -> anyhow::Result<MSync<(), T>> {
         // recursively walk the file directory
         let new_files_state: HashSet<(FileKey, FileState)> = {
@@ -242,7 +247,8 @@ where
 
         let old_files_state: HashSet<(FileKey, FileState)> = self.state()?.unwrap_or_default();
 
-        let diff_new_and_different = new_files_state.difference(&old_files_state);
+        let diff_new_and_different = new_files_state.difference(&old_files_state).collect::<Vec<_>>();
+        info!("{} Updated files", diff_new_and_different.len());
 
         let new_paths: HashSet<&FileKey> = new_files_state.iter().map(|(key, _)| key).collect();
         let old_paths: HashSet<&FileKey> = old_files_state.iter().map(|(key, _)| key).collect();
@@ -253,10 +259,12 @@ where
             .map(|it| it.to_string())
             .collect();
 
+        info!("{} Deleted files", removed_paths.len());
+
         Ok(MSync {
             db: self,
             deletes: removed_paths.into_iter().collect(),
-            updates: diff_new_and_different
+            updates: diff_new_and_different.into_iter()
                 .map(|(key, state)| (key.to_string(), *state, ()))
                 .collect(),
         })
@@ -362,7 +370,7 @@ where
 
     pub fn map<U, F: Copy>(&self, f: F) -> anyhow::Result<Vec<U>>
     where
-        F: FnOnce(&str, &T) -> U,
+        F: Fn(&FileKey, &T) -> U,
     {
         let db = Database::open(self.db_path())?;
         let read_txn = db.begin_read()?;
@@ -376,7 +384,7 @@ where
                 let (_, values) = value_guard.value();
                 values
                     .iter()
-                    .map(|value| Ok(f(key.as_str(), &bincode::deserialize(value)?)))
+                    .map(|value| Ok(f(&key, &bincode::deserialize(value)?)))
                     .collect::<Vec<_>>()
             })
             .collect()
