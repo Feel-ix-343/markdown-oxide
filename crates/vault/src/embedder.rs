@@ -5,7 +5,7 @@ use async_openai::{config::OpenAIConfig, types::CreateEmbeddingRequest};
 use futures::{stream, StreamExt};
 use itertools::Itertools;
 use tiktoken_rs::cl100k_base;
-use tracing::{info, instrument};
+use tracing::{info, instrument, span, Level};
 
 pub type Embedding = Vec<f32>;
 
@@ -49,7 +49,8 @@ impl Embedder {
 
         let r = stream::iter(embeddables.chunks(2048).into_iter().enumerate())
             .map(|(idx, it)| async move {
-                info!("Constructing embeddings request {}/{}", idx + 1, num_chunks);
+                let span = span!(Level::INFO, "Embeddings request", idx);
+                let _ = span.enter();
 
                 let validated_content = it
                     .map(|item| {
