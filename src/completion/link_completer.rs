@@ -202,7 +202,7 @@ impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
         let line_to_cursor = line_chars.get(0..character)?;
 
         static PARTIAL_MDLINK_REGEX: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r"\[(?<display>[^\[\]\(\)]*)\]\((?<path>[^\[\]\(\)\#]*)(\#(?<infileref>[^\[\]\(\)]*))?$").unwrap()
+            Regex::new(r"\[(?<display>[^\[\]\(\)]*)\]\((?<path>[^\[\]\(\)\#]+)?(\#(?<infileref>[^\[\]\(\)]*))?$").unwrap()
         }); // [display](relativePath)
 
         let line_string_to_cursor = String::from_iter(line_to_cursor);
@@ -212,13 +212,14 @@ impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
         let (full, display, reftext, infileref) = (
             captures.get(0)?,
             captures.name("display")?,
-            captures.name("path")?,
+            captures.name("path"),
             captures.name("infileref"),
         );
 
         let line_string = String::from_iter(&line_chars);
 
-        let reference_under_cursor = Reference::new(&line_string).into_iter().find(|reference| {
+        let file_name = context.path.file_stem().expect("File name is not valid").to_string_lossy();
+        let reference_under_cursor = Reference::new(&line_string, &file_name).into_iter().find(|reference| {
             reference.range.start.character <= character as u32
                 && reference.range.end.character >= character as u32
         });
@@ -247,7 +248,7 @@ impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
         });
 
         let partial = Some(MarkdownLinkCompleter {
-            path: (reftext.as_str().to_string(), reftext.range()),
+            path: (reftext.map(|it| it.as_str().to_string()).unwrap_or(file_name.to_string()), reftext.map(|it| it.range()).unwrap_or(character-1..character-1)), // range shouldn't matter if no path specified.
             display: (display.as_str().to_string(), display.range()),
             infile_ref: partial_infileref,
             full_range,

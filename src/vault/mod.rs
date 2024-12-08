@@ -554,14 +554,15 @@ pub struct MDFile {
 impl MDFile {
     fn new(context: &Settings, text: &str, path: PathBuf) -> MDFile {
         let code_blocks = MDCodeBlock::new(text).collect_vec();
+        let file_name = path.file_stem().expect("file should have file stem").to_str().unwrap_or_default();
         let links = match context {
             Settings {
                 references_in_codeblocks: false,
                 ..
-            } => Reference::new(text)
+            } => Reference::new(text, file_name)
                 .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
                 .collect_vec(),
-            _ => Reference::new(text).collect_vec(),
+            _ => Reference::new(text, file_name).collect_vec(),
         };
         let headings = MDHeading::new(text)
             .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
@@ -718,9 +719,9 @@ impl Reference {
         }
     }
 
-    pub fn new(text: &str) -> impl Iterator<Item = Reference> + '_ {
+    pub fn new<'a>(text: &'a str, file_name: &'a str) -> impl Iterator<Item = Reference> + 'a {
         static WIKI_LINK_RE: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r"\[\[(?<filepath>[^\[\]\|\.\#]+)(\#(?<infileref>[^\[\]\.\|]+))?(?<ending>\.[^\# <>]+)?(\|(?<display>[^\[\]\.\|]+))?\]\]")
+            Regex::new(r"\[\[(?<filepath>[^\[\]\|\.\#]+)?(\#(?<infileref>[^\[\]\.\|]+))?(?<ending>\.[^\# <>]+)?(\|(?<display>[^\[\]\.\|]+))?\]\]")
 
                 .unwrap()
         }); // A [[link]] that does not have any [ or ] in it
@@ -735,11 +736,11 @@ impl Reference {
             )
             .flat_map(RegexTuple::new)
             .flat_map(|regextuple| {
-                generic_link_constructor::<WikiReferenceConstructor>(text, regextuple)
+                generic_link_constructor::<WikiReferenceConstructor>(text, file_name, regextuple)
             });
 
         static MD_LINK_RE: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r"\[(?<display>[^\[\]\.]*)\]\(<?(?<filepath>(\.?\/)?[^\[\]\|\.\#<>]+)(?<ending>\.[^\# <>]+)?(\#(?<infileref>[^\[\]\.\|<>]+))?>?\)")
+            Regex::new(r"\[(?<display>[^\[\]\.]*)\]\(<?(?<filepath>(\.?\/)?[^\[\]\|\.\#<>]+)?(?<ending>\.[^\# <>]+)?(\#(?<infileref>[^\[\]\.\|<>]+))?>?\)")
                 .expect("MD Link Not Constructing")
         }); // [display](relativePath)
 
@@ -753,7 +754,7 @@ impl Reference {
             )
             .flat_map(RegexTuple::new)
             .flat_map(|regextuple| {
-                generic_link_constructor::<MDReferenceConstructor>(text, regextuple)
+                generic_link_constructor::<MDReferenceConstructor>(text, file_name, regextuple)
             });
 
         let tags = MDTag::new(text).map(|tag| {
@@ -932,7 +933,7 @@ impl Reference {
 
 struct RegexTuple<'a> {
     range: Match<'a>,
-    file_path: Match<'a>,
+    file_path: Option<Match<'a>>,
     infile_ref: Option<Match<'a>>,
     display_text: Option<Match<'a>>,
 }
@@ -945,7 +946,7 @@ impl RegexTuple<'_> {
             capture.name("infileref"),
             capture.name("display"),
         ) {
-            (Some(range), Some(file_path), infile_ref, display_text) => Some(RegexTuple {
+            (Some(range), file_path, infile_ref, display_text) => Some(RegexTuple {
                 range,
                 file_path,
                 infile_ref,
@@ -991,6 +992,7 @@ impl ParseableReferenceConstructor for MDReferenceConstructor {
 
 fn generic_link_constructor<T: ParseableReferenceConstructor>(
     text: &str,
+    file_name: &str,
     RegexTuple {
         range,
         file_path,
@@ -998,38 +1000,38 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
         display_text,
     }: RegexTuple,
 ) -> Option<Reference> {
-    if file_path.as_str().starts_with("http://")
-        || file_path.as_str().starts_with("https://")
-        || file_path.as_str().starts_with("data:")
+    if file_path.is_some_and(|path| path.as_str().starts_with("http://")
+        || path.as_str().starts_with("https://")
+        || path.as_str().starts_with("data:"))
     {
         return None;
     }
 
-    match (range, file_path, infile_ref, display_text) {
+    match (range, file_path.map(|it| it.as_str()).unwrap_or(file_name), infile_ref, display_text) {
         // Pure file reference as there is no infileref such as #... for headings or #^... for indexed blocks
         (full, filepath, None, display) => Some(T::new_file_link(ReferenceData {
-            reference_text: filepath.as_str().into(),
+            reference_text: filepath.into(),
             range: MyRange::from_range(&Rope::from_str(text), full.range()),
             display_text: display.map(|d| d.as_str().into()),
         })),
         (full, filepath, Some(infile), display) if infile.as_str().get(0..1) == Some("^") => {
             Some(T::new_indexed_block_link(
                 ReferenceData {
-                    reference_text: format!("{}#{}", filepath.as_str(), infile.as_str()),
+                    reference_text: format!("{}#{}", filepath, infile.as_str()),
                     range: MyRange::from_range(&Rope::from_str(text), full.range()),
                     display_text: display.map(|d| d.as_str().into()),
                 },
-                filepath.as_str(),
+                filepath,
                 &infile.as_str()[1..], // drop the ^ for the index
             ))
         }
         (full, filepath, Some(infile), display) => Some(T::new_heading(
             ReferenceData {
-                reference_text: format!("{}#{}", filepath.as_str(), infile.as_str()),
+                reference_text: format!("{}#{}", filepath, infile.as_str()),
                 range: MyRange::from_range(&Rope::from_str(text), full.range()),
                 display_text: display.map(|d| d.as_str().into()),
             },
-            filepath.as_str(),
+            filepath,
             infile.as_str(),
         )),
     }
@@ -1547,7 +1549,7 @@ mod vault_tests {
     #[test]
     fn wiki_link_parsing() {
         let text = "This is a [[link]] [[link 2]]\n[[link 3]]";
-        let parsed = Reference::new(text).collect_vec();
+        let parsed = Reference::new(text, "test").collect_vec();
 
         let expected = vec![
             WikiFileLink(ReferenceData {
@@ -1603,7 +1605,7 @@ mod vault_tests {
     #[test]
     fn wiki_link_heading_parsing() {
         let text = "This is a [[link#heading]]";
-        let parsed = Reference::new(text).collect_vec();
+        let parsed = Reference::new(text, "test.md").collect_vec();
 
         let expected = vec![WikiHeadingLink(
             ReferenceData {
@@ -1631,7 +1633,7 @@ mod vault_tests {
     #[test]
     fn wiki_link_indexedblock_parsing() {
         let text = "This is a [[link#^index1]]";
-        let parsed = Reference::new(text).collect_vec();
+        let parsed = Reference::new(text, "test.md").collect_vec();
 
         let expected = vec![WikiIndexedBlockLink(
             ReferenceData {
@@ -1659,7 +1661,7 @@ mod vault_tests {
     #[test]
     fn wiki_link_parsin_with_display_text() {
         let text = "This is a [[link|but called different]] [[link 2|222]]\n[[link 3|333]]";
-        let parsed = Reference::new(text).collect_vec();
+        let parsed = Reference::new(text, "test.md").collect_vec();
 
         let expected = vec![
             WikiFileLink(ReferenceData {
@@ -1716,7 +1718,7 @@ mod vault_tests {
     fn md_link_parsing() {
         let text = "Test text test text [link](path/to/link)";
 
-        let parsed = Reference::new(text).collect_vec();
+        let parsed = Reference::new(text, "test.md").collect_vec();
 
         let expected = vec![Reference::MDFileLink(ReferenceData {
             reference_text: "path/to/link".into(),
@@ -1738,7 +1740,7 @@ mod vault_tests {
 
         let text = "Test text test text [link](./path/to/link)";
 
-        let parsed = Reference::new(text).collect_vec();
+        let parsed = Reference::new(text, "test.md").collect_vec();
 
         let expected = vec![Reference::MDFileLink(ReferenceData {
             reference_text: "./path/to/link".into(),
@@ -1760,7 +1762,7 @@ mod vault_tests {
 
         let text = "Test text test text [link](./path/to/link.md)";
 
-        let parsed = Reference::new(text).collect_vec();
+        let parsed = Reference::new(text, "test.md").collect_vec();
 
         let expected = vec![Reference::MDFileLink(ReferenceData {
             reference_text: "./path/to/link".into(),
@@ -1785,7 +1787,7 @@ mod vault_tests {
     fn advanced_md_link_parsing() {
         let text = "Test text test text [link](<path to/link>)";
 
-        let parsed = Reference::new(text).collect_vec();
+        let parsed = Reference::new(text, "test.md").collect_vec();
 
         let expected = vec![Reference::MDFileLink(ReferenceData {
             reference_text: "path to/link".into(),
@@ -1807,7 +1809,7 @@ mod vault_tests {
 
         let text = "Test text test text [link](<path/to/link.md#heading>)";
 
-        let parsed = Reference::new(text).collect_vec();
+        let parsed = Reference::new(text, "test.md").collect_vec();
 
         let expected = vec![Reference::MDHeadingLink(
             ReferenceData {
@@ -1836,7 +1838,7 @@ mod vault_tests {
     fn md_heading_link_parsing() {
         let text = "Test text test text [link](path/to/link#heading)";
 
-        let parsed = Reference::new(text).collect_vec();
+        let parsed = Reference::new(text, "test.md").collect_vec();
 
         let expected = vec![Reference::MDHeadingLink(
             ReferenceData {
@@ -1862,7 +1864,7 @@ mod vault_tests {
 
         let text = "Test text test text [link](path/to/link.md#heading)";
 
-        let parsed = Reference::new(text).collect_vec();
+        let parsed = Reference::new(text, "test.md").collect_vec();
 
         let expected = vec![Reference::MDHeadingLink(
             ReferenceData {
@@ -1891,7 +1893,7 @@ mod vault_tests {
     fn md_block_link_parsing() {
         let text = "Test text test text [link](path/to/link#^index1)";
 
-        let parsed = Reference::new(text).collect_vec();
+        let parsed = Reference::new(text, "test.md").collect_vec();
 
         let expected = vec![Reference::MDIndexedBlockLink(
             ReferenceData {
@@ -1917,7 +1919,7 @@ mod vault_tests {
 
         let text = "Test text test text [link](path/to/link.md#^index1)";
 
-        let parsed = Reference::new(text).collect_vec();
+        let parsed = Reference::new(text, "test.md").collect_vec();
 
         let expected = vec![Reference::MDIndexedBlockLink(
             ReferenceData {
@@ -1947,7 +1949,7 @@ mod vault_tests {
         let text = "This is a footnote[^1]
 
 [^1]: This is not";
-        let parsed = Reference::new(text).collect_vec();
+        let parsed = Reference::new(text, "test.md").collect_vec();
         let expected = vec![Footnote(ReferenceData {
             reference_text: "^1".into(),
             range: tower_lsp::lsp_types::Range {
@@ -1970,7 +1972,7 @@ mod vault_tests {
     #[test]
     fn link_parsing_with_png() {
         let text = "This is a png [[link.png]] [[link|display.png]]";
-        let parsed = Reference::new(text).collect_vec();
+        let parsed = Reference::new(text, "test.md").collect_vec();
 
         assert_eq!(parsed, vec![])
     }
@@ -2118,7 +2120,7 @@ more text
     #[test]
     fn parsing_special_text() {
         let text = "’’’󰌶 is a [[link]] [[link 2]]\n[[link 3]]";
-        let parsed = Reference::new(text).collect_vec();
+        let parsed = Reference::new(text, "test.md").collect_vec();
 
         let expected = vec![
             WikiFileLink(ReferenceData {
@@ -2348,7 +2350,7 @@ Continued
     fn parse_link_ref() {
         let text = "This is a [link]j\n\n[link]: linktext";
 
-        let parsed = Reference::new(text).collect_vec();
+        let parsed = Reference::new(text, "test.md").collect_vec();
 
         let expected = vec![Reference::LinkRef(ReferenceData {
             reference_text: "link".into(),
