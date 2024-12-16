@@ -125,54 +125,61 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
     use std::path::PathBuf;
-    use tracing::info;
     use tracing_subscriber::{
         fmt::{self, format::FmtSpan},
         EnvFilter,
     };
 
     #[tokio::test]
-    async fn test_vault_synced() -> anyhow::Result<()> {
-        // Initialize tracing subscriber
+    async fn test_search() -> anyhow::Result<()> {
+        // Initialize tracing like the other test
         tracing_subscriber::fmt()
             .with_env_filter(EnvFilter::from_default_env())
             .with_span_events(FmtSpan::CLOSE)
             .init();
 
-        // Get the project directory using Cargo's CARGO_MANIFEST_DIR environment variable
-        //let project_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        //let test_files_dir = project_dir.join("../../TestFiles");
-
         let test_files_dir = PathBuf::from("/home/felix/notes");
-
         tracing::info!("Test files directory: {:?}", test_files_dir);
 
-        // Create a new Vault instance with the TestFiles directory
+        // Initialize and sync vault
         let vault = Vault::new(Box::leak(test_files_dir.into_boxed_path()));
-
-        tracing::info!("Created Vault instance");
-
-        // Sync the vault
-        let synced_vault = vault.synced().await?;
-
+        let vault = vault.synced().await?;
         tracing::info!("Vault synced successfully");
 
-        let it = synced_vault.db.map(|file, value| {
-            (
-                file.to_owned(),
-                value.0.clone(),
-                value
-                    .1
-                    .as_ref()
-                    .and_then(|it| it.get(0..7).map(|it| it.to_vec())),
-            )
-        })?;
+        // Test search functionality
+        let results = vault.search("rust programming", 5).await?;
+        
+        tracing::info!("Search results: {:?}", 
+            results.iter()
+                .map(|(score, entity)| {
+                    let preview = match entity {
+                        Entity::File { content } => content.chars().take(50).collect::<String>(),
+                        Entity::Heading { content } => content.to_string(),
+                    };
+                    format!("(score: {:.3}, content: {}...)", score, preview)
+                })
+                .collect::<Vec<_>>()
+        );
 
-        info!("Test results {:?}", it.iter().take(10).collect::<Vec<_>>());
+        // Verify results
+        assert!(!results.is_empty(), "Should return at least one result");
+        assert!(results.len() <= 5, "Should not return more than k results");
 
-        assert!(it.len() != 0);
+        // Verify scores are in descending order
+        for window in results.windows(2) {
+            assert!(
+                window[0].0 >= window[1].0, 
+                "Results should be in descending order: {} >= {}", 
+                window[0].0, 
+                window[1].0
+            );
+        }
+
+        // Verify all scores are valid
+        for (score, _) in &results {
+            assert!(*score >= 0.0 && *score <= 1.0, "Score should be between 0 and 1: {}", score);
+        }
 
         Ok(())
     }
