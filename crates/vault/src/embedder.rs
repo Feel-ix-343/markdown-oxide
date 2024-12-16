@@ -5,12 +5,13 @@ use async_openai::{config::OpenAIConfig, types::CreateEmbeddingRequest};
 use futures::{stream, StreamExt};
 use itertools::Itertools;
 use tiktoken_rs::cl100k_base;
-use tracing::{info, instrument, span, Level};
+use tracing::{info, info_span, instrument, span, warn, Instrument, Level};
 
 pub type Embedding = Vec<f32>;
 
 pub struct Embedder {
     client: async_openai::Client<OpenAIConfig>,
+    tokenizer: tiktoken_rs::CoreBPE,
 }
 
 pub trait Embeddable {
@@ -33,6 +34,7 @@ impl Embedder {
 
         Self {
             client: async_openai::Client::with_config(config),
+            tokenizer: cl100k_base().expect("tokenizer should construct")
         }
     }
 
@@ -49,8 +51,6 @@ impl Embedder {
 
         let r = stream::iter(embeddables.chunks(2048).into_iter().enumerate())
             .map(|(idx, it)| async move {
-                let span = span!(Level::INFO, "Embeddings request", idx);
-                let _ = span.enter();
 
                 let validated_content = it
                     .map(|item| {
@@ -59,7 +59,7 @@ impl Embedder {
                     })
                     .map(|(item, content)| {
                         if content.is_empty() {
-                            info!("Content for item {:?} empty; not embedding", item.1);
+                            warn!("Content for item {:?} empty; not embedding", item.1);
                             (item, None)
                         } else {
                             (item, Some(content))
@@ -67,19 +67,22 @@ impl Embedder {
                     })
                     .collect::<Vec<_>>();
 
+                let span = info_span!("tokenizing content").entered();
+
+
                 let valid_content = validated_content
                     .iter()
                     .flat_map(|(item, content)| content.as_ref().map(|content| (item, content)))
                     .map(|it| (it.0 .0, it.1))
                     .map(|(idx, string)| -> (usize, String) {
-                        let bpe = cl100k_base().unwrap();
-                        let tokens = bpe.encode_with_special_tokens(&string);
+                        let tokens = self.tokenizer.encode_with_special_tokens(&string);
                         let truncated_tokens =
                             tokens.iter().take(8192).cloned().collect::<Vec<_>>();
-                        let truncated_string = bpe.decode(truncated_tokens).unwrap();
-                        println!("Tokenized item {}: {} tokens", idx, tokens.len());
+                        let truncated_string = self.tokenizer.decode(truncated_tokens).unwrap();
                         (idx, truncated_string)
                     });
+
+                drop(span);
 
                 let text = valid_content
                     .clone()
@@ -120,12 +123,11 @@ impl Embedder {
                             ))?;
                             Ok((idx, item, Some(embedding.to_owned())))
                         }
-                        None => Ok((idx, item, None)),
-                    })
+                        None => Ok((idx, item, None)), })
                     .collect::<anyhow::Result<Vec<_>>>()?;
 
                 anyhow::Ok(results)
-            })
+            }.instrument(info_span!("Embedding chunk", chunk = idx)))
             .buffer_unordered(4)
             .collect::<Vec<_>>()
             .await
