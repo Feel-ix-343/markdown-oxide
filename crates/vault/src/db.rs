@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet, convert::TryInto, hash::Hash, path::{Path, PathBuf}, process::Output, sync::Arc, time::{SystemTime, UNIX_EPOCH}, u128
+    collections::HashSet, convert::TryInto, hash::Hash, path::{Path, PathBuf}, process::Output, rc::Rc, sync::Arc, time::{SystemTime, UNIX_EPOCH}, u128
 };
 
 use anyhow::{anyhow, Context};
@@ -31,27 +31,36 @@ type FileKey = String;
 #[derive(Debug, Eq, Hash, PartialEq, Clone, Copy)]
 struct FileState(u128);
 
-/// What is this? This is a monadic interface for constructing (and then running) sync effects for the file-synchonized database.
+/// What is this? This is an interface for constructing and chaining sync effects for the files in the FileDB.
+///
+/// It allows for constructing update logic for both the files and the items of the database, as well as chain
+/// operations together for efficient and easily composable updates of the database (composing the functinos on the file
+/// instead of mutating the database).
 ///
 /// What does it do? This allows you to construct the update logic for the sub-sets of your collection that are out of sync,
-/// and do so without worrying about the storage mechanisms for these collections or about collection contents that needs to be removed
+/// and do so without worrying too much about the storage mechanisms for these collections or about collection contents that needs to be removed
 /// from the database
-///
-/// Treat and sync the data like a flat collection, even if it chunked up by file for storage.
 ///
 /// When the item type can be updated to the DB, the run function will be available to perform this update.
 /// The item type can be updated to the DB when the item type is the same as the DB type, where the DB type is the
 /// is the value type of values stored in collections associate with files.
 ///
-/// MSync manages grouping these values to files for you! so take your initial, file-based data (file contents), parse it, flatmap it,
-/// ... and don't worry about the grouping. 
-pub struct MSync<Item, DBValue> 
+/// Initially, the Item type of the sync will be (). The provided functions are meant to allow for transforming the ()
+/// into the database item type. Once this happens, the run function will become available and you can sync to the database.
+pub struct Sync<SyncItem, DBItem> 
 where 
-    DBValue: Serialize + for<'a> Deserialize<'a> + 'static
+    DBItem: Serialize + for<'a> Deserialize<'a> + 'static
 {
-    db: FileDB<DBValue>,
-    updates: Vec<(FileKey, FileState, Item)>,
+    db: FileDB<DBItem>,
+    updates: Vec<FileItemUpdate<SyncItem>>,
     deletes: Vec<FileKey>,
+}
+
+#[derive(Debug)]
+struct FileItemUpdate<Item> {
+    key: FileKey,
+    state: FileState,
+    sync_item: Item
 }
 
 use util::ResultIteratorExt;
@@ -59,27 +68,29 @@ use util::ResultIteratorExt;
 type FileContent = Arc<str>;
 
 
-impl<V> MSync<(), V> 
+// methods related to constructing the initial sync.
+impl<DatabaseItem> Sync<(), DatabaseItem> 
 where 
-    V: Serialize + for<'a> Deserialize<'a> + 'static
+    DatabaseItem: Serialize + for<'a> Deserialize<'a> + 'static
 {
     #[instrument(skip(self, f))]
+    /// Populate the sync using the recent content of the file, the key of the file, and the possibly
+    /// the collection slice related to the file.
     pub async fn async_populate<I, F: Future<Output = I>>(
         self,
         f: impl for<'a> Fn(&'a FileKey, FileContent) -> F + Copy,
-    ) -> MSync<I, V> 
+    ) -> Sync<I, DatabaseItem> 
     where
         I: std::fmt::Debug
     {
         let dir = self.db.dir;
-        let futures = self.updates.into_iter().map(|(it, state, _)| async move {
-            let key: FileKey = it;
+        let futures = self.updates.into_iter().map(|FileItemUpdate { key, state, sync_item: _ }| async move {
             let root_dir = dir;
             let path = root_dir.join(&key);
             let content = tokio::fs::read_to_string(&path).await?;
-            let item = f(&key, Arc::from(content)).await;
+            let sync_item = f(&key, Arc::from(content)).await;
 
-            anyhow::Ok((key, state, item))
+            anyhow::Ok(FileItemUpdate { key, state, sync_item: sync_item.into() })
         });
 
         let updates = futures::future::join_all(futures)
@@ -89,7 +100,7 @@ where
             .collect::<Vec<_>>();
 
 
-        MSync {
+        Sync {
             db: self.db,
             deletes: self.deletes,
             updates,
@@ -97,57 +108,61 @@ where
     }
 }
 
-impl<I, V> MSync<I, V> 
+impl<I, V> Sync<I, V> 
 where 
     V: Serialize + for<'a> Deserialize<'a> + 'static
 {
 
-    pub fn map<IP>(self, f: impl Fn(I) -> IP) -> MSync<IP, V> {
-        MSync {
+    pub fn map<IP>(self, f: impl Fn(I) -> IP) -> Sync<IP, V> {
+        Sync {
             db: self.db,
             deletes: self.deletes,
             updates: self
                 .updates
                 .into_iter()
-                .map(|(key, state, item)| (key.clone(), state, f(item)))
+                .map(|file_item_update| file_item_update.map(&f))
                 .collect(),
         }
     }
 
-    pub fn flat_map<IP, C: IntoIterator<Item = IP>>(self, f: impl Fn(&I) -> C) -> MSync<IP, V> {
-        MSync {
+    /// maps sync items into collection, then flattens the collections while keeping the sync items associated files
+    pub fn flat_map<IP, C: IntoIterator<Item = IP>>(self, f: impl Fn(&I) -> C) -> Sync<IP, V> {
+        Sync {
             db: self.db,
             deletes: self.deletes,
             updates: self
                 .updates
                 .into_iter()
-                .flat_map(|(key, state, item)| {
-                    f(&item).into_iter().map(move |it| (key.clone(), state, it))
+                .flat_map(|FileItemUpdate { key, state, sync_item }| {
+                    f(&sync_item)
+                        .into_iter()
+                        .map(move |it| FileItemUpdate { key: key.clone(), state, sync_item: it })
                 })
                 .collect(),
         }
     }
 
-    /// Map the full collection. The order must be maintained.
+    /// Batch map the full collection. The order and count of sync values must be maintained.
     pub async fn external_async_map<IP, F: Future<Output = anyhow::Result<Vec<IP>>>>(
         self,
         f: impl Fn(Vec<I>) -> F,
-    ) -> anyhow::Result<MSync<IP, V>> {
+    ) -> anyhow::Result<Sync<IP, V>> {
         let keys = self
             .updates
             .iter()
-            .map(|it| (it.0.to_string(), it.1))
+            .map(|it| (it.key.to_string(), it.state))
             .collect::<Vec<_>>();
-        let old_values = self.updates.into_iter().map(|it| it.2).collect::<Vec<_>>();
+
+        let old_values = self.updates.into_iter().map(|it| it.sync_item).collect::<Vec<_>>();
         let result = f(old_values).await?;
 
         let updates = keys
             .into_iter()
             .zip(result)
-            .map(|it| (it.0 .0, it.0 .1, it.1))
+            .map(|((key, state), new_value)| FileItemUpdate { key, state, sync_item: new_value })
             .collect::<Vec<_>>();
 
-        Ok(MSync {
+        Ok(Sync {
             db: self.db,
             deletes: self.deletes,
             updates,
@@ -156,28 +171,32 @@ where
 }
 
 // flatten
-impl<IP, I: IntoIterator<Item = IP>, V: Serialize + for<'a> Deserialize<'a>> MSync<I, V> {
-    pub fn flatten(self) -> MSync<IP, V> {
-        MSync {
+impl<ItemInner, IterableItem: IntoIterator<Item = ItemInner>, DatabaseItem: Serialize + for<'a> Deserialize<'a>> Sync<IterableItem, DatabaseItem> {
+    /// Flatten the inner collection while maintaining file association of the items
+    pub fn inner_flatten(self) -> Sync<ItemInner, DatabaseItem> {
+        Sync {
             db: self.db,
             deletes: self.deletes,
             updates: self
                 .updates
                 .into_iter()
-                .flat_map(|(key, state, items)| 
-                    items.into_iter().map(move |item| (key.clone(), state, item))
-                )
+                .flat_map(|FileItemUpdate { key, state, sync_item }|  {
+                    sync_item
+                        .into_iter()
+                        .map(|item| FileItemUpdate { key: key.clone(), state, sync_item: item })
+                        .collect::<Vec<_>>()
+                })
                 .collect(),
         }
     }
 }
 
-impl<I> MSync<I, I>
+impl<I> Sync<I, I>
 where
     I: Serialize + for<'a> Deserialize<'a> + 'static,
 {
     pub async fn run(self) -> anyhow::Result<FileDB<I>> {
-        let MSync {
+        let Sync {
             db,
             updates,
             deletes,
@@ -185,9 +204,9 @@ where
 
         let updates: Vec<(FileKey, FileState, Vec<I>)> = updates
             .into_iter()
-            .into_group_map_by(|it| (it.0.clone(), it.1))
+            .into_group_map_by(|update| (update.key.clone(), update.state))
             .into_iter()
-            .map(|it| (it.0, it.1.into_iter().map(|it| it.2).collect()))
+            .map(|(key, updates)| (key, updates.into_iter().map(|update| update.sync_item).collect()))
             .map(|it| (it.0 .0, it.0 .1, it.1))
             .collect();
 
@@ -219,7 +238,7 @@ where
     }
 
     #[instrument(skip(self))]
-    pub async fn new_msync(self) -> anyhow::Result<MSync<(), T>> {
+    pub async fn new_msync(self) -> anyhow::Result<Sync<(), T>> {
         // recursively walk the file directory
         let new_files_state: HashSet<(FileKey, FileState)> = {
             let walker = WalkDir::new(self.dir);
@@ -261,11 +280,11 @@ where
 
         info!("{} Deleted files", removed_paths.len());
 
-        Ok(MSync {
+        Ok(Sync {
             db: self,
             deletes: removed_paths.into_iter().collect(),
             updates: diff_new_and_different.into_iter()
-                .map(|(key, state)| (key.to_string(), *state, ()))
+                .map(|(key, state)| FileItemUpdate { key: key.clone(), state: *state, sync_item: ().into() } )
                 .collect(),
         })
     }
@@ -345,6 +364,10 @@ where
         Ok(Some(result))
     }
 
+    fn deserialize_db_value(value: &[u8]) -> anyhow::Result<Arc<T>> {
+        Ok(Arc::new(bincode::deserialize(&value)?))
+    }
+
     pub fn fold<B, F>(&self, init: B, mut f: F) -> anyhow::Result<B>
     where
         F: FnMut(B, &str, &T) -> B,
@@ -361,16 +384,17 @@ where
                 let (_, values) = value_guard.value();
 
                 values.iter().try_fold(acc, |inner_acc, value| {
-                    let value: T = bincode::deserialize(value)?;
+                    let value: Arc<T> = Self::deserialize_db_value(value)?;
                     Ok(f(inner_acc, &key, &value))
                 })
 
             })
     }
 
+
     pub fn map<U, F: Copy>(&self, f: F) -> anyhow::Result<Vec<U>>
     where
-        F: Fn(&FileKey, &T) -> U,
+        F: Fn(&FileKey, &Arc<T>) -> U,
     {
         let db = Database::open(self.db_path())?;
         let read_txn = db.begin_read()?;
@@ -384,7 +408,7 @@ where
                 let (_, values) = value_guard.value();
                 values
                     .iter()
-                    .map(|value| Ok(f(&key, &bincode::deserialize(value)?)))
+                    .map(|value| Ok(f(&key, &Self::deserialize_db_value(value)?)))
                     .collect::<Vec<_>>()
             })
             .collect()
@@ -432,6 +456,24 @@ impl redb::Value for FileState {
     }
 }
 
+impl<Item> FileItemUpdate<Item> {
+    fn map<ItemP>(self, f: &impl Fn(Item) -> ItemP) -> FileItemUpdate<ItemP> {
+        FileItemUpdate {
+            key: self.key,
+            state: self.state,
+            sync_item: f(self.sync_item),
+        }
+    }
+
+    fn with_item_moved<I>(self, item: I) -> FileItemUpdate<I> {
+        FileItemUpdate {
+            key: self.key,
+            state: self.state,
+            sync_item: item.into(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -461,7 +503,7 @@ mod tests {
         let db = FileDB::<String>::new(Box::leak(temp_path.to_path_buf().into_boxed_path()));
 
         // Step 1: Populate the database using flatmap
-        let msync: MSync<(), String> = db.new_msync().await?;
+        let msync: Sync<(), String> = db.new_msync().await?;
         let populated_db = msync
             .async_populate(|_file_key, content| async move { content.to_string() })
             .await
