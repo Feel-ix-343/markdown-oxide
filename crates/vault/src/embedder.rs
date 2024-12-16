@@ -38,6 +38,32 @@ impl Embedder {
         }
     }
 
+    /// Embed a single text string
+    #[instrument(skip(self))]
+    pub async fn embed_one(&self, text: &str) -> anyhow::Result<Embedding> {
+        if text.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let tokens = self.tokenizer.encode_with_special_tokens(text);
+        let truncated_tokens = tokens.iter().take(8192).cloned().collect::<Vec<_>>();
+        let truncated_text = self.tokenizer.decode(truncated_tokens).unwrap();
+
+        let response = self
+            .client
+            .embeddings()
+            .create(CreateEmbeddingRequest {
+                model: "text-embedding-3-large".to_string(),
+                input: vec![truncated_text],
+                user: None,
+                encoding_format: None,
+                dimensions: None,
+            })
+            .await?;
+
+        Ok(response.data.into_iter().next().map(|e| e.embedding).unwrap_or_default())
+    }
+
     /// Embeds the items and returns them in the same order passed in.
     #[instrument(skip(self, embeddables))]
     pub async fn embed<I: Embeddable + std::fmt::Debug>(
