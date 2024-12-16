@@ -27,6 +27,20 @@ type Score = f64;
 type VaultSync<T> = db::Sync<T, VaultItem>;
 
 impl Vault {
+    /// Find the k best matches for a query embedding
+    pub fn best_matches(&self, query_embedding: &[f32], k: usize) -> anyhow::Result<Vec<(Score, Entity)>> {
+        self.db.iter()?
+            .filter_map(|(_, (entity, embedding))| {
+                embedding.as_ref().map(|emb| {
+                    assert_eq!(query_embedding.len(), emb.len());
+                    let similarity = cosine_similarity(query_embedding, emb);
+                    (similarity, entity)
+                })
+            })
+            .k_largest_by_key(k, |&(score, _)| ordered_float::OrderedFloat(score))
+            .collect()
+    }
+
     pub fn new(root_dir: &'static Path) -> Vault {
         Self {
             root_dir,
@@ -88,6 +102,18 @@ impl Embeddable for Entity {
             Entity::File { content } => content.to_string(),
             Entity::Heading { content } => content.to_string(),
         }
+    }
+}
+
+fn cosine_similarity(a: &[f32], b: &[f32]) -> f64 {
+    let dot_product: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+    let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
+    let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
+    
+    if norm_a == 0.0 || norm_b == 0.0 {
+        0.0
+    } else {
+        (dot_product / (norm_a * norm_b)) as f64
     }
 }
 
