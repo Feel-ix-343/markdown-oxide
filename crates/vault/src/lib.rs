@@ -24,7 +24,7 @@ pub enum Entity {
 
 type Score = f64;
 
-type VaultSync<T> = db::MSync<T, VaultItem>;
+type VaultSync<T> = db::Sync<T, VaultItem>;
 
 impl Vault {
     pub fn new(root_dir: &'static Path) -> Vault {
@@ -43,7 +43,7 @@ impl Vault {
         let parsed: VaultSync<md_parser::Document> = sync
             .async_populate(|_, file_content| async move { Document::new(&file_content) })
             .await
-            .flatten();
+            .inner_flatten();
 
         // flat map this into files and headings
         let embeddables: VaultSync<Entity> = parsed.flat_map(|document| {
@@ -111,8 +111,10 @@ mod tests {
             .init();
 
         // Get the project directory using Cargo's CARGO_MANIFEST_DIR environment variable
-        let project_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let test_files_dir = project_dir.join("../../TestFiles");
+        //let project_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        //let test_files_dir = project_dir.join("../../TestFiles");
+
+        let test_files_dir = PathBuf::from("/home/felix/notes");
 
         tracing::info!("Test files directory: {:?}", test_files_dir);
 
