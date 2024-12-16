@@ -49,6 +49,12 @@ impl Vault {
         }
     }
 
+    /// Search for similar content using a text query
+    pub async fn search(&self, query: &str, k: usize) -> anyhow::Result<Vec<(Score, Entity)>> {
+        let query_embedding = self.embedder.embed_one(query).await?;
+        self.best_matches(&query_embedding, k)
+    }
+
     pub async fn synced(self) -> anyhow::Result<Self> {
         // create a new msync
         let sync: VaultSync<()> = self.db.new_msync().await?;
