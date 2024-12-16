@@ -4,6 +4,7 @@ use embedder::{Embeddable, Embedder};
 use md_parser::Document;
 use serde::{Deserialize, Serialize};
 
+use itertools::Itertools;
 mod db;
 mod embedder;
 
@@ -29,16 +30,14 @@ type VaultSync<T> = db::Sync<T, VaultItem>;
 impl Vault {
     /// Find the k best matches for a query embedding
     pub fn best_matches(&self, query_embedding: &[f32], k: usize) -> anyhow::Result<Vec<(Score, Entity)>> {
-        self.db.iter()?
-            .filter_map(|(_, (entity, embedding))| {
-                embedding.as_ref().map(|emb| {
-                    assert_eq!(query_embedding.len(), emb.len());
-                    let similarity = cosine_similarity(query_embedding, emb);
-                    (similarity, entity)
-                })
+        Ok(self.db.iter()?
+            .filter_map(|(_, reference)| {
+                let value_embedding = reference.as_ref().1.as_ref()?;
+                let similarity = cosine_similarity(query_embedding, value_embedding);
+                Some((similarity, reference.0.clone()))
             })
             .k_largest_by_key(k, |&(score, _)| ordered_float::OrderedFloat(score))
-            .collect()
+            .collect())
     }
 
     pub fn new(root_dir: &'static Path) -> Vault {
