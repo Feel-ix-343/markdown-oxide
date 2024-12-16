@@ -133,7 +133,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_search() -> anyhow::Result<()> {
-        // Initialize tracing like the other test
         tracing_subscriber::fmt()
             .with_env_filter(EnvFilter::from_default_env())
             .with_span_events(FmtSpan::CLOSE)
@@ -142,25 +141,28 @@ mod tests {
         let test_files_dir = PathBuf::from("/home/felix/notes");
         tracing::info!("Test files directory: {:?}", test_files_dir);
 
-        // Initialize and sync vault
         let vault = Vault::new(Box::leak(test_files_dir.into_boxed_path()));
         let vault = vault.synced().await?;
         tracing::info!("Vault synced successfully");
 
-        // Test search functionality
-        let results = vault.search("rust programming", 5).await?;
+        let query = "rust programming";
+        tracing::info!("Searching for: {}", query);
+        let results = vault.search(query, 5).await?;
         
-        tracing::info!("Search results: {:?}", 
-            results.iter()
-                .map(|(score, entity)| {
-                    let preview = match entity {
-                        Entity::File { content } => content.chars().take(50).collect::<String>(),
-                        Entity::Heading { content } => content.to_string(),
-                    };
-                    format!("(score: {:.3}, content: {}...)", score, preview)
-                })
-                .collect::<Vec<_>>()
-        );
+        tracing::info!("Search results:");
+        for (i, (score, entity)) in results.iter().enumerate() {
+            let (kind, content) = match entity {
+                Entity::File { content } => ("File", content.chars().take(100).collect::<String>()),
+                Entity::Heading { content } => ("Heading", content.to_string()),
+            };
+            tracing::info!(
+                "\n{}: {}\n   Score: {:.3}\n   Content: {}...", 
+                i + 1,
+                kind,
+                score, 
+                content.replace('\n', " ").trim()
+            );
+        }
 
         // Verify results
         assert!(!results.is_empty(), "Should return at least one result");
