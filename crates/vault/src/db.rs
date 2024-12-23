@@ -243,23 +243,33 @@ where
     pub async fn new_msync(self) -> anyhow::Result<Sync<(), T>> {
         // recursively walk the file directory
         let new_files_state: HashSet<(FileKey, FileState)> = {
-            let walker = WalkDir::new(self.dir);
+            let walker = WalkDir::new(self.dir)
+                .follow_links(false)
+                .into_iter()
+                .filter_entry(|e| {
+                    // If it's a directory, only enter if it's not hidden
+                    if e.file_type().is_dir() {
+                        return !e.file_name()
+                            .to_str()
+                            .map(|s| s.starts_with('.'))
+                            .unwrap_or(false);
+                    }
+                    
+                    // For files, check both hidden status and markdown extension
+                    !e.file_name()
+                        .to_str()
+                        .map(|s| s.starts_with('.'))
+                        .unwrap_or(false)
+                    && e.path()
+                        .extension()
+                        .and_then(|ext| ext.to_str())
+                        .map(|ext| ext.eq_ignore_ascii_case("md") || ext.eq_ignore_ascii_case("markdown"))
+                        .unwrap_or(false)
+                })
+                .filter_map(|entry| entry.ok())
+                .filter(|entry| entry.file_type().is_file());
 
             walker
-                .into_iter()
-                .flatten()
-                .filter(|it| !it.path().components().any(|comp| {
-                    comp.as_os_str()
-                        .to_string_lossy()
-                        .starts_with('.')
-                }))
-                .filter(|it| it.file_type().is_file())
-                .filter(|it| {
-                    it.path().extension().is_some_and(|extension| {
-                        extension.eq_ignore_ascii_case("md")
-                            || extension.eq_ignore_ascii_case("markdown")
-                    })
-                })
                 .logging_flat_map(|it| {
                     // ignore any metadata errors; I don't forsee these being an issue
                     let path = it.path();
