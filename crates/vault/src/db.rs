@@ -360,19 +360,16 @@ where
             .begin_read()
             .context("Failed to begin read transaction")?;
         let table = read_txn
-            .open_table(Self::TABLE)
+            .open_table(Self::STATE_TABLE)
             .context("Failed to open table")?;
 
-        let result = table
-            .iter()?
-            .flatten_results_and_log()
-            .map(|(key_guard, value_guard)| {
-                let key = key_guard.value();
-                let (state, _) = value_guard.value();
-
-                (key, state)
-            })
-            .collect();
+        let capacity = table.len()? as usize;
+        let mut result = HashSet::with_capacity(capacity);
+        
+        for entry in table.iter()? {
+            let (key, state) = entry?;
+            result.insert((key.value().to_string(), state.value()));
+        }
 
         Ok(Some(result))
     }
