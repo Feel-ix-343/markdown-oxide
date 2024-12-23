@@ -227,6 +227,8 @@ where
     // if performance is bad, TODO try changing this to use zero copy.
     const TABLE: TableDefinition<'static, FileKey, (FileState, Vec<Vec<u8>>)> =
         TableDefinition::new("main-table");
+    const STATE_TABLE: TableDefinition<'static, FileKey, FileState> =
+        TableDefinition::new("state-table");
 
     fn db_path(&self) -> PathBuf {
         self.dir.join(DB_NAME)
@@ -314,39 +316,30 @@ where
         deletes: Vec<FileKey>,
     ) -> anyhow::Result<Self> {
         let db = Database::create(self.dir.join(DB_NAME))?;
-
         let write_txn = db.begin_write()?;
 
         {
-            let mut table = write_txn.open_table(Self::TABLE)?;
+            let mut main_table = write_txn.open_table(Self::TABLE)?;
+            let mut state_table = write_txn.open_table(Self::STATE_TABLE)?;
 
-            let _ = updates.into_iter()
-                .map(|(key, state, collection)| {
-                    let serialized = collection
-                        .into_iter()
-                        .map(|it| bincode::serialize(&it)
-                            .map_err(|e| anyhow!("Failed to serialize item for key {} with error {e:?}", key.clone()))
-                        )
-                        .collect::<anyhow::Result<Vec<_>>>()?;
+            for (key, state, collection) in updates {
+                let serialized = collection
+                    .into_iter()
+                    .map(|it| bincode::serialize(&it))
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|e| anyhow!("Failed to serialize item for key {} with error {e:?}", key))?;
 
-                    anyhow::Ok((key, state, serialized))
-                })
-                .flatten_results_and_log()
-                .map(|(key, state, serialized)| {
-                    table.insert(key, (state, serialized))?;
-                    anyhow::Ok(())
-                })
-                .flatten_results_and_log()
-                .collect::<Vec<()>>();
+                main_table.insert(&key, (state, serialized))?;
+                state_table.insert(&key, state)?;
+            }
 
-            let _ = deletes.into_iter()
-                .map(|key| table.remove(key).map(|_| ()))
-                .flatten_results_and_log()
-                .collect::<Vec<()>>();
+            for key in deletes {
+                main_table.remove(&key)?;
+                state_table.remove(&key)?;
+            }
         }
 
         write_txn.commit()?;
-
         Ok(self)
     }
 
