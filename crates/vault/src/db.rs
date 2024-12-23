@@ -5,7 +5,7 @@ use std::{
 use anyhow::{anyhow, Context};
 use futures::Future;
 use itertools::Itertools;
-use redb::{Database, ReadableTable, TableDefinition, TypeName};
+use redb::{Database, ReadableTable, ReadableTableMetadata, TableDefinition, TypeName};
 use serde::{Deserialize, Serialize};
 use tempfile::TempDir;
 use tracing::{info, info_span, instrument};
@@ -443,7 +443,7 @@ where
             .flatten_results_and_log()
             .try_fold(init, |acc, (key_guard, value_guard)| {
                 let key = key_guard.value();
-                let (_, values) = value_guard.value();
+                let values = value_guard.value();
 
                 values.iter().try_fold(acc, |inner_acc, value| {
                     let value: Arc<T> = Self::deserialize_db_value(value)?;
@@ -467,7 +467,7 @@ where
             .flatten_results_and_log()
             .flat_map(|(key_guard, value_guard)| {
                 let key = key_guard.value();
-                let (_, values) = value_guard.value();
+                let values = value_guard.value();
                 values
                     .iter()
                     .map(|value| Ok(f(&key, &Self::deserialize_db_value(value)?)))
