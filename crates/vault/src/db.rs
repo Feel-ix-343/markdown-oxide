@@ -8,7 +8,7 @@ use itertools::Itertools;
 use redb::{Database, ReadableTable, TableDefinition, TypeName};
 use serde::{Deserialize, Serialize};
 use tempfile::TempDir;
-use tracing::{info, instrument};
+use tracing::{info, info_span, instrument};
 use walkdir::WalkDir;
 
 /// File-synchronized database for arbitrary collections derived from file contents
@@ -243,6 +243,7 @@ where
     pub async fn new_msync(self) -> anyhow::Result<Sync<(), T>> {
         // recursively walk the file directory
         let new_files_state: HashSet<(FileKey, FileState)> = {
+            let _ = info_span!("current file state").entered();
             let walker = WalkDir::new(self.dir)
                 .follow_links(false)
                 .into_iter()
@@ -281,29 +282,43 @@ where
                 .collect()
         };
 
-        let old_files_state: HashSet<(FileKey, FileState)> = self.state()?.unwrap_or_default();
+        let old_files_state: HashSet<(FileKey, FileState)> = { 
+            let _ = info_span!("old file state").entered();
+            self.state()?.unwrap_or_default()
+        };
 
-        let diff_new_and_different = new_files_state.difference(&old_files_state).collect::<Vec<_>>();
+        let diff_new_and_different = {
+            let _ = info_span!("calculating updated files").entered();
+            new_files_state.difference(&old_files_state).collect::<Vec<_>>()
+        };
         info!("{} Updated files", diff_new_and_different.len());
+
 
         let new_paths: HashSet<&FileKey> = new_files_state.iter().map(|(key, _)| key).collect();
         let old_paths: HashSet<&FileKey> = old_files_state.iter().map(|(key, _)| key).collect();
 
-        let removed_paths: HashSet<FileKey> = old_paths
-            .difference(&new_paths)
-            .into_iter()
-            .map(|it| it.to_string())
-            .collect();
+        let removed_paths: HashSet<FileKey> = { 
+            let _ = info_span!("deleted files").entered();
+            old_paths
+                .difference(&new_paths)
+                .into_iter()
+                .map(|it| it.to_string())
+                .collect() 
+        };
 
         info!("{} Deleted files", removed_paths.len());
+        
+        {
+            let _ = info_span!("constructing the sync").entered();
+            Ok(Sync {
+                db: self,
+                deletes: removed_paths.into_iter().collect(),
+                updates: diff_new_and_different.into_iter()
+                    .map(|(key, state)| FileItemUpdate { key: key.clone(), state: *state, sync_item: ().into() } )
+                    .collect(),
+            })
+        }
 
-        Ok(Sync {
-            db: self,
-            deletes: removed_paths.into_iter().collect(),
-            updates: diff_new_and_different.into_iter()
-                .map(|(key, state)| FileItemUpdate { key: key.clone(), state: *state, sync_item: ().into() } )
-                .collect(),
-        })
     }
 
     fn apply_sync(
