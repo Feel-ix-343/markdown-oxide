@@ -223,9 +223,9 @@ impl<T> FileDB<T>
 where
     T: Serialize + for<'a> Deserialize<'a> + 'static,
 {
-    /// Table definition: FileKey: String, then Value: (FileState, used for syncing, and then a Vec of binary serialized items, which make up the file-derived collection)
+    /// Table definition: FileKey: String, Value: Vec of binary serialized items which make up the file-derived collection
     // if performance is bad, TODO try changing this to use zero copy.
-    const TABLE: TableDefinition<'static, FileKey, (FileState, Vec<Vec<u8>>)> =
+    const TABLE: TableDefinition<'static, FileKey, Vec<Vec<u8>>> =
         TableDefinition::new("main-table");
     const STATE_TABLE: TableDefinition<'static, FileKey, FileState> =
         TableDefinition::new("state-table");
@@ -329,7 +329,7 @@ where
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(|e| anyhow!("Failed to serialize item for key {} with error {e:?}", key))?;
 
-                main_table.insert(&key, (state, serialized))?;
+                main_table.insert(&key, serialized)?;
                 state_table.insert(&key, state)?;
             }
 
@@ -389,7 +389,7 @@ where
             .map(|result| {
                 result.map(|(key_guard, value_guard)| {
                     let key = key_guard.value().to_string();
-                    let (_, values) = value_guard.value();
+                    let values = value_guard.value();
                     (key, values)
                 })
             })
