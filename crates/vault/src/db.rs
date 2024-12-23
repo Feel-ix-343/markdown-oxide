@@ -240,7 +240,7 @@ where
     }
 
     #[instrument(skip(self))]
-    pub async fn new_msync(self) -> anyhow::Result<Sync<(), T>> {
+    pub fn new_msync(self) -> anyhow::Result<Sync<(), T>> {
         // recursively walk the file directory
         let new_files_state: HashSet<(FileKey, FileState)> = {
             let walker = WalkDir::new(self.dir)
@@ -350,6 +350,7 @@ where
         Ok(self)
     }
 
+    #[instrument(skip(self))]
     fn state(&self) -> anyhow::Result<Option<HashSet<(FileKey, FileState)>>> {
         let db = match Database::open(self.db_path()) {
             Ok(db) => db,
@@ -574,7 +575,7 @@ mod tests {
         let db = FileDB::<String>::new(Box::leak(temp_path.to_path_buf().into_boxed_path()));
 
         // Step 1: Populate the database using flatmap
-        let msync: Sync<(), String> = db.new_msync().await?;
+        let msync: Sync<(), String> = db.new_msync()?;
         let populated_db = msync
             .async_populate(|_file_key, content| async move { content.to_string() })
             .await
