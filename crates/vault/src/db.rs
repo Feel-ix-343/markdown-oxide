@@ -248,13 +248,17 @@ where
             walker
                 .into_iter()
                 .flatten()
-                .filter(|it| !it.)
+                .filter(|it| !it.path().components().any(|comp| {
+                    comp.as_os_str()
+                        .to_string_lossy()
+                        .starts_with('.')
+                }))
+                .filter(|it| it.file_type().is_file())
                 .filter(|it| {
-                    it.file_type().is_file()
-                        && it.path().extension().is_some_and(|extension| {
-                            extension.eq_ignore_ascii_case("md")
-                                || extension.eq_ignore_ascii_case("markdown")
-                        })
+                    it.path().extension().is_some_and(|extension| {
+                        extension.eq_ignore_ascii_case("md")
+                            || extension.eq_ignore_ascii_case("markdown")
+                    })
                 })
                 .logging_flat_map(|it| {
                     // ignore any metadata errors; I don't forsee these being an issue
