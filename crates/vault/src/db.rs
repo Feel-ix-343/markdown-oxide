@@ -345,33 +345,25 @@ where
 
     #[instrument(skip(self))]
     fn state(&self) -> anyhow::Result<Option<HashSet<(FileKey, FileState)>>> {
-        let db = match Database::open(self.db_path()) {
-            Ok(db) => db,
+        match Database::open(self.db_path()) {
+            Ok(db) => {
+                let read_txn = db.begin_read()
+                    .context("Failed to begin read transaction")?;
+                let table = read_txn.open_table(Self::STATE_TABLE)
+                    .context("Failed to open table")?;
+                
+                let result = table.iter()?
+                    .map(|entry| {
+                        entry.map(|(key, state)| (key.value().to_string(), state.value()))
+                    })
+                    .collect::<Result<HashSet<_>, _>>()?;
+
+                Ok(Some(result))
+            },
             Err(redb::DatabaseError::Storage(redb::StorageError::Io(io_error)))
-                if io_error.kind() == std::io::ErrorKind::NotFound =>
-            {
-                // Database file doesn't exist yet, return None
-                return Ok(None);
-            }
-            Err(e) => return Err(e.into()), // Other errors are propagated
-        };
-
-        let read_txn = db
-            .begin_read()
-            .context("Failed to begin read transaction")?;
-        let table = read_txn
-            .open_table(Self::STATE_TABLE)
-            .context("Failed to open table")?;
-
-        let capacity = table.len()? as usize;
-        let mut result = HashSet::with_capacity(capacity);
-        
-        for entry in table.iter()? {
-            let (key, state) = entry?;
-            result.insert((key.value().to_string(), state.value()));
+                if io_error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e.into()),
         }
-
-        Ok(Some(result))
     }
 
     fn deserialize_db_value(value: &[u8]) -> anyhow::Result<Arc<T>> {
