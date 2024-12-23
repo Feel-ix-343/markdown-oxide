@@ -7,6 +7,7 @@ use futures::Future;
 use itertools::Itertools;
 use redb::{Database, ReadableTable, TableDefinition, TypeName};
 use serde::{Deserialize, Serialize};
+use tempfile::TempDir;
 use tracing::{info, instrument};
 use walkdir::WalkDir;
 
@@ -107,43 +108,6 @@ where
         }
     }
 
-    #[test]
-    fn test_filedb_iteration() -> anyhow::Result<()> {
-        let temp_dir = TempDir::new()?;
-        let db: FileDB<String> = FileDB::new(Box::leak(temp_dir.path().to_path_buf().into_boxed_path()));
-
-        // First insert some test data
-        let updates = vec![
-            ("file1.md".to_string(), FileState(1), vec!["content1".to_string()]),
-            ("file2.md".to_string(), FileState(2), vec!["content2".to_string()]),
-        ];
-        let db = db.apply_sync(updates, vec![])?;
-
-        // Test iter()
-        let items: Vec<_> = db.iter()?.collect();
-        assert_eq!(items.len(), 2);
-        assert!(items.iter().any(|(k, v)| k == "file1.md" && v.as_ref() == "content1"));
-        assert!(items.iter().any(|(k, v)| k == "file2.md" && v.as_ref() == "content2"));
-
-        // Test values()
-        let values: Vec<_> = db.values()?.collect();
-        assert_eq!(values.len(), 2);
-        assert!(values.iter().any(|v| v.as_ref() == "content1"));
-        assert!(values.iter().any(|v| v.as_ref() == "content2"));
-
-        // Test iter_file()
-        let file1_items: Vec<_> = db.iter_file("file1.md")?.collect();
-        assert_eq!(file1_items.len(), 1);
-        assert_eq!(file1_items[0].as_ref(), "content1");
-
-        // Test keys()
-        let keys: Vec<_> = db.keys()?.collect();
-        assert_eq!(keys.len(), 2);
-        assert!(keys.contains(&"file1.md".to_string()));
-        assert!(keys.contains(&"file2.md".to_string()));
-
-        Ok(())
-    }
 }
 
 impl<I, V> Sync<I, V> 
@@ -283,7 +247,8 @@ where
 
             walker
                 .into_iter()
-                .flat_map(|it| it)
+                .flatten()
+                .filter(|it| !it.)
                 .filter(|it| {
                     it.file_type().is_file()
                         && it.path().extension().is_some_and(|extension| {
@@ -431,6 +396,7 @@ where
                             .ok()
                             .map(|item| (key.clone(), item))
                     })
+                    .collect::<Vec<_>>()
             })
             .collect();
 
@@ -442,24 +408,6 @@ where
         Ok(self.iter()?.map(|(_, value)| value))
     }
 
-    /// Iterator over items from a specific file
-    pub fn iter_file(&self, key: &str) -> anyhow::Result<impl Iterator<Item = Arc<T>>> {
-        let db = Database::open(self.db_path())?;
-        let read_txn = db.begin_read()?;
-        let table = read_txn.open_table(Self::TABLE)?;
-
-        let items = if let Some(guard) = table.get(key)? {
-            let (_, values) = guard.value();
-            values
-                .iter()
-                .filter_map(|value| Self::deserialize_db_value(value).ok())
-                .collect()
-        } else {
-            Vec::new()
-        };
-
-        Ok(items.into_iter())
-    }
 
     /// Iterator over file keys
     pub fn keys(&self) -> anyhow::Result<impl Iterator<Item = FileKey>> {
@@ -635,6 +583,41 @@ mod tests {
         assert!(lines.contains(&"Content 3".to_string()));
 
         // Step 3: Clean up (this is handled automatically by TempDir when it goes out of scope)
+
+        Ok(())
+    }
+
+
+    #[test]
+    fn test_filedb_iteration() -> anyhow::Result<()> {
+        let temp_dir = TempDir::new()?;
+        let db: FileDB<String> = FileDB::new(Box::leak(temp_dir.path().to_path_buf().into_boxed_path()));
+
+        // First insert some test data
+        let updates = vec![
+            ("file1.md".to_string(), FileState(1), vec!["content1".to_string()]),
+            ("file2.md".to_string(), FileState(2), vec!["content2".to_string()]),
+        ];
+        let db = db.apply_sync(updates, vec![])?;
+
+        // Test iter()
+        let items: Vec<_> = db.iter()?.collect();
+        assert_eq!(items.len(), 2);
+        assert!(items.iter().any(|(k, v)| k == "file1.md" && v.as_ref() == "content1"));
+        assert!(items.iter().any(|(k, v)| k == "file2.md" && v.as_ref() == "content2"));
+
+        // Test values()
+        let values: Vec<_> = db.values()?.collect();
+        assert_eq!(values.len(), 2);
+        assert!(values.iter().any(|v| v.as_ref() == "content1"));
+        assert!(values.iter().any(|v| v.as_ref() == "content2"));
+
+
+        // Test keys()
+        let keys: Vec<_> = db.keys()?.collect();
+        assert_eq!(keys.len(), 2);
+        assert!(keys.contains(&"file1.md".to_string()));
+        assert!(keys.contains(&"file2.md".to_string()));
 
         Ok(())
     }
