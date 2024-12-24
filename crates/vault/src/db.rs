@@ -235,12 +235,26 @@ where
         self.dir.join(DB_NAME)
     }
 
-    pub fn new(dir: &'static Path) -> Self {
-        Self {
+    pub fn new(dir: &'static Path) -> anyhow::Result<Self> {
+        let db = Self {
             dir,
             cache: Vec::new(),
             _t: std::marker::PhantomData,
-        }
+        };
+        
+        // Initialize cache from existing database if present
+        let cache = match Database::open(db.db_path()) {
+            Ok(_) => db.mem_map()?,
+            Err(redb::DatabaseError::Storage(redb::StorageError::Io(io_error)))
+                if io_error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+            Err(e) => return Err(e.into()),
+        };
+
+        Ok(Self {
+            dir,
+            cache,
+            _t: std::marker::PhantomData,
+        })
     }
 
     #[instrument(skip(self))]
@@ -605,7 +619,7 @@ mod tests {
         }
 
         // Initialize FileDB
-        let db = FileDB::<String>::new(Box::leak(temp_path.to_path_buf().into_boxed_path()));
+        let db = FileDB::<String>::new(Box::leak(temp_path.to_path_buf().into_boxed_path()))?;
 
         // Step 1: Populate the database using flatmap
         let msync: Sync<(), String> = db.new_msync()?;
@@ -641,7 +655,7 @@ mod tests {
     #[test]
     fn test_filedb_iteration() -> anyhow::Result<()> {
         let temp_dir = TempDir::new()?;
-        let db: FileDB<String> = FileDB::new(Box::leak(temp_dir.path().to_path_buf().into_boxed_path()));
+        let db: FileDB<String> = FileDB::new(Box::leak(temp_dir.path().to_path_buf().into_boxed_path()))?;
 
         // First insert some test data
         let updates = vec![
