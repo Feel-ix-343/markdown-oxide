@@ -387,6 +387,35 @@ where
         }
     }
 
+    #[instrument(skip(self))]
+    fn mem_map(&self) -> anyhow::Result<Vec<(Arc<FileKey>, Arc<T>)>> {
+        let db = Database::open(self.db_path())?;
+        let read_txn = db.begin_read()?;
+        let table = read_txn.open_table(Self::TABLE)?;
+
+        let cache = table
+            .iter()?
+            .flat_map(|result| {
+                result.map(|(key_guard, value_guard)| {
+                    let key = Arc::new(key_guard.value().to_string());
+                    let values = value_guard.value();
+                    values
+                        .iter()
+                        .filter_map(move |value| {
+                            Self::deserialize_db_value(value)
+                                .ok()
+                                .map(|item| (key.clone(), Arc::new(item)))
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .flatten()
+            .collect();
+
+        info!("Created memory cache with {} items", cache.len());
+        Ok(cache)
+    }
+
     fn deserialize_db_value(value: &[u8]) -> anyhow::Result<T> {
         Ok(bincode::deserialize(&value)?)
     }
