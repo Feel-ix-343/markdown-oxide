@@ -388,23 +388,9 @@ where
 
     #[instrument(skip(self))]
     fn mem_map(&self) -> anyhow::Result<Vec<(Arc<FileKey>, Arc<T>)>> {
-        match self.iter() {
-            Ok(iter) => {
-                let cache = iter
-                    .map(|(key, value)| (Arc::new(key), Arc::new(value)))
-                    .collect_vec();
-                info!("Created memory cache with {} items", cache.len());
-                Ok(cache)
-            }
-            Err(e) => match e.downcast_ref::<redb::DatabaseError>() {
-                Some(redb::DatabaseError::Storage(redb::StorageError::Io(io_error)))
-                    if io_error.kind() == std::io::ErrorKind::NotFound => {
-                    info!("No existing database found");
-                    Ok(Vec::new())
-                }
-                _ => Err(e)
-            }
-        }
+        let cache = self.iter()?.map(|(key, value)| (Arc::new(key), Arc::new(value))).collect_vec();
+        info!("Created memory cache with {} items", cache.len());
+        Ok(cache)
     }
 
     fn deserialize_db_value(value: &[u8]) -> anyhow::Result<T> {
