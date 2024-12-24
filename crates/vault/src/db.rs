@@ -235,26 +235,23 @@ where
         self.dir.join(DB_NAME)
     }
 
-    pub fn new(dir: &'static Path) -> anyhow::Result<Self> {
+    pub fn new(dir: &'static Path) -> Self {
         let db = Self {
             dir,
             cache: Vec::new(),
             _t: std::marker::PhantomData,
         };
         
-        // Initialize cache from existing database if present
-        let cache = match Database::open(db.db_path()) {
-            Ok(_) => db.mem_map()?,
-            Err(redb::DatabaseError::Storage(redb::StorageError::Io(io_error)))
-                if io_error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
-            Err(e) => return Err(e.into()),
-        };
-
-        Ok(Self {
-            dir,
-            cache,
-            _t: std::marker::PhantomData,
-        })
+        // Initialize cache if database exists
+        if let Ok(cache) = db.mem_map() {
+            Self {
+                dir,
+                cache,
+                _t: std::marker::PhantomData,
+            }
+        } else {
+            db
+        }
     }
 
     #[instrument(skip(self))]
@@ -403,31 +400,40 @@ where
 
     #[instrument(skip(self))]
     fn mem_map(&self) -> anyhow::Result<Vec<(Arc<FileKey>, Arc<T>)>> {
-        let db = Database::open(self.db_path())?;
-        let read_txn = db.begin_read()?;
-        let table = read_txn.open_table(Self::TABLE)?;
+        match Database::open(self.db_path()) {
+            Ok(db) => {
+                let read_txn = db.begin_read()?;
+                let table = read_txn.open_table(Self::TABLE)?;
 
-        let cache = table
-            .iter()?
-            .flat_map(|result| {
-                result.map(|(key_guard, value_guard)| {
-                    let key = Arc::new(key_guard.value().to_string());
-                    let values = value_guard.value();
-                    values
-                        .iter()
-                        .filter_map(move |value| {
-                            Self::deserialize_db_value(value)
-                                .ok()
-                                .map(|item| (key.clone(), Arc::new(item)))
+                let cache = table
+                    .iter()?
+                    .flat_map(|result| {
+                        result.map(|(key_guard, value_guard)| {
+                            let key = Arc::new(key_guard.value().to_string());
+                            let values = value_guard.value();
+                            values
+                                .iter()
+                                .filter_map(move |value| {
+                                    Self::deserialize_db_value(value)
+                                        .ok()
+                                        .map(|item| (key.clone(), Arc::new(item)))
+                                })
+                                .collect::<Vec<_>>()
                         })
-                        .collect::<Vec<_>>()
-                })
-            })
-            .flatten()
-            .collect();
+                    })
+                    .flatten()
+                    .collect();
 
-        info!("Created memory cache with {} items", cache.len());
-        Ok(cache)
+                info!("Created memory cache with {} items", cache.len());
+                Ok(cache)
+            },
+            Err(redb::DatabaseError::Storage(redb::StorageError::Io(io_error)))
+                if io_error.kind() == std::io::ErrorKind::NotFound => {
+                info!("No existing database found");
+                Ok(Vec::new())
+            },
+            Err(e) => Err(e.into())
+        }
     }
 
     fn deserialize_db_value(value: &[u8]) -> anyhow::Result<T> {
@@ -619,7 +625,7 @@ mod tests {
         }
 
         // Initialize FileDB
-        let db = FileDB::<String>::new(Box::leak(temp_path.to_path_buf().into_boxed_path()))?;
+        let db = FileDB::<String>::new(Box::leak(temp_path.to_path_buf().into_boxed_path()));
 
         // Step 1: Populate the database using flatmap
         let msync: Sync<(), String> = db.new_msync()?;
@@ -655,7 +661,7 @@ mod tests {
     #[test]
     fn test_filedb_iteration() -> anyhow::Result<()> {
         let temp_dir = TempDir::new()?;
-        let db: FileDB<String> = FileDB::new(Box::leak(temp_dir.path().to_path_buf().into_boxed_path()))?;
+        let db: FileDB<String> = FileDB::new(Box::leak(temp_dir.path().to_path_buf().into_boxed_path()));
 
         // First insert some test data
         let updates = vec![
