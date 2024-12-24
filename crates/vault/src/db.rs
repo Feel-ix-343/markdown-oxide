@@ -352,19 +352,6 @@ where
             }
         }
 
-        let cache = self.cache
-            .into_iter()
-            .filter(|(key, _)| !deletes.contains(key.as_str()))
-            .chain(
-                updates
-                    .into_iter()
-                    .map(|(key, _, it)|  {
-                        let key = Arc::new(key);
-                        it.into_iter().map(move |it| (key.clone(), it))
-                    }  )
-                    .flatten()
-            )
-            .collect_vec();
             
 
         write_txn.commit()?;
@@ -422,7 +409,7 @@ where
                         })
                     })
                     .flatten()
-                    .collect();
+                    .collect_vec();
 
                 info!("Created memory cache with {} items", cache.len());
                 Ok(cache)
@@ -442,7 +429,7 @@ where
 
     /// Iterator over all items in the database with their file keys
     #[instrument(skip(self))]
-    pub fn iter(&self) -> anyhow::Result<impl Iterator<Item = (FileKey, Arc<T>)>> {
+    pub fn iter(&self) -> anyhow::Result<impl Iterator<Item = (FileKey, T)>> {
         let db = Database::open(self.db_path())?;
         let read_txn = db.begin_read()?;
         let table = read_txn.open_table(Self::TABLE)?;
@@ -475,7 +462,7 @@ where
 
     /// Iterator over just the items, without file keys
     pub fn values(&self) -> anyhow::Result<impl Iterator<Item = Arc<T>>> {
-        Ok(self.iter()?.map(|(_, value)| value))
+        Ok(self.iter()?.map(|(_, value)| value.into()))
     }
 
 
@@ -509,7 +496,7 @@ where
                 let values = value_guard.value();
 
                 values.iter().try_fold(acc, |inner_acc, value| {
-                    let value: Arc<T> = Self::deserialize_db_value(value)?;
+                    let value: T = Self::deserialize_db_value(value)?;
                     Ok(f(inner_acc, &key, &value))
                 })
 
@@ -519,7 +506,7 @@ where
 
     pub fn map<U, F: Copy>(&self, f: F) -> anyhow::Result<Vec<U>>
     where
-        F: Fn(&FileKey, &Arc<T>) -> U,
+        F: Fn(&FileKey, &T) -> U,
     {
         let db = Database::open(self.db_path())?;
         let read_txn = db.begin_read()?;
@@ -668,13 +655,13 @@ mod tests {
             ("file1.md".to_string(), FileState(1), vec!["content1".to_string()]),
             ("file2.md".to_string(), FileState(2), vec!["content2".to_string()]),
         ];
-        let db = db.apply_sync(updates, vec![])?;
+        let db = db.apply_sync(updates, vec![].into_iter().collect())?;
 
         // Test iter()
         let items: Vec<_> = db.iter()?.collect();
         assert_eq!(items.len(), 2);
-        assert!(items.iter().any(|(k, v)| k == "file1.md" && v.as_ref() == "content1"));
-        assert!(items.iter().any(|(k, v)| k == "file2.md" && v.as_ref() == "content2"));
+        assert!(items.iter().any(|(k, v)| k == "file1.md" && v.as_str() == "content1"));
+        assert!(items.iter().any(|(k, v)| k == "file2.md" && v.as_str() == "content2"));
 
         // Test values()
         let values: Vec<_> = db.values()?.collect();
