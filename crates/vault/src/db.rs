@@ -388,38 +388,19 @@ where
 
     #[instrument(skip(self))]
     fn mem_map(&self) -> anyhow::Result<Vec<(Arc<FileKey>, Arc<T>)>> {
-        match Database::open(self.db_path()) {
-            Ok(db) => {
-                let read_txn = db.begin_read()?;
-                let table = read_txn.open_table(Self::TABLE)?;
-
-                let cache = table
-                    .iter()?
-                    .flat_map(|result| {
-                        result.map(|(key_guard, value_guard)| {
-                            let key = Arc::new(key_guard.value().to_string());
-                            let values = value_guard.value();
-                            values
-                                .iter()
-                                .filter_map(move |value| {
-                                    Self::deserialize_db_value(value)
-                                        .ok()
-                                        .map(|item| (key.clone(), Arc::new(item)))
-                                })
-                                .collect::<Vec<_>>()
-                        })
-                    })
-                    .flatten()
+        match self.iter() {
+            Ok(iter) => {
+                let cache = iter
+                    .map(|(key, value)| (Arc::new(key), Arc::new(value)))
                     .collect_vec();
-
                 info!("Created memory cache with {} items", cache.len());
                 Ok(cache)
-            },
+            }
             Err(redb::DatabaseError::Storage(redb::StorageError::Io(io_error)))
                 if io_error.kind() == std::io::ErrorKind::NotFound => {
                 info!("No existing database found");
                 Ok(Vec::new())
-            },
+            }
             Err(e) => Err(e.into())
         }
     }
