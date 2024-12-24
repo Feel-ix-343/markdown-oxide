@@ -396,12 +396,14 @@ where
                 info!("Created memory cache with {} items", cache.len());
                 Ok(cache)
             }
-            Err(redb::DatabaseError::Storage(redb::StorageError::Io(io_error)))
-                if io_error.kind() == std::io::ErrorKind::NotFound => {
-                info!("No existing database found");
-                Ok(Vec::new())
+            Err(e) => match e.downcast_ref::<redb::DatabaseError>() {
+                Some(redb::DatabaseError::Storage(redb::StorageError::Io(io_error)))
+                    if io_error.kind() == std::io::ErrorKind::NotFound => {
+                    info!("No existing database found");
+                    Ok(Vec::new())
+                }
+                _ => Err(e)
             }
-            Err(e) => Err(e.into())
         }
     }
 
