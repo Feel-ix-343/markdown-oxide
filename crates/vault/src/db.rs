@@ -357,7 +357,7 @@ where
         write_txn.commit()?;
         
         // Update cache after syncing
-        let cache = self.mem_map()?;
+        let cache = self.mem_map()?; // its ok 
         
         Ok(Self {
             dir: self.dir,
