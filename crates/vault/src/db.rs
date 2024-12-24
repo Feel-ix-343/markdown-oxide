@@ -21,7 +21,7 @@ where
 {
     dir: &'static Path,
     /// File -> Entity; there can be multiple entities per file. 
-    cache: Vec<(Arc<FileKey>, T)>, 
+    cache: Vec<(Arc<FileKey>, Arc<T>)>, 
     _t: std::marker::PhantomData<T>,
 }
 
@@ -387,8 +387,8 @@ where
         }
     }
 
-    fn deserialize_db_value(value: &[u8]) -> anyhow::Result<Arc<T>> {
-        Ok(Arc::new(bincode::deserialize(&value)?))
+    fn deserialize_db_value(value: &[u8]) -> anyhow::Result<T> {
+        Ok(bincode::deserialize(&value)?)
     }
 
     /// Iterator over all items in the database with their file keys
