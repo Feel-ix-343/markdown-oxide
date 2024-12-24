@@ -434,6 +434,11 @@ where
     }
 
     /// Iterator over just the items, without file keys
+    /// Iterator over the in-memory cache of items with their file keys
+    pub fn iter(&self) -> impl Iterator<Item = (&FileKey, &T)> {
+        self.cache.iter().map(|(key, value)| (key.as_ref(), value.as_ref()))
+    }
+
     pub fn values(&self) -> anyhow::Result<impl Iterator<Item = Arc<T>>> {
         Ok(self.db_iter(None)?.map(|(_, value)| value.into()))
     }
@@ -648,6 +653,12 @@ mod tests {
         assert_eq!(keys.len(), 2);
         assert!(keys.contains(&"file1.md".to_string()));
         assert!(keys.contains(&"file2.md".to_string()));
+
+        // Test iter()
+        let cache_items: Vec<_> = db.iter().collect();
+        assert_eq!(cache_items.len(), 2);
+        assert!(cache_items.iter().any(|(k, v)| k == "file1.md" && v.as_str() == "content1"));
+        assert!(cache_items.iter().any(|(k, v)| k == "file2.md" && v.as_str() == "content2"));
 
         Ok(())
     }
