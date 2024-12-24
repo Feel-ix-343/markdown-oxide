@@ -236,21 +236,18 @@ where
     }
 
     pub fn new(dir: &'static Path) -> Self {
-        let db = Self {
+        let cache = Self {
             dir,
             cache: Vec::new(),
             _t: std::marker::PhantomData,
-        };
-        
-        // Initialize cache if database exists
-        if let Ok(cache) = db.mem_map() {
-            Self {
-                dir,
-                cache,
-                _t: std::marker::PhantomData,
-            }
-        } else {
-            db
+        }
+        .mem_map()
+        .unwrap_or_default();
+
+        Self {
+            dir,
+            cache,
+            _t: std::marker::PhantomData,
         }
     }
 
