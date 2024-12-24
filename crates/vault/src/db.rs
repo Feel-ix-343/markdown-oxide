@@ -241,7 +241,7 @@ where
             cache: Vec::new(),
             _t: std::marker::PhantomData,
         }
-        .mem_map()
+        .mem_map(None)
         .unwrap_or_default();
 
         Self {
@@ -320,6 +320,7 @@ where
 
     }
 
+    #[instrument(skip_all)]
     fn apply_sync(
         self,
         updates: Vec<(FileKey, FileState, Vec<T>)>,
@@ -354,7 +355,7 @@ where
         write_txn.commit()?;
         
         // Update cache after syncing
-        let cache = self.mem_map()?; // its ok 
+        let cache = self.mem_map(Some(db))?; // its ok 
         
         Ok(Self {
             dir: self.dir,
@@ -387,8 +388,8 @@ where
     }
 
     #[instrument(skip(self))]
-    fn mem_map(&self) -> anyhow::Result<Vec<(Arc<FileKey>, Arc<T>)>> {
-        let cache = self.iter()?.map(|(key, value)| (Arc::new(key), Arc::new(value))).collect_vec();
+    fn mem_map(&self, database: Option<redb::Database>) -> anyhow::Result<Vec<(Arc<FileKey>, Arc<T>)>> {
+        let cache = self.db_iter(database)?.map(|(key, value)| (Arc::new(key), Arc::new(value))).collect_vec();
         info!("Created memory cache with {} items", cache.len());
         Ok(cache)
     }
@@ -399,9 +400,11 @@ where
 
     /// Iterator over all items in the database with their file keys
     #[instrument(skip(self))]
-    pub fn iter(&self) -> anyhow::Result<impl Iterator<Item = (FileKey, T)>> {
-        let db = Database::open(self.db_path())?;
-        let read_txn = db.begin_read()?;
+    pub fn db_iter(&self, database: Option<redb::Database>) -> anyhow::Result<impl Iterator<Item = (FileKey, T)>> {
+        let read_txn = match database {
+            Some(db) => db.begin_read()?,
+            None => Database::open(self.db_path())?.begin_read()?
+        };
         let table = read_txn.open_table(Self::TABLE)?;
 
         let items: Vec<_> = table
@@ -432,7 +435,7 @@ where
 
     /// Iterator over just the items, without file keys
     pub fn values(&self) -> anyhow::Result<impl Iterator<Item = Arc<T>>> {
-        Ok(self.iter()?.map(|(_, value)| value.into()))
+        Ok(self.db_iter(None)?.map(|(_, value)| value.into()))
     }
 
 
@@ -628,7 +631,7 @@ mod tests {
         let db = db.apply_sync(updates, vec![].into_iter().collect())?;
 
         // Test iter()
-        let items: Vec<_> = db.iter()?.collect();
+        let items: Vec<_> = db.db_iter(None)?.collect();
         assert_eq!(items.len(), 2);
         assert!(items.iter().any(|(k, v)| k == "file1.md" && v.as_str() == "content1"));
         assert!(items.iter().any(|(k, v)| k == "file2.md" && v.as_str() == "content2"));
