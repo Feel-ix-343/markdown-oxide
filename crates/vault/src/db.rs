@@ -5,10 +5,9 @@ use std::{
 use anyhow::{anyhow, Context};
 use futures::Future;
 use itertools::Itertools;
-use redb::{Database, ReadableTable, ReadableTableMetadata, TableDefinition, TypeName};
+use redb::{Database, ReadableTable, TableDefinition, TypeName};
 use serde::{Deserialize, Serialize};
-use tempfile::TempDir;
-use tracing::{info, info_span, instrument};
+use tracing::{info, instrument};
 use walkdir::WalkDir;
 
 /// File-synchronized database for arbitrary collections derived from file contents
@@ -21,6 +20,8 @@ where
     T: Serialize + for<'a> Deserialize<'a> + 'static
 {
     dir: &'static Path,
+    /// File -> Entity; there can be multiple entities per file. 
+    cache: Vec<(Arc<FileKey>, T)>, 
     _t: std::marker::PhantomData<T>,
 }
 
@@ -54,7 +55,7 @@ where
 {
     db: FileDB<DBItem>,
     updates: Vec<FileItemUpdate<SyncItem>>,
-    deletes: Vec<FileKey>,
+    deletes: HashSet<FileKey>,
 }
 
 #[derive(Debug)]
@@ -237,6 +238,7 @@ where
     pub fn new(dir: &'static Path) -> Self {
         Self {
             dir,
+            cache: Vec::new(),
             _t: std::marker::PhantomData,
         }
     }
@@ -313,7 +315,7 @@ where
     fn apply_sync(
         self,
         updates: Vec<(FileKey, FileState, Vec<T>)>,
-        deletes: Vec<FileKey>,
+        deletes: HashSet<FileKey>,
     ) -> anyhow::Result<Self> {
         let db = Database::create(self.dir.join(DB_NAME))?;
         let write_txn = db.begin_write()?;
@@ -322,25 +324,44 @@ where
             let mut main_table = write_txn.open_table(Self::TABLE)?;
             let mut state_table = write_txn.open_table(Self::STATE_TABLE)?;
 
-            for (key, state, collection) in updates {
+            for (key, state, collection) in updates.as_slice() {
                 let serialized = collection
                     .into_iter()
                     .map(|it| bincode::serialize(&it))
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(|e| anyhow!("Failed to serialize item for key {} with error {e:?}", key))?;
 
-                main_table.insert(&key, serialized)?;
-                state_table.insert(&key, state)?;
+                main_table.insert(key, serialized)?;
+                state_table.insert(key, state)?;
             }
 
-            for key in deletes {
-                main_table.remove(&key)?;
-                state_table.remove(&key)?;
+            for key in deletes.iter() {
+                main_table.remove(key)?;
+                state_table.remove(key)?;
             }
         }
 
+        let cache = self.cache
+            .into_iter()
+            .filter(|(key, _)| !deletes.contains(key.as_str()))
+            .chain(
+                updates
+                    .into_iter()
+                    .map(|(key, _, it)|  {
+                        let key = Arc::new(key);
+                        it.into_iter().map(move |it| (key.clone(), it))
+                    }  )
+                    .flatten()
+            )
+            .collect_vec();
+            
+
         write_txn.commit()?;
-        Ok(self)
+        Ok(Self {
+            dir: self.dir,
+            cache,
+            _t: std::marker::PhantomData,
+        })
     }
 
     #[instrument(skip(self))]
@@ -371,6 +392,7 @@ where
     }
 
     /// Iterator over all items in the database with their file keys
+    #[instrument(skip(self))]
     pub fn iter(&self) -> anyhow::Result<impl Iterator<Item = (FileKey, Arc<T>)>> {
         let db = Database::open(self.db_path())?;
         let read_txn = db.begin_read()?;
