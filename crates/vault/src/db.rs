@@ -1,5 +1,13 @@
 use std::{
-    collections::HashSet, convert::TryInto, hash::Hash, path::{Path, PathBuf}, process::Output, rc::Rc, sync::Arc, time::{SystemTime, UNIX_EPOCH}, u128
+    collections::HashSet,
+    convert::TryInto,
+    hash::Hash,
+    path::{Path, PathBuf},
+    process::Output,
+    rc::Rc,
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+    u128,
 };
 
 use anyhow::{anyhow, Context};
@@ -7,26 +15,26 @@ use futures::Future;
 use itertools::Itertools;
 use redb::{Database, ReadableTable, TableDefinition, TypeName};
 use serde::{Deserialize, Serialize};
-use tracing::{info, instrument};
+use tracing::{error, info, instrument, warn};
 use walkdir::WalkDir;
 
 /// File-synchronized database for arbitrary collections derived from file contents
 ///
-/// The generic type is the value type in these collections. It must be serializable and deserializable. 
+/// The generic type is the value type in these collections. It must be serializable and deserializable.
 ///
 /// Data is stored in KV stores in the form (FileKey, Vec<T>)
-pub struct FileDB<T> 
-where 
-    T: Serialize + for<'a> Deserialize<'a> + 'static
+pub struct FileDB<T>
+where
+    T: Serialize + for<'a> Deserialize<'a> + 'static,
 {
     dir: &'static Path,
-    /// File -> Entity; there can be multiple entities per file. 
-    cache: Vec<(Arc<FileKey>, Arc<T>)>, 
+    /// File -> Entity; there can be multiple entities per file.
+    cache: Option<Vec<(Arc<FileKey>, Arc<T>)>>,
     _t: std::marker::PhantomData<T>,
 }
 
 /// String Relative Path: path of a file relative to the root_dir of the collection of files.
-type FileKey = String;
+pub type FileKey = String;
 /// Semantic File State: semantic state of the file, indicated by the time that it was last modified
 ///
 /// Maybe in the future this will be a hash or some other state indication.
@@ -49,9 +57,9 @@ struct FileState(u128);
 ///
 /// Initially, the Item type of the sync will be (). The provided functions are meant to allow for transforming the ()
 /// into the database item type. Once this happens, the run function will become available and you can sync to the database.
-pub struct Sync<SyncItem, DBItem> 
-where 
-    DBItem: Serialize + for<'a> Deserialize<'a> + 'static
+pub struct Sync<SyncItem, DBItem>
+where
+    DBItem: Serialize + for<'a> Deserialize<'a> + 'static,
 {
     db: FileDB<DBItem>,
     updates: Vec<FileItemUpdate<SyncItem>>,
@@ -60,40 +68,49 @@ where
 
 #[derive(Debug)]
 struct FileItemUpdate<Item> {
-    key: FileKey,
+    key: Arc<FileKey>,
     state: FileState,
-    sync_item: Item
+    sync_item: Item,
 }
 
 use util::ResultIteratorExt;
 
 type FileContent = Arc<str>;
 
-
 // methods related to constructing the initial sync.
-impl<DatabaseItem> Sync<(), DatabaseItem> 
-where 
-    DatabaseItem: Serialize + for<'a> Deserialize<'a> + 'static
+impl<DatabaseItem> Sync<(), DatabaseItem>
+where
+    DatabaseItem: Serialize + for<'a> Deserialize<'a> + 'static,
 {
     #[instrument(skip(self, f))]
     /// Populate the sync using the recent content of the file, the key of the file, and the possibly
     /// the collection slice related to the file.
     pub async fn async_populate<I, F: Future<Output = I>>(
         self,
-        f: impl for<'a> Fn(&'a FileKey, FileContent) -> F + Copy,
-    ) -> Sync<I, DatabaseItem> 
+        f: impl for<'a> Fn(Arc<FileKey>, FileContent) -> F + Copy,
+    ) -> Sync<I, DatabaseItem>
     where
-        I: std::fmt::Debug
+        I: std::fmt::Debug,
     {
         let dir = self.db.dir;
-        let futures = self.updates.into_iter().map(|FileItemUpdate { key, state, sync_item: _ }| async move {
-            let root_dir = dir;
-            let path = root_dir.join(&key);
-            let content = tokio::fs::read_to_string(&path).await?;
-            let sync_item = f(&key, Arc::from(content)).await;
+        let futures = self.updates.into_iter().map(
+            |FileItemUpdate {
+                 key,
+                 state,
+                 sync_item: _,
+             }| async move {
+                let root_dir = dir;
+                let path = root_dir.join(key.as_str());
+                let content = tokio::fs::read_to_string(&path).await?;
+                let sync_item = f(key.clone(), Arc::from(content)).await;
 
-            anyhow::Ok(FileItemUpdate { key, state, sync_item: sync_item.into() })
-        });
+                anyhow::Ok(FileItemUpdate {
+                    key,
+                    state,
+                    sync_item: sync_item.into(),
+                })
+            },
+        );
 
         let updates = futures::future::join_all(futures)
             .await
@@ -101,21 +118,18 @@ where
             .flatten_results_and_log()
             .collect::<Vec<_>>();
 
-
         Sync {
             db: self.db,
             deletes: self.deletes,
             updates,
         }
     }
-
 }
 
-impl<I, V> Sync<I, V> 
-where 
-    V: Serialize + for<'a> Deserialize<'a> + 'static
+impl<I, V> Sync<I, V>
+where
+    V: Serialize + for<'a> Deserialize<'a> + 'static,
 {
-
     pub fn map<IP>(self, f: impl Fn(I) -> IP) -> Sync<IP, V> {
         Sync {
             db: self.db,
@@ -136,11 +150,19 @@ where
             updates: self
                 .updates
                 .into_iter()
-                .flat_map(|FileItemUpdate { key, state, sync_item }| {
-                    f(&sync_item)
-                        .into_iter()
-                        .map(move |it| FileItemUpdate { key: key.clone(), state, sync_item: it })
-                })
+                .flat_map(
+                    |FileItemUpdate {
+                         key,
+                         state,
+                         sync_item,
+                     }| {
+                        f(&sync_item).into_iter().map(move |it| FileItemUpdate {
+                            key: key.clone(),
+                            state,
+                            sync_item: it,
+                        })
+                    },
+                )
                 .collect(),
         }
     }
@@ -153,16 +175,24 @@ where
         let keys = self
             .updates
             .iter()
-            .map(|it| (it.key.to_string(), it.state))
+            .map(|it| (it.key.clone(), it.state))
             .collect::<Vec<_>>();
 
-        let old_values = self.updates.into_iter().map(|it| it.sync_item).collect::<Vec<_>>();
+        let old_values = self
+            .updates
+            .into_iter()
+            .map(|it| it.sync_item)
+            .collect::<Vec<_>>();
         let result = f(old_values).await?;
 
         let updates = keys
             .into_iter()
             .zip(result)
-            .map(|((key, state), new_value)| FileItemUpdate { key, state, sync_item: new_value })
+            .map(|((key, state), new_value)| FileItemUpdate {
+                key,
+                state,
+                sync_item: new_value,
+            })
             .collect::<Vec<_>>();
 
         Ok(Sync {
@@ -174,7 +204,12 @@ where
 }
 
 // flatten
-impl<ItemInner, IterableItem: IntoIterator<Item = ItemInner>, DatabaseItem: Serialize + for<'a> Deserialize<'a>> Sync<IterableItem, DatabaseItem> {
+impl<
+        ItemInner,
+        IterableItem: IntoIterator<Item = ItemInner>,
+        DatabaseItem: Serialize + for<'a> Deserialize<'a>,
+    > Sync<IterableItem, DatabaseItem>
+{
     /// Flatten the inner collection while maintaining file association of the items
     pub fn inner_flatten(self) -> Sync<ItemInner, DatabaseItem> {
         Sync {
@@ -183,12 +218,22 @@ impl<ItemInner, IterableItem: IntoIterator<Item = ItemInner>, DatabaseItem: Seri
             updates: self
                 .updates
                 .into_iter()
-                .flat_map(|FileItemUpdate { key, state, sync_item }|  {
-                    sync_item
-                        .into_iter()
-                        .map(|item| FileItemUpdate { key: key.clone(), state, sync_item: item })
-                        .collect::<Vec<_>>()
-                })
+                .flat_map(
+                    |FileItemUpdate {
+                         key,
+                         state,
+                         sync_item,
+                     }| {
+                        sync_item
+                            .into_iter()
+                            .map(|item| FileItemUpdate {
+                                key: key.clone(),
+                                state,
+                                sync_item: item,
+                            })
+                            .collect::<Vec<_>>()
+                    },
+                )
                 .collect(),
         }
     }
@@ -205,11 +250,16 @@ where
             deletes,
         } = self;
 
-        let updates: Vec<(FileKey, FileState, Vec<I>)> = updates
+        let updates: Vec<(Arc<FileKey>, FileState, Vec<I>)> = updates
             .into_iter()
             .into_group_map_by(|update| (update.key.clone(), update.state))
             .into_iter()
-            .map(|(key, updates)| (key, updates.into_iter().map(|update| update.sync_item).collect()))
+            .map(|(key, updates)| {
+                (
+                    key,
+                    updates.into_iter().map(|update| update.sync_item).collect(),
+                )
+            })
             .map(|it| (it.0 .0, it.0 .1, it.1))
             .collect();
 
@@ -238,11 +288,18 @@ where
     pub fn new(dir: &'static Path) -> Self {
         let cache = Self {
             dir,
-            cache: Vec::new(),
+            cache: None,
             _t: std::marker::PhantomData,
         }
-        .mem_map(None)
-        .unwrap_or_default();
+        .mem_map(None);
+
+        let cache = match cache {
+            Ok(cache) => Some(cache),
+            Err(e) => {
+                warn!("Failed to create cache: {e:?}");
+                None
+            }
+        };
 
         Self {
             dir,
@@ -254,29 +311,33 @@ where
     #[instrument(skip(self))]
     pub fn new_msync(self) -> anyhow::Result<Sync<(), T>> {
         // recursively walk the file directory
-        let new_files_state: HashSet<(FileKey, FileState)> = {
+        let new_files_state: HashSet<(Arc<FileKey>, FileState)> = {
             let walker = WalkDir::new(self.dir)
                 .follow_links(false)
                 .into_iter()
                 .filter_entry(|e| {
                     // If it's a directory, only enter if it's not hidden
                     if e.file_type().is_dir() {
-                        return !e.file_name()
+                        return !e
+                            .file_name()
                             .to_str()
                             .map(|s| s.starts_with('.'))
                             .unwrap_or(false);
                     }
-                    
+
                     // For files, check both hidden status and markdown extension
                     !e.file_name()
                         .to_str()
                         .map(|s| s.starts_with('.'))
                         .unwrap_or(false)
-                    && e.path()
-                        .extension()
-                        .and_then(|ext| ext.to_str())
-                        .map(|ext| ext.eq_ignore_ascii_case("md") || ext.eq_ignore_ascii_case("markdown"))
-                        .unwrap_or(false)
+                        && e.path()
+                            .extension()
+                            .and_then(|ext| ext.to_str())
+                            .map(|ext| {
+                                ext.eq_ignore_ascii_case("md")
+                                    || ext.eq_ignore_ascii_case("markdown")
+                            })
+                            .unwrap_or(false)
                 })
                 .filter_map(|entry| entry.ok())
                 .filter(|entry| entry.file_type().is_file());
@@ -288,19 +349,20 @@ where
                     let metadata = path.metadata()?;
                     let file_state: FileState = metadata.modified()?.into();
                     let relative_path = path.strip_prefix(self.dir)?;
-                    anyhow::Ok((relative_path.to_string_lossy().into_owned(), file_state))
+                    anyhow::Ok((Arc::new(relative_path.to_string_lossy().into_owned()), file_state))
                 })
                 .collect()
         };
 
-        let old_files_state: HashSet<(FileKey, FileState)> = self.state()?.unwrap_or_default();
+        let old_files_state: HashSet<(Arc<FileKey>, FileState)> = self.state()?.unwrap_or_default();
 
-        let diff_new_and_different = new_files_state.difference(&old_files_state).collect::<Vec<_>>();
+        let diff_new_and_different = new_files_state
+            .difference(&old_files_state)
+            .collect::<Vec<_>>();
         info!("{} Updated files", diff_new_and_different.len());
 
-
-        let new_paths: HashSet<&FileKey> = new_files_state.iter().map(|(key, _)| key).collect();
-        let old_paths: HashSet<&FileKey> = old_files_state.iter().map(|(key, _)| key).collect();
+        let new_paths: HashSet<&FileKey> = new_files_state.iter().map(|(key, _)| key.as_ref()).collect();
+        let old_paths: HashSet<&FileKey> = old_files_state.iter().map(|(key, _)| key.as_ref()).collect();
 
         let removed_paths: HashSet<FileKey> = old_paths
             .difference(&new_paths)
@@ -309,21 +371,25 @@ where
             .collect();
 
         info!("{} Deleted files", removed_paths.len());
-        
-        Ok(Sync {
-                db: self,
-                deletes: removed_paths.into_iter().collect(),
-                updates: diff_new_and_different.into_iter()
-                    .map(|(key, state)| FileItemUpdate { key: key.clone(), state: *state, sync_item: ().into() } )
-                    .collect(),
-        })
 
+        Ok(Sync {
+            db: self,
+            deletes: removed_paths.into_iter().collect(),
+            updates: diff_new_and_different
+                .into_iter()
+                .map(|(key, state)| FileItemUpdate {
+                    key: key.clone(),
+                    state: *state,
+                    sync_item: ().into(),
+                })
+                .collect(),
+        })
     }
 
     #[instrument(skip_all)]
     fn apply_sync(
         self,
-        updates: Vec<(FileKey, FileState, Vec<T>)>,
+        updates: Vec<(Arc<FileKey>, FileState, Vec<T>)>,
         deletes: HashSet<FileKey>,
     ) -> anyhow::Result<Self> {
         let db = Database::create(self.dir.join(DB_NAME))?;
@@ -338,10 +404,12 @@ where
                     .into_iter()
                     .map(|it| bincode::serialize(&it))
                     .collect::<Result<Vec<_>, _>>()
-                    .map_err(|e| anyhow!("Failed to serialize item for key {} with error {e:?}", key))?;
+                    .map_err(|e| {
+                        anyhow!("Failed to serialize item for key {} with error {e:?}", key)
+                    })?;
 
-                main_table.insert(key, serialized)?;
-                state_table.insert(key, state)?;
+                main_table.insert(key.as_ref(), serialized)?;
+                state_table.insert(key.as_ref(), state)?;
             }
 
             for key in deletes.iter() {
@@ -350,46 +418,54 @@ where
             }
         }
 
-            
-
         write_txn.commit()?;
-        
+
         // Update cache after syncing
-        let cache = self.mem_map(Some(db))?; // its ok 
-        
+        let cache = self.mem_map(Some(db))?;
+
         Ok(Self {
             dir: self.dir,
-            cache,
+            cache: Some(cache),
             _t: std::marker::PhantomData,
         })
     }
 
     #[instrument(skip(self))]
-    fn state(&self) -> anyhow::Result<Option<HashSet<(FileKey, FileState)>>> {
+    fn state(&self) -> anyhow::Result<Option<HashSet<(Arc<FileKey>, FileState)>>> {
         match Database::open(self.db_path()) {
             Ok(db) => {
-                let read_txn = db.begin_read()
+                let read_txn = db
+                    .begin_read()
                     .context("Failed to begin read transaction")?;
-                let table = read_txn.open_table(Self::STATE_TABLE)
+                let table = read_txn
+                    .open_table(Self::STATE_TABLE)
                     .context("Failed to open table")?;
-                
-                let result = table.iter()?
-                    .map(|entry| {
-                        entry.map(|(key, state)| (key.value().to_string(), state.value()))
-                    })
+
+                let result = table
+                    .iter()?
+                    .map(|entry| entry.map(|(key, state)| (Arc::from(key.value()), state.value())))
                     .collect::<Result<HashSet<_>, _>>()?;
 
                 Ok(Some(result))
-            },
+            }
             Err(redb::DatabaseError::Storage(redb::StorageError::Io(io_error)))
-                if io_error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+                if io_error.kind() == std::io::ErrorKind::NotFound =>
+            {
+                Ok(None)
+            }
             Err(e) => Err(e.into()),
         }
     }
 
     #[instrument(skip(self))]
-    fn mem_map(&self, database: Option<redb::Database>) -> anyhow::Result<Vec<(Arc<FileKey>, Arc<T>)>> {
-        let cache = self.db_iter(database)?.map(|(key, value)| (Arc::new(key), Arc::new(value))).collect_vec();
+    fn mem_map(
+        &self,
+        database: Option<redb::Database>,
+    ) -> anyhow::Result<Vec<(Arc<FileKey>, Arc<T>)>> {
+        let cache = self
+            .db_iter(database)?
+            .map(|(key, value)| (Arc::new(key), Arc::new(value)))
+            .collect_vec();
         info!("Created memory cache with {} items", cache.len());
         Ok(cache)
     }
@@ -400,10 +476,13 @@ where
 
     /// Iterator over all items in the database with their file keys
     #[instrument(skip(self))]
-    pub fn db_iter(&self, database: Option<redb::Database>) -> anyhow::Result<impl Iterator<Item = (FileKey, T)>> {
+    pub fn db_iter(
+        &self,
+        database: Option<redb::Database>,
+    ) -> anyhow::Result<impl Iterator<Item = (FileKey, T)>> {
         let read_txn = match database {
             Some(db) => db.begin_read()?,
-            None => Database::open(self.db_path())?.begin_read()?
+            None => Database::open(self.db_path())?.begin_read()?,
         };
         let table = read_txn.open_table(Self::TABLE)?;
 
@@ -435,14 +514,14 @@ where
 
     /// Iterator over just the items, without file keys
     /// Iterator over the in-memory cache of items with their file keys
+    #[instrument(skip(self))]
     pub fn iter(&self) -> impl Iterator<Item = (&FileKey, &T)> {
-        self.cache.iter().map(|(key, value)| (key.as_ref(), value.as_ref()))
+        self.cache.as_ref().expect("this should exist because if you are iterating over the FileDB, the cache should exist").iter().map(|(key, value)| (key.as_ref(), value.as_ref()))
     }
 
     pub fn values(&self) -> anyhow::Result<impl Iterator<Item = Arc<T>>> {
         Ok(self.db_iter(None)?.map(|(_, value)| value.into()))
     }
-
 
     /// Iterator over file keys
     pub fn keys(&self) -> anyhow::Result<impl Iterator<Item = FileKey>> {
@@ -477,10 +556,8 @@ where
                     let value: T = Self::deserialize_db_value(value)?;
                     Ok(f(inner_acc, &key, &value))
                 })
-
             })
     }
-
 
     pub fn map<U, F: Copy>(&self, f: F) -> anyhow::Result<Vec<U>>
     where
@@ -622,31 +699,42 @@ mod tests {
         Ok(())
     }
 
-
     #[test]
     fn test_filedb_iteration() -> anyhow::Result<()> {
         let temp_dir = TempDir::new()?;
-        let db: FileDB<String> = FileDB::new(Box::leak(temp_dir.path().to_path_buf().into_boxed_path()));
+        let db: FileDB<String> =
+            FileDB::new(Box::leak(temp_dir.path().to_path_buf().into_boxed_path()));
 
         // First insert some test data
         let updates = vec![
-            ("file1.md".to_string(), FileState(1), vec!["content1".to_string()]),
-            ("file2.md".to_string(), FileState(2), vec!["content2".to_string()]),
+            (
+                Arc::from("file1.md".to_string()),
+                FileState(1),
+                vec!["content1".to_string()],
+            ),
+            (
+                Arc::from("file2.md".to_string()),
+                FileState(2),
+                vec!["content2".to_string()],
+            ),
         ];
         let db = db.apply_sync(updates, vec![].into_iter().collect())?;
 
         // Test iter()
         let items: Vec<_> = db.db_iter(None)?.collect();
         assert_eq!(items.len(), 2);
-        assert!(items.iter().any(|(k, v)| k == "file1.md" && v.as_str() == "content1"));
-        assert!(items.iter().any(|(k, v)| k == "file2.md" && v.as_str() == "content2"));
+        assert!(items
+            .iter()
+            .any(|(k, v)| k == "file1.md" && v.as_str() == "content1"));
+        assert!(items
+            .iter()
+            .any(|(k, v)| k == "file2.md" && v.as_str() == "content2"));
 
         // Test values()
         let values: Vec<_> = db.values()?.collect();
         assert_eq!(values.len(), 2);
         assert!(values.iter().any(|v| v.as_ref() == "content1"));
         assert!(values.iter().any(|v| v.as_ref() == "content2"));
-
 
         // Test keys()
         let keys: Vec<_> = db.keys()?.collect();
@@ -657,8 +745,12 @@ mod tests {
         // Test iter()
         let cache_items: Vec<_> = db.iter().collect();
         assert_eq!(cache_items.len(), 2);
-        assert!(cache_items.iter().any(|(k, v)| k == "file1.md" && v.as_str() == "content1"));
-        assert!(cache_items.iter().any(|(k, v)| k == "file2.md" && v.as_str() == "content2"));
+        assert!(cache_items
+            .iter()
+            .any(|(k, v)| *k == "file1.md" && v.as_str() == "content1"));
+        assert!(cache_items
+            .iter()
+            .any(|(k, v)| *k == "file2.md" && v.as_str() == "content2"));
 
         Ok(())
     }

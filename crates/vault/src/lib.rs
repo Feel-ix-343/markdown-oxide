@@ -1,10 +1,14 @@
-use std::path::{Path, PathBuf};
+use std::{path::{Path, PathBuf}, sync::Arc};
 
+use db::FileKey;
 use embedder::{Embeddable, Embedder};
 use md_parser::Document;
+use ordered_float::OrderedFloat;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use itertools::Itertools;
+use tracing::{info_span, instrument, Instrument};
 mod db;
 mod embedder;
 
@@ -19,25 +23,41 @@ pub struct Vault {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Entity {
-    File { content: String },
-    Heading { content: String },
+    File { key: Arc<FileKey>, content: String },
+    Heading { key: Arc<FileKey>, content: String },
 }
 
-type Score = f64;
+type Score = f32;
 
 type VaultSync<T> = db::Sync<T, VaultItem>;
 
 impl Vault {
     /// Find the k best matches for a query embedding
+    #[instrument(skip(self, query_embedding))]
     pub fn best_matches(&self, query_embedding: &[f32], k: usize) -> anyhow::Result<Vec<(Score, Entity)>> {
-        Ok(self.db.iter()?
-            .filter_map(|(_, reference)| {
-                let value_embedding = reference.as_ref().1.as_ref()?;
-                let similarity = cosine_similarity(query_embedding, value_embedding);
+        let db_iter = self.db.iter();
+        let scores = info_span!("scoring").in_scope(|| db_iter
+            .flat_map(|(_, reference)| {
+                let value_embedding = reference.1.as_ref()?;
+
+                let similarity: f32 =  {
+                    // this works for openai embeddings as they are normalized already
+
+                    // the compiler probably optimizes this to simd.
+
+                    query_embedding
+                        .iter()
+                        .zip(value_embedding)
+                        .map(|(a, b)| a * b)
+                        .sum()
+                };
+
                 Some((similarity, reference.0.clone()))
             })
-            .k_largest_by_key(k, |&(score, _)| ordered_float::OrderedFloat(score))
-            .collect())
+            .collect::<Vec<_>>());
+        let top_scores = info_span!("reducing scores").in_scope(|| scores.into_iter().k_largest_by_key(k, |(s, _)| OrderedFloat::from(*s)).collect_vec());
+
+        Ok(top_scores)
     }
 
     pub fn new(root_dir: &'static Path) -> Vault {
@@ -49,28 +69,32 @@ impl Vault {
     }
 
     /// Search for similar content using a text query
+    #[instrument(skip_all)]
     pub async fn search(&self, query: &str, k: usize) -> anyhow::Result<Vec<(Score, Entity)>> {
         let query_embedding = self.embedder.embed_one(query).await?;
         self.best_matches(&query_embedding, k)
     }
 
+    #[instrument(skip(self))]
     pub async fn synced(self) -> anyhow::Result<Self> {
         // create a new msync
-        let sync: VaultSync<()> = self.db.new_msync().await?;
+        let sync: VaultSync<()> = self.db.new_msync()?;
 
         // populate the sync with parsed files.
-        let parsed: VaultSync<md_parser::Document> = sync
-            .async_populate(|_, file_content| async move { Document::new(&file_content) })
+        let parsed: VaultSync<(Arc<FileKey>, md_parser::Document)> = sync
+            .async_populate(|file_key, file_content| async move { Document::new(&file_content).map(|it| (file_key.clone(), it)) })
             .await
             .inner_flatten();
 
         // flat map this into files and headings
-        let embeddables: VaultSync<Entity> = parsed.flat_map(|document| {
+        let embeddables: VaultSync<Entity> = parsed.flat_map(|(key, document)| {
             std::iter::once(Entity::File {
+                key: key.clone(),
                 content: document.rope.to_string(),
             })
             .chain(document.sections().flat_map(|it| {
                 it.heading.as_ref().map(|_| Entity::Heading {
+                        key: key.clone(),
                     content: {
                         let range = it.range;
                         let slice = document.rope.byte_slice(range.start_byte..range.end_byte);
@@ -104,23 +128,12 @@ impl Vault {
 impl Embeddable for Entity {
     fn content(&self) -> String {
         match self {
-            Entity::File { content } => content.to_string(),
-            Entity::Heading { content } => content.to_string(),
+            Entity::File { content, .. } => content.to_string(),
+            Entity::Heading { content, .. } => content.to_string(),
         }
     }
 }
 
-fn cosine_similarity(a: &[f32], b: &[f32]) -> f64 {
-    let dot_product: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
-    let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-    let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
-    
-    if norm_a == 0.0 || norm_b == 0.0 {
-        0.0
-    } else {
-        (dot_product / (norm_a * norm_b)) as f64
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -145,17 +158,17 @@ mod tests {
         let vault = vault.synced().await?;
         tracing::info!("Vault synced successfully");
 
-        let query = "rust programming";
+        let query = "notes about overlaps between Oxide and Exa";
         tracing::info!("Searching for: {}", query);
-        let results = vault.search(query, 5).await?;
+        let results = vault.search(query, 10).await?;
         
-        tracing::info!("Search results:");
+        tracing::debug!("Search results:");
         for (i, (score, entity)) in results.iter().enumerate() {
             let (kind, content) = match entity {
-                Entity::File { content } => ("File", content.chars().take(100).collect::<String>()),
-                Entity::Heading { content } => ("Heading", content.to_string()),
+                Entity::File { content, key } => (format!("Key: {key}; File"), content.chars().take(800).collect::<String>()),
+                Entity::Heading { content, key  } => (format!("Key: {key}: Heading"), content.to_string()),
             };
-            tracing::info!(
+            tracing::debug!(
                 "\n{}: {}\n   Score: {:.3}\n   Content: {}...", 
                 i + 1,
                 kind,
@@ -166,7 +179,7 @@ mod tests {
 
         // Verify results
         assert!(!results.is_empty(), "Should return at least one result");
-        assert!(results.len() <= 5, "Should not return more than k results");
+        assert!(results.len() <= 10, "Should not return more than k results");
 
         // Verify scores are in descending order
         for window in results.windows(2) {

@@ -17,3 +17,4 @@ derive_deref = "*"
 tracing = "*"
 tracing-subscriber = { version = "*", features = ["env-filter"] }
 util = { path = "crates/util" }
+ordered-float = "4.5.0"

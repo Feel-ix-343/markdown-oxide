@@ -3,3 +3,4 @@ Session.vim
 .idea
 *.redb
 .aider*
+.env

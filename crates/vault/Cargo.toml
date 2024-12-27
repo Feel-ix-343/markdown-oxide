@@ -25,3 +25,4 @@ derive_deref.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 util.workspace = true
+ordered-float.workspace = true

@@ -46,15 +46,14 @@ impl Embedder {
         }
 
         let tokens = self.tokenizer.encode_with_special_tokens(text);
-        let truncated_tokens = tokens.iter().take(8192).cloned().collect::<Vec<_>>();
-        let truncated_text = self.tokenizer.decode(truncated_tokens).unwrap();
+        let truncated_tokens = tokens.iter().take(8192).map(|it| *it as u32).collect::<Vec<_>>();
 
         let response = self
             .client
             .embeddings()
             .create(CreateEmbeddingRequest {
                 model: "text-embedding-3-large".to_string(),
-                input: vec![truncated_text],
+                input: truncated_tokens.into(),
                 user: None,
                 encoding_format: None,
                 dimensions: None,
