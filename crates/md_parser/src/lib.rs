@@ -104,8 +104,14 @@ pub struct WikiLink {
 
 pub struct MarkdownLink {
     doc_rope: Rope,
+    /// The full range of the markdown link, including the []() markers
+    /// For example, in "[text](url)", includes "[text](url)"
     pub range: Range,
+    /// The range of just the target URL
+    /// For example, in "[text](url)", includes just "url"
     pub to_range: Range,
+    /// The range of the display text inside the square brackets
+    /// For example, in "[text](url)", includes just "text"
     pub display_range: Range,
 }
 
@@ -658,9 +664,28 @@ impl MarkdownLink {
             .to_string()
     }
 
+    /// Returns the target URL from the markdown link
+    /// For example, in "[text](url)", returns "url"
+    pub fn to(&self) -> String {
+        self.doc_rope
+            .byte_slice(self.to_range.start_byte..self.to_range.end_byte)
+            .to_string()
+    }
+
+    /// Returns the display text from inside the square brackets
+    /// For example, in "[text](url)", returns "text"
     pub fn display(&self) -> String {
         self.doc_rope
             .byte_slice(self.display_range.start_byte..self.display_range.end_byte)
+            .to_string()
+    }
+
+    /// Returns the complete markdown link text including the []() markers
+    /// For example:
+    /// - "[text](url)" returns "[text](url)"
+    pub fn full_text(&self) -> String {
+        self.doc_rope
+            .byte_slice(self.range.start_byte..self.range.end_byte)
             .to_string()
     }
 }
