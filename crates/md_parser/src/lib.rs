@@ -560,7 +560,7 @@ impl Debug for MarkdownLink {
 impl Debug for Heading {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Heading")
-            .field("text", &self.text())
+            .field("text", &self.heading_text())
             .field("level", &self.level)
             .field("range", &self.range)
             .finish()
@@ -645,13 +645,13 @@ impl MarkdownLink {
 }
 
 impl Heading {
-    pub fn text(&self) -> String {
+    pub fn heading_text(&self) -> String {
         self.doc_rope
             .byte_slice(self.range.start_byte..self.range.end_byte)
             .to_string()
     }
 
-    pub fn full_text(&self) -> String {
+    pub fn full_heading_content(&self) -> String {
         self.doc_rope
             .byte_slice(self.full_range.start_byte..self.full_range.end_byte)
             .to_string()
