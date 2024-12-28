@@ -93,13 +93,13 @@ pub struct WikiLink {
     doc_rope: Rope,
     /// The full range of the wiki link, including the [[]] markers
     /// For example, in "[[Page]]", includes "[[Page]]"
-    pub range: Range,
+    range: Range,
     /// The range of just the target page name
     /// For example, in "[[Page]]", includes just "Page"
-    pub to_range: Range,
+    to_range: Range,
     /// The range of the optional display text after the |
     /// For example, in "[[Page|Display]]", includes just "Display"
-    pub display_range: Option<Range>,
+    display_range: Option<Range>,
 }
 
 pub struct MarkdownLink {
