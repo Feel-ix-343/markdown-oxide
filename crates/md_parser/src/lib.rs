@@ -559,9 +559,6 @@ impl Heading {
         let heading_range = children
             .find(|it| it.kind() == "inline")
             .map(|it| it.range())?;
-        let text = rope
-            .byte_slice(heading_range.start_byte..heading_range.end_byte)
-            .as_str()?;
 
         let level = it.child(0).and_then(|it| match it.kind() {
             "atx_h1_marker" => Some(HeadingLevel::One),
@@ -574,7 +571,8 @@ impl Heading {
         })?;
 
         Some(Heading {
-            range: it.range(),
+            doc_rope: rope,
+            range: heading_range,
             level,
         })
     }
