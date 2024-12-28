@@ -3,8 +3,6 @@ use tracing::instrument;
 use tree_sitter_md::MarkdownTree;
 
 use std::ops::Not;
-use std::sync::Arc;
-
 use tree_sitter::Range;
 use tree_sitter_md::MarkdownParser;
 
