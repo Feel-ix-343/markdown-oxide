@@ -11,7 +11,7 @@ use tree_sitter_md::MarkdownParser;
 use std::fmt::Formatter;
 
 use std::fmt::Debug;
-
+use std::sync::Arc;
 use ropey::Rope;
 
 pub struct Document {
@@ -139,6 +139,9 @@ impl Document {
 
 /// Behavior
 impl Document {
+    pub fn content(&self) -> Arc<str> {
+        Arc::from(self.rope.to_string())
+    }
     pub fn all_doc_blocks(&self) -> Box<dyn Iterator<Item = BorrowedDocBlock<'_>> + '_> {
         Box::new(self.sections.iter().flat_map(|it| it.all_blocks()))
     }
