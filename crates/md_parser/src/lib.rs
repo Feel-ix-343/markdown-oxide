@@ -109,7 +109,7 @@ pub struct Heading {
     doc_rope: Rope,
     /// The heading_range only includes the content after the '#' markers
     /// For example, in "## Heading", it only includes "Heading"
-    pub range: Range,
+    range: Range,
     pub level: HeadingLevel,
 }
 
