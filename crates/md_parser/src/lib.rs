@@ -621,12 +621,17 @@ impl Tag {
 }
 
 impl WikiLink {
+    /// Returns the target page name from the wiki link
+    /// For example, in "[[Page]]" or "[[Page|Display]]", returns "Page"
     pub fn to(&self) -> String {
         self.doc_rope
             .byte_slice(self.to_range.start_byte..self.to_range.end_byte)
             .to_string()
     }
 
+    /// Returns the optional display text if present
+    /// For example, in "[[Page|Display]]", returns Some("Display")
+    /// In "[[Page]]", returns None
     pub fn display(&self) -> Option<String> {
         self.display_range.map(|range| {
             self.doc_rope
@@ -651,12 +656,16 @@ impl MarkdownLink {
 }
 
 impl Heading {
+    /// Returns just the heading text content, excluding the '#' markers
+    /// For example, in "## Heading", returns "Heading"
     pub fn heading_text(&self) -> String {
         self.doc_rope
             .byte_slice(self.range.start_byte..self.range.end_byte)
             .to_string()
     }
 
+    /// Returns the complete heading including the '#' markers and content
+    /// For example, in "## Heading", returns "## Heading" 
     pub fn full_heading_content(&self) -> String {
         self.doc_rope
             .byte_slice(self.full_range.start_byte..self.full_range.end_byte)
