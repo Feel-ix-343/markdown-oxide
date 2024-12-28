@@ -90,18 +90,15 @@ impl Vault {
         let embeddables: VaultSync<Entity> = parsed.flat_map(|(key, document)| {
             std::iter::once(Entity::File {
                 key: key.clone(),
-                content: document.rope.to_string(),
+                content: document.content()
             })
             .chain(document.sections().flat_map(|it| {
                 it.heading.as_ref().map(|_| Entity::Heading {
                         key: key.clone(),
-                    content: {
-                        let range = it.range;
-                        let slice = document.rope.byte_slice(range.start_byte..range.end_byte);
-                        slice.to_string()
-                    },
+                    content: it.content(),
                 })
             }))
+            //.chain(document.all_doc_blocks().map(|blcok| block))
             .collect::<Vec<_>>()
         });
 

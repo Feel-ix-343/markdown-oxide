@@ -585,7 +585,6 @@ impl Heading {
         Some(Heading {
             range: it.range(),
             level,
-            text: Arc::from(text),
         })
     }
 }
@@ -631,7 +630,7 @@ impl BlockContent {
     pub fn content(&self) -> String {
         self.doc_rope
             .byte_slice(self.range.start_byte..self.range.end_byte)
-            .into_string()
+            .to_string()
     }
 }
 
@@ -640,7 +639,7 @@ impl Tag {
         // Skip the # character by adding 1 to start_byte
         self.doc_rope
             .byte_slice(self.range.start_byte + 1..self.range.end_byte)
-            .into_string()
+            .to_string()
     }
 }
 
@@ -648,14 +647,14 @@ impl WikiLink {
     pub fn to(&self) -> String {
         self.doc_rope
             .byte_slice(self.to_range.start_byte..self.to_range.end_byte)
-            .into_string()
+            .to_string()
     }
 
     pub fn display(&self) -> Option<String> {
         self.display_range.map(|range| {
             self.doc_rope
                 .byte_slice(range.start_byte..range.end_byte)
-                .into_string()
+                .to_string()
         })
     }
 }
@@ -664,13 +663,13 @@ impl MarkdownLink {
     pub fn to(&self) -> String {
         self.doc_rope
             .byte_slice(self.to_range.start_byte..self.to_range.end_byte)
-            .into_string()
+            .to_string()
     }
 
     pub fn display(&self) -> String {
         self.doc_rope
             .byte_slice(self.display_range.start_byte..self.display_range.end_byte)
-            .into_string()
+            .to_string()
     }
 }
 
@@ -678,6 +677,6 @@ impl Heading {
     pub fn text(&self) -> String {
         self.doc_rope
             .byte_slice(self.range.start_byte..self.range.end_byte)
-            .into_string()
+            .to_string()
     }
 }
