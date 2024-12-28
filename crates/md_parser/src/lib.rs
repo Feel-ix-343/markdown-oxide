@@ -67,7 +67,7 @@ pub struct ParagraphBlock {
 }
 
 pub struct BlockContent {
-    pub text: Arc<str>,
+    doc_rope: Rope,
     /// This is the exact range of only the block's content, excluding any (list) block markers like `-` ...
     pub range: Range,
     pub tags: Vec<Tag>,
@@ -77,27 +77,28 @@ pub struct BlockContent {
 
 pub struct Tag {
     /// Tag Range, including #
+    doc_rope: Rope,
     pub range: Range,
-    /// Tag text no #
-    pub text: Arc<str>,
 }
 
 pub struct WikiLink {
+    doc_rope: Rope,
     pub range: Range,
-    pub to: Arc<str>,
-    pub display: Option<Arc<str>>,
+    pub to_range: Range,
+    pub display_range: Option<Range>,
 }
 
 pub struct MarkdownLink {
+    doc_rope: Rope,
     pub range: Range,
-    pub to: Arc<str>,
-    pub display: Arc<str>,
+    pub to_range: Range,
+    pub display_range: Range,
 }
 
 pub struct Heading {
+    doc_rope: Rope,
     pub range: Range,
     pub level: HeadingLevel,
-    pub text: Arc<str>,
 }
 
 #[derive(Debug)]
@@ -419,12 +420,10 @@ impl BlockContent {
         match (inline_node, inline_node.kind()) {
             (node, "inline") => {
                 let range = node.range();
-                let text = rope.byte_slice(range.start_byte..range.end_byte).as_str()?;
-
                 let mut cursor = node.walk();
 
                 Some(BlockContent {
-                    text: Arc::from(text),
+                    doc_rope: rope.clone(),
                     range,
                     tags: node
                         .children(&mut cursor)
@@ -444,13 +443,13 @@ impl BlockContent {
         }
     }
 
-    pub fn refs(&self) -> Box<dyn Iterator<Item = Arc<str>> + '_> {
+    pub fn refs(&self) -> Box<dyn Iterator<Item = String> + '_> {
         Box::new(
             self.tags
                 .iter()
-                .map(|tag| tag.text.clone())
-                .chain(self.md_links.iter().map(|link| link.to.clone()))
-                .chain(self.wiki_links.iter().map(|link| link.to.clone())),
+                .map(|tag| tag.text())
+                .chain(self.md_links.iter().map(|link| link.to()))
+                .chain(self.wiki_links.iter().map(|link| link.to()))
         )
     }
 }
@@ -626,5 +625,59 @@ One person one vote: [[Baker v Carr#^baa84a]]
         println!("{:#?}", Document::new(file_text).unwrap())
 
         // assert_eq!(file_text, "How will this print?");
+    }
+}
+impl BlockContent {
+    pub fn content(&self) -> String {
+        self.doc_rope
+            .byte_slice(self.range.start_byte..self.range.end_byte)
+            .into_string()
+    }
+}
+
+impl Tag {
+    pub fn text(&self) -> String {
+        // Skip the # character by adding 1 to start_byte
+        self.doc_rope
+            .byte_slice(self.range.start_byte + 1..self.range.end_byte)
+            .into_string()
+    }
+}
+
+impl WikiLink {
+    pub fn to(&self) -> String {
+        self.doc_rope
+            .byte_slice(self.to_range.start_byte..self.to_range.end_byte)
+            .into_string()
+    }
+
+    pub fn display(&self) -> Option<String> {
+        self.display_range.map(|range| {
+            self.doc_rope
+                .byte_slice(range.start_byte..range.end_byte)
+                .into_string()
+        })
+    }
+}
+
+impl MarkdownLink {
+    pub fn to(&self) -> String {
+        self.doc_rope
+            .byte_slice(self.to_range.start_byte..self.to_range.end_byte)
+            .into_string()
+    }
+
+    pub fn display(&self) -> String {
+        self.doc_rope
+            .byte_slice(self.display_range.start_byte..self.display_range.end_byte)
+            .into_string()
+    }
+}
+
+impl Heading {
+    pub fn text(&self) -> String {
+        self.doc_rope
+            .byte_slice(self.range.start_byte..self.range.end_byte)
+            .into_string()
     }
 }
