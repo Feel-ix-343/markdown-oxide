@@ -470,12 +470,9 @@ impl Tag {
     pub fn parse(inline_child: tree_sitter::Node, rope: Rope) -> Option<Tag> {
         match (inline_child, inline_child.kind()) {
             (node, "tag") => {
-                let range = node.range();
-                let text_range = range.start_byte + 1..range.end_byte;
-                let text = rope.byte_slice(text_range).as_str()?;
                 Some(Tag {
-                    range,
-                    text: Arc::from(text),
+                    doc_rope: rope,
+                    range: node.range(),
                 })
             }
             _ => None,
@@ -493,18 +490,15 @@ impl WikiLink {
     pub fn parse(inline_child: tree_sitter::Node, rope: Rope) -> Option<WikiLink> {
         match (inline_child, inline_child.kind()) {
             (node, "wiki_link") => {
-                let range = node.range();
-                let to = node.named_child(0).and_then(|it| {
-                    let range = it.range();
-                    let text = rope.byte_slice(range.start_byte..range.end_byte).as_str()?;
-                    Some(Arc::from(text))
-                })?;
-                let display = node.named_child(1).and_then(|it| {
-                    let range = it.range();
-                    let text = rope.byte_slice(range.start_byte..range.end_byte).as_str()?;
-                    Some(Arc::from(text))
-                });
-                Some(WikiLink { range, to, display })
+                let to_range = node.named_child(0)?.range();
+                let display_range = node.named_child(1).map(|it| it.range());
+                
+                Some(WikiLink {
+                    doc_rope: rope,
+                    range: node.range(),
+                    to_range,
+                    display_range,
+                })
             }
             _ => None,
         }
@@ -524,18 +518,15 @@ impl MarkdownLink {
     pub fn parse(inline_child: tree_sitter::Node, rope: Rope) -> Option<MarkdownLink> {
         match (inline_child, inline_child.kind()) {
             (node, "inline_link") => {
-                let range = node.range();
-                let to = node.named_child(1).and_then(|it| {
-                    let range = it.range();
-                    let text = rope.byte_slice(range.start_byte..range.end_byte).as_str()?;
-                    Some(Arc::from(text))
-                })?;
-                let display = node.named_child(0).and_then(|it| {
-                    let range = it.range();
-                    let text = rope.byte_slice(range.start_byte..range.end_byte).as_str()?;
-                    Some(Arc::from(text))
-                })?;
-                Some(MarkdownLink { range, to, display })
+                let to_range = node.named_child(1)?.range();
+                let display_range = node.named_child(0)?.range();
+                
+                Some(MarkdownLink {
+                    doc_rope: rope,
+                    range: node.range(),
+                    to_range,
+                    display_range,
+                })
             }
             _ => None,
         }
