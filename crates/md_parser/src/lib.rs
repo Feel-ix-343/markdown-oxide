@@ -11,7 +11,6 @@ use tree_sitter_md::MarkdownParser;
 use std::fmt::Formatter;
 
 use std::fmt::Debug;
-use std::sync::Arc;
 use ropey::Rope;
 
 pub struct Document {
@@ -21,7 +20,10 @@ pub struct Document {
 
 #[derive(Debug)]
 pub struct Section {
-    pub range: Range,
+    doc_rope: Rope,
+
+    /// what is this? this is the full range of the section, including the heading and all contained content.
+    range: Range,
     pub heading: Option<Heading>,
     pub level: usize,
     pub nodes: Vec<Node>,
@@ -42,6 +44,8 @@ pub enum DocBlock {
 pub struct ListBlock {
     /// what is this?
     /// this is the exact range of the list block and does not contain the ranges of the children blocks.
+    /// while hte BlockContent range includes only the text content of the block, this will include other markers
+    /// like the checkbox and the `- `
     pub range: Range,
     /// what is this?
     /// this is the exact content of the list block and does not contain the content of the children blocks.
@@ -64,6 +68,7 @@ pub struct ParagraphBlock {
 
 pub struct BlockContent {
     pub text: Arc<str>,
+    /// This is the exact range of only the block's content, excluding any (list) block markers like `-` ...
     pub range: Range,
     pub tags: Vec<Tag>,
     pub wiki_links: Vec<WikiLink>,
@@ -139,8 +144,8 @@ impl Document {
 
 /// Behavior
 impl Document {
-    pub fn content(&self) -> Arc<str> {
-        Arc::from(self.rope.to_string())
+    pub fn content(&self) -> String {
+        self.rope.to_string()
     }
     pub fn all_doc_blocks(&self) -> Box<dyn Iterator<Item = BorrowedDocBlock<'_>> + '_> {
         Box::new(self.sections.iter().flat_map(|it| it.all_blocks()))
@@ -220,6 +225,7 @@ impl Section {
 
                 if nodes.is_empty().not() || heading.is_some() {
                     Some(Section {
+                        doc_rope: rope,
                         heading,
                         level,
                         nodes,
@@ -291,6 +297,12 @@ impl Section {
                     .flatten(),
             ),
         )
+    }
+
+    pub fn content(&self) -> String {
+        self.doc_rope
+            .byte_slice(self.range.start_byte..self.range.end_byte)
+            .to_string()
     }
 }
 
@@ -591,25 +603,25 @@ pub(crate) mod tests {
 One person one vote: [[Baker v Carr#^baa84a]]
 ## Facts
 - Tennessee citizens (Baker was alphabetically first in this list of citizens) thought that Tennessee's districting, which was set up based on the distribution of population in 1901, was unfair to current population shifts; they were based on geography instead of population and were thought to be unfair bu the legislatures did not want to lose their seats though fairer redistricting
-	- Rural parts of states would have the same representation as a largely populated city
-	- Rural parts of states would take over the legislatures while there was much more population in the cities
-		- The population in 1901 must have been much more spread out, then became compressed as time passed
-		- **As time passed, the legislature who had been elected there at the time did not want to lose their seats by redistricting, so they did nto do it**
-	- **Districts did not have equal populations, and therefore, the votes of each person were unequal**
+  - Rural parts of states would have the same representation as a largely populated city
+  - Rural parts of states would take over the legislatures while there was much more population in the cities
+    - The population in 1901 must have been much more spread out, then became compressed as time passed
+    - **As time passed, the legislature who had been elected there at the time did not want to lose their seats by redistricting, so they did nto do it**
+  - **Districts did not have equal populations, and therefore, the votes of each person were unequal**
 - Prior to this trial, the supreme court had refused to intervine in apportionment cases
-	- I am guessing that these cases would be for a similar topic
-	- Supreme court thought that these cases were not coverable under the constitution; it did not have anything to say about them
-	- Reversed this decision for this case (Q1: is this something under the power of the constitution)
+  - I am guessing that these cases would be for a similar topic
+  - Supreme court thought that these cases were not coverable under the constitution; it did not have anything to say about them
+  - Reversed this decision for this case (Q1: is this something under the power of the constitution)
 ## Question
 - Did the supreme court have jurisdiction over questions of legislative apportiontmentp
 - Should all votes should be represented equally
-	- Gerrymandering changes the ratios of voters of parties to the actual districts made; dilutes
+  - Gerrymandering changes the ratios of voters of parties to the actual districts made; dilutes
 ## Majority Opinion and Reasoning
 - Favor of Baker: The supreme court ruile dthat they coukld review state redistricting issues and that all districts should be proportionately represented
 ### Reasoning
 - Cited the **equal protection clause** (14th ammendment) gave citizens an equal vote that should not be based on geography
-	- Answering Q1: [**IMPACT**] this means that redistricting cases are **justiciable**; other cases were held
-	- Answering Q2: The districts can't undermine equality; ruled in favor of baker; in future cases, "one person, one vote" was required by the constitution ^baa84a"#;
+  - Answering Q1: [**IMPACT**] this means that redistricting cases are **justiciable**; other cases were held
+  - Answering Q2: The districts can't undermine equality; ruled in favor of baker; in future cases, "one person, one vote" was required by the constitution ^baa84a"#;
 
         println!("{:#?}", Document::new(file_text).unwrap())
 
