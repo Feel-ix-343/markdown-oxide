@@ -19,8 +19,8 @@ pub struct Document {
 pub struct Section {
     doc_rope: Rope,
 
-    /// what is this? this is the full range of the section, including the heading and all contained content.
-    range: Range,
+    /// The full range of the section, including the heading and all contained content.
+    pub(crate) range: Range,
     pub heading: Option<Heading>,
     pub level: usize,
     pub nodes: Vec<Node>,
@@ -50,11 +50,10 @@ pub enum DocBlock {
 }
 
 pub struct ListBlock {
-    /// what is this?
-    /// this is the exact range of the list block and does not contain the ranges of the children blocks.
-    /// while hte BlockContent range includes only the text content of the block, this will include other markers
+    /// The exact range of the list block and does not contain the ranges of the children blocks.
+    /// While the BlockContent range includes only the text content of the block, this will include other markers
     /// like the checkbox and the `- `
-    pub range: Range,
+    range: Range,
     /// what is this?
     /// this is the exact content of the list block and does not contain the content of the children blocks.
     pub content: BlockContent,
@@ -70,14 +69,14 @@ pub enum CheckBox {
 
 pub struct ParagraphBlock {
     /// Paragraph Range is (row, 0) to (row + 1, 0)
-    pub range: Range,
+    range: Range,
     pub content: BlockContent,
 }
 
 pub struct BlockContent {
     doc_rope: Rope,
-    /// This is the exact range of only the block's content, excluding any (list) block markers like `-` ...
-    pub range: Range,
+    /// The exact range of only the block's content, excluding any (list) block markers like `-` ...
+    range: Range,
     pub tags: Vec<Tag>,
     pub wiki_links: Vec<WikiLink>,
     pub md_links: Vec<MarkdownLink>,
@@ -86,7 +85,7 @@ pub struct BlockContent {
 pub struct Tag {
     /// Tag Range, including #
     doc_rope: Rope,
-    pub range: Range,
+    range: Range,
 }
 
 pub struct WikiLink {
@@ -106,13 +105,13 @@ pub struct MarkdownLink {
     doc_rope: Rope,
     /// The full range of the markdown link, including the []() markers
     /// For example, in "[text](url)", includes "[text](url)"
-    pub range: Range,
+    range: Range,
     /// The range of just the target URL
     /// For example, in "[text](url)", includes just "url"
-    pub to_range: Range,
+    to_range: Range,
     /// The range of the display text inside the square brackets
     /// For example, in "[text](url)", includes just "text"
-    pub display_range: Range,
+    display_range: Range,
 }
 
 pub struct Heading {
