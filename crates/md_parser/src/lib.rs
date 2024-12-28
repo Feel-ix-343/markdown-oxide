@@ -457,7 +457,7 @@ impl BlockContent {
 impl Debug for BlockContent {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BlockContent")
-            .field("text", &self.text)
+            .field("content", &self.content())
             .field("tags", &self.tags)
             .field("wiki_links", &self.wiki_links)
             .field("md_links", &self.md_links)
@@ -482,7 +482,7 @@ impl Tag {
 
 impl Debug for Tag {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Tag").field("text", &self.text).finish()
+        f.debug_struct("Tag").field("text", &self.text()).finish()
     }
 }
 
@@ -508,8 +508,8 @@ impl WikiLink {
 impl Debug for WikiLink {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("WikiLink")
-            .field("to", &self.to)
-            .field("display", &self.display)
+            .field("to", &self.to())
+            .field("display", &self.display())
             .finish()
     }
 }
@@ -536,8 +536,8 @@ impl MarkdownLink {
 impl Debug for MarkdownLink {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MarkdownLink")
-            .field("to", &self.to)
-            .field("display", &self.display)
+            .field("to", &self.to())
+            .field("display", &self.display())
             .finish()
     }
 }
@@ -545,7 +545,7 @@ impl Debug for MarkdownLink {
 impl Debug for Heading {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Heading")
-            .field("text", &self.text)
+            .field("text", &self.text())
             .field("level", &self.level)
             .field("range", &self.range)
             .finish()
