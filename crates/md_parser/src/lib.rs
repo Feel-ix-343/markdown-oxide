@@ -18,7 +18,6 @@ pub struct Document {
     rope: Rope,
 }
 
-#[derive(Debug)]
 pub struct Section {
     doc_rope: Rope,
 
@@ -27,6 +26,17 @@ pub struct Section {
     pub heading: Option<Heading>,
     pub level: usize,
     pub nodes: Vec<Node>,
+}
+
+impl Debug for Section {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Section")
+            .field("range", &self.range)
+            .field("heading", &self.heading)
+            .field("level", &self.level)
+            .field("nodes", &self.nodes)
+            .finish()
+    }
 }
 
 #[derive(Debug)]
