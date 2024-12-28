@@ -658,11 +658,6 @@ impl WikiLink {
 }
 
 impl MarkdownLink {
-    pub fn to(&self) -> String {
-        self.doc_rope
-            .byte_slice(self.to_range.start_byte..self.to_range.end_byte)
-            .to_string()
-    }
 
     /// Returns the target URL from the markdown link
     /// For example, in "[text](url)", returns "url"
@@ -737,6 +732,7 @@ One person one vote: [[Baker v Carr#^baa84a]]
 - Favor of Baker: The supreme court ruile dthat they coukld review state redistricting issues and that all districts should be proportionately represented
 ### Reasoning
 - Cited the **equal protection clause** (14th ammendment) gave citizens an equal vote that should not be based on geography
+  - this is a test link [[link here|display]]
   - Answering Q1: [**IMPACT**] this means that redistricting cases are **justiciable**; other cases were held
   - Answering Q2: The districts can't undermine equality; ruled in favor of baker; in future cases, "one person, one vote" was required by the constitution ^baa84a"#;
 
