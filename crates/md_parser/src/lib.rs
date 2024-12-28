@@ -16,15 +16,15 @@ use ropey::Rope;
 
 pub struct Document {
     pub sections: Vec<Section>,
-    pub rope: Rope,
+    rope: Rope,
 }
 
 #[derive(Debug)]
 pub struct Section {
+    pub range: Range,
     pub heading: Option<Heading>,
     pub level: usize,
     pub nodes: Vec<Node>,
-    pub range: Range,
 }
 
 #[derive(Debug)]
@@ -40,7 +40,11 @@ pub enum DocBlock {
 }
 
 pub struct ListBlock {
+    /// what is this?
+    /// this is the exact range of the list block and does not contain the ranges of the children blocks.
     pub range: Range,
+    /// what is this?
+    /// this is the exact content of the list block and does not contain the content of the children blocks.
     pub content: BlockContent,
     pub children: Option<Vec<ListBlock>>,
     pub checkbox: Option<CheckBox>,
@@ -156,6 +160,7 @@ impl Document {
             )
         }))
     }
+
 }
 
 impl Section {
