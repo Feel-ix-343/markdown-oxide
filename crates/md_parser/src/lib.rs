@@ -106,13 +106,15 @@ pub struct MarkdownLink {
 }
 
 pub struct Heading {
+    /// The underlying rope data structure containing the document text
     doc_rope: Rope,
-    /// The heading_range only includes the content after the '#' markers
-    /// For example, in "## Heading", it only includes "Heading"
+    /// The range of just the heading text content, excluding the '#' markers
+    /// For example, in "## Heading", this range only includes "Heading"
     range: Range,
-    /// The full_range includes the entire heading including the '#' markers
-    /// For example, in "## Heading", it includes "## Heading"
+    /// The range of the complete heading including the '#' markers and content
+    /// For example, in "## Heading", this range includes "## Heading"
     full_range: Range,
+    /// The heading level (h1-h6) determined by the number of '#' markers
     pub level: HeadingLevel,
 }
 
