@@ -110,6 +110,9 @@ pub struct Heading {
     /// The heading_range only includes the content after the '#' markers
     /// For example, in "## Heading", it only includes "Heading"
     range: Range,
+    /// The full_range includes the entire heading including the '#' markers
+    /// For example, in "## Heading", it includes "## Heading"
+    full_range: Range,
     pub level: HeadingLevel,
 }
 
@@ -587,6 +590,7 @@ impl Heading {
         Some(Heading {
             doc_rope: rope,
             range: heading_range,
+            full_range: it.range(),
             level,
         })
     }
@@ -644,6 +648,12 @@ impl Heading {
     pub fn text(&self) -> String {
         self.doc_rope
             .byte_slice(self.range.start_byte..self.range.end_byte)
+            .to_string()
+    }
+
+    pub fn full_text(&self) -> String {
+        self.doc_rope
+            .byte_slice(self.full_range.start_byte..self.full_range.end_byte)
             .to_string()
     }
 }
