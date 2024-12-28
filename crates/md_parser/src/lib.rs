@@ -639,6 +639,16 @@ impl WikiLink {
                 .to_string()
         })
     }
+
+    /// Returns the complete wiki link text including the [[]] markers
+    /// For example:
+    /// - "[[Page]]" returns "[[Page]]"
+    /// - "[[Page|Display]]" returns "[[Page|Display]]"
+    pub fn full_text(&self) -> String {
+        self.doc_rope
+            .byte_slice(self.range.start_byte..self.range.end_byte)
+            .to_string()
+    }
 }
 
 impl MarkdownLink {
