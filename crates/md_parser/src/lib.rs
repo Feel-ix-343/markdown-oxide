@@ -556,6 +556,8 @@ impl Heading {
     pub fn parse(it: tree_sitter::Node<'_>, rope: Rope) -> Option<Heading> {
         let mut cursor = it.walk();
         let mut children = it.children(&mut cursor);
+        // The heading_range only includes the content after the '#' markers
+        // For example, in "## Heading", it only includes "Heading"
         let heading_range = children
             .find(|it| it.kind() == "inline")
             .map(|it| it.range())?;
