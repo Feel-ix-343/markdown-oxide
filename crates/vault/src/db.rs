@@ -82,7 +82,7 @@ impl<DatabaseItem> Sync<(), DatabaseItem>
 where
     DatabaseItem: Serialize + for<'a> Deserialize<'a> + 'static,
 {
-    #[instrument(skip(self, f))]
+    #[instrument(skip_all)]
     /// Populate the sync using the recent content of the file, the key of the file, and the possibly
     /// the collection slice related to the file.
     pub async fn async_populate<I, F: Future<Output = I>>(

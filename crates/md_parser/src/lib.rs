@@ -50,9 +50,12 @@ pub enum DocBlock {
 }
 
 pub struct ListBlock {
-    /// The exact range of the list block and does not contain the ranges of the children blocks.
-    /// While the BlockContent range includes only the text content of the block, this will include other markers
-    /// like the checkbox and the `- `
+    doc_rope: Rope,
+    /// This is the full range of the list block section
+    /// (Row, 0) -> (EndRow + 1, 0)
+    /// this will contain all children list blocks
+    ///
+    /// if you want the content of only this list block, use the content field
     range: Range,
     /// what is this?
     /// this is the exact content of the list block and does not contain the content of the children blocks.
@@ -68,6 +71,7 @@ pub enum CheckBox {
 }
 
 pub struct ParagraphBlock {
+    doc_rope: Rope,
     /// Paragraph Range is (row, 0) to (row + 1, 0)
     range: Range,
     pub content: BlockContent,
@@ -274,15 +278,22 @@ pub enum BorrowedDocBlock<'a> {
 }
 
 impl BorrowedDocBlock<'_> {
-    pub fn content(&self) -> &BlockContent {
+    pub fn content_obj(&self) -> &BlockContent {
         match self {
             BorrowedDocBlock::ListBlock(block) => &block.content,
             BorrowedDocBlock::ParagraphBlock(block) => &block.content,
         }
     }
 
+    pub fn full_content(&self) -> String {
+        match self {
+            BorrowedDocBlock::ListBlock(block) => block.full_content(),
+            BorrowedDocBlock::ParagraphBlock(block) => block.full_content(),
+        }
+    }
+
     pub fn line_number(&self) -> usize {
-        self.content().range.start_point.row + 1
+        self.content_obj().range.start_point.row + 1
     }
 }
 
@@ -374,9 +385,10 @@ impl ListBlock {
                         x
                     })?;
 
-                let content = BlockContent::parse(inline_node, rope, markdown_tree)?;
+                let content = BlockContent::parse(inline_node, rope.clone(), markdown_tree)?;
 
                 Some(ListBlock {
+                    doc_rope: rope,
                     children: sub_list,
                     content,
                     range: node.range(),
@@ -402,10 +414,10 @@ impl ListBlock {
 impl Debug for ListBlock {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ListBlock")
+            .field("range", &self.range)
             .field("content", &self.content)
             .field("children", &self.children)
             .field("checkbox", &self.checkbox)
-            .field("range", &self.range)
             .finish()
     }
 }
@@ -431,7 +443,7 @@ impl ParagraphBlock {
         let inline = children.find(|it| it.kind() == "inline").unwrap();
         let content = BlockContent::parse(inline, rope.clone(), markdown_tree)?;
 
-        Some(ParagraphBlock { content, range })
+        Some(ParagraphBlock { doc_rope: rope, content, range })
     }
 }
 
@@ -702,13 +714,40 @@ impl Heading {
     }
 }
 
+impl ListBlock {
+    /// the full content of the list block; this includes all markers and raw content of all sub blocks.
+    pub fn full_content(&self) -> String {
+        self.doc_rope
+            .byte_slice(self.range.start_byte..self.range.end_byte)
+            .to_string()
+
+    }
+}
+impl ParagraphBlock {
+    /// the full content of the paragraph block.
+    pub fn full_content(&self) -> String {
+        self.doc_rope
+            .byte_slice(self.range.start_byte..self.range.end_byte)
+            .to_string()
+
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
 
     #[test]
     fn test_parse() {
-        let file_text = r#"# Baker v Carr
+        let file_text = r#"
+this is the first paragraph
+
+- list item
+- list item
+- parent list item
+    - sublist 
+
+# Baker v Carr
 [[Members of Congress#Redistricting]]
 
 One person one vote: [[Baker v Carr#^baa84a]]

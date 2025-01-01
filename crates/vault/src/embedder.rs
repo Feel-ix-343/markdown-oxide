@@ -5,7 +5,7 @@ use async_openai::{config::OpenAIConfig, types::CreateEmbeddingRequest};
 use futures::{stream, StreamExt};
 use itertools::Itertools;
 use tiktoken_rs::cl100k_base;
-use tracing::{info, info_span, instrument, span, warn, Instrument, Level};
+use tracing::{debug, debug_span, info, info_span, instrument, span, warn, Instrument, Level};
 
 pub type Embedding = Vec<f32>;
 
@@ -77,22 +77,22 @@ impl Embedder {
         let r = stream::iter(embeddables.chunks(2048).into_iter().enumerate())
             .map(|(idx, it)| async move {
 
-                let validated_content = it
+                let validated_content = debug_span!("getting and validating content").in_scope(|| it
                     .map(|item| {
                         let content = item.1.content();
                         (item, content)
                     })
                     .map(|(item, content)| {
                         if content.is_empty() {
-                            warn!("Content for item {:?} empty; not embedding", item.1);
+                            debug!("Content for item {:?} empty; not embedding", item.1);
                             (item, None)
                         } else {
                             (item, Some(content))
                         }
                     })
-                    .collect::<Vec<_>>();
+                    .collect::<Vec<_>>());
 
-                let span = info_span!("tokenizing content").entered();
+                let span = debug_span!("tokenizing content").entered();
 
 
                 let valid_content = validated_content
@@ -134,12 +134,12 @@ impl Embedder {
 
                 info!("Recieved embeddings response {}/{}", idx + 1, num_chunks);
 
-                let embeddings_map = valid_content
+                let embeddings_map = debug_span!("constructing embeddings map").in_scope(|| valid_content
                     .zip(embeddings)
                     .map(|it| (it.0 .0, it.1))
-                    .collect::<HashMap<_, _>>();
+                    .collect::<HashMap<_, _>>());
 
-                let results = validated_content
+                let results = debug_span!("collecting results").in_scope(||validated_content
                     .into_iter()
                     .map(|((idx, item), validated_content)| match validated_content {
                         Some(_) => {
@@ -149,7 +149,7 @@ impl Embedder {
                             Ok((idx, item, Some(embedding.to_owned())))
                         }
                         None => Ok((idx, item, None)), })
-                    .collect::<anyhow::Result<Vec<_>>>()?;
+                    .collect::<anyhow::Result<Vec<_>>>())?;
 
                 anyhow::Ok(results)
             }.instrument(info_span!("Embedding chunk", chunk = idx)))
