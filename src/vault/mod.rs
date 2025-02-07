@@ -765,10 +765,13 @@ impl Reference {
             })
         });
 
-        static FOOTNOTE_LINK_RE: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"[^\[](?<full>\[(?<index>\^[^\[\] ]+)\])[^\:]").unwrap());
+        static FOOTNOTE_LINK_RE: Lazy<Regex> = Lazy::new(|| {Regex::new(r"(?<start>\[?)(?<full>\[(?<index>\^[^\[\] ]+)\])(?<end>:?)").unwrap()});
         let footnote_references = FOOTNOTE_LINK_RE
             .captures_iter(text)
+            .filter(|capture| matches!(
+                (capture.name("start"), capture.name("end")),
+                (Some(start), Some(end)) if !start.as_str().starts_with('[') && !end.as_str().ends_with(':'))
+            )
             .flat_map(
                 |capture| match (capture.name("full"), capture.name("index")) {
                     (Some(full), Some(index)) => Some((full, index)),
@@ -1965,6 +1968,65 @@ mod vault_tests {
             .into(),
             ..ReferenceData::default()
         })];
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn multi_footnote_link_parsing() {
+        let text = "This is a footnote[^1][^2][^3]
+
+[^1]: This is not
+[^2]: This is not
+[^3]: This is not";
+        let parsed = Reference::new(text, "test.md").collect_vec();
+        let expected = vec![
+            Footnote(ReferenceData {
+                reference_text: "^1".into(),
+                range: tower_lsp::lsp_types::Range {
+                    start: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 18,
+                    },
+                    end: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 22,
+                    },
+                }
+                .into(),
+                ..ReferenceData::default()
+            }),
+            Footnote(ReferenceData {
+                reference_text: "^2".into(),
+                range: tower_lsp::lsp_types::Range {
+                    start: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 22,
+                    },
+                    end: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 26,
+                    },
+                }
+                .into(),
+                ..ReferenceData::default()
+            }),
+            Footnote(ReferenceData {
+                reference_text: "^3".into(),
+                range: tower_lsp::lsp_types::Range {
+                    start: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 26,
+                    },
+                    end: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 30,
+                    },
+                }
+                .into(),
+                ..ReferenceData::default()
+            }),
+        ];
 
         assert_eq!(parsed, expected)
     }
