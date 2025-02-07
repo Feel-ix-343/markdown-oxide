@@ -721,7 +721,7 @@ impl Reference {
 
     pub fn new<'a>(text: &'a str, file_name: &'a str) -> impl Iterator<Item = Reference> + 'a {
         static WIKI_LINK_RE: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r"\[\[(?<filepath>[^\[\]\|\.\#]+)?(\#(?<infileref>[^\[\]\.\|]+))?(?<ending>\.[^\# <>]+)?(\|(?<display>[^\[\]\.\|]+))?\]\]")
+            Regex::new(r"\[\[(?<filepath>[^\[\]\|\.\#]+)?(\#(?<infileref>[^\[\]\|]+))?(?<ending>\.[^\# <>]+)?(\|(?<display>[^\[\]\.\|]+))?\]\]")
 
                 .unwrap()
         }); // A [[link]] that does not have any [ or ] in it
@@ -740,7 +740,7 @@ impl Reference {
             });
 
         static MD_LINK_RE: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r"\[(?<display>[^\[\]\.]*)\]\(<?(?<filepath>(\.?\/)?[^\[\]\|\.\#<>]+)?(?<ending>\.[^\# <>]+)?(\#(?<infileref>[^\[\]\.\|<>]+))?>?\)")
+            Regex::new(r"\[(?<display>[^\[\]\.]*)\]\(<?(?<filepath>(\.?\/)?[^\[\]\|\.\#<>]+)?(?<ending>\.[^\# <>]+)?(\#(?<infileref>[^\[\]\|<>]+))?>?\)")
                 .expect("MD Link Not Constructing")
         }); // [display](relativePath)
 
@@ -1625,6 +1625,34 @@ mod vault_tests {
             },
             "link".into(),
             "heading".into(),
+        )];
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn wiki_link_heading_with_dot_parsing() {
+        let text = "This is a [[link#heading.]]";
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        let expected = vec![WikiHeadingLink(
+            ReferenceData {
+                reference_text: "link#heading.".into(),
+                range: tower_lsp::lsp_types::Range {
+                    start: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 10,
+                    },
+                    end: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 27,
+                    },
+                }
+                .into(),
+                ..ReferenceData::default()
+            },
+            "link".into(),
+            "heading.".into(),
         )];
 
         assert_eq!(parsed, expected)
