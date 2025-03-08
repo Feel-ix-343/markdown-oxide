@@ -52,6 +52,13 @@ jobs:
         shell: bash
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
 
+      - name: Update Cargo.toml with version number
+        shell: bash
+        run: |
+          sed --regexp-extended --in-place \
+            "s|^version = \"\\S+\"\|version = \"${VERSION}\"|" \
+            Cargo.toml
+
       - name: Build
         uses: actions-rs/cargo@v1
         with:
