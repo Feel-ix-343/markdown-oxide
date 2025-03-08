@@ -55,8 +55,11 @@ jobs:
       - name: Update Cargo.toml with version number
         shell: bash
         run: |
+          # strip leading "v" from tag
+          version_num="$(echo "${VERSION}" | cut --characters 2-)"
+          # edit version number in Cargo.toml
           sed --regexp-extended --in-place \
-            "s|^version = \"\\S+\"\|version = \"${VERSION}\"|" \
+            "s|^version = \"\\S+\"|version = \"${version_num}\"|" \
             Cargo.toml
 
       - name: Build
