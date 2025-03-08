@@ -56,10 +56,11 @@ jobs:
         shell: bash
         run: |
           # strip leading "v" from tag
-          version_num="$(echo "${VERSION}" | cut --characters 2-)"
+          version_num="$(echo "${VERSION}" | cut -c 2-)"
           # edit version number in Cargo.toml
-          sed --regexp-extended --in-place \
-            "s|^version = \"\\S+\"|version = \"${version_num}\"|" \
+          sed -r \
+            -i.bak \
+            -e "s|^version = \"\\S+\"|version = \"${version_num}\"|" \
             Cargo.toml
 
       - name: Build
