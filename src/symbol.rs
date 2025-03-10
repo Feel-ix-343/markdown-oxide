@@ -1,6 +1,10 @@
 use std::{iter, path::Path};
 
 use itertools::Itertools;
+use nucleo_matcher::{
+    pattern::{self, Normalization},
+    Matcher,
+};
 use tower_lsp::lsp_types::{
     DocumentSymbol, DocumentSymbolParams, DocumentSymbolResponse, Location, SymbolInformation,
     SymbolKind, Url, WorkspaceSymbolParams,
@@ -12,6 +16,16 @@ pub fn workspace_symbol(
     vault: &Vault,
     _params: &WorkspaceSymbolParams,
 ) -> Option<Vec<SymbolInformation>> {
+    // Initialize the fuzzy matcher
+    let mut matcher = Matcher::new(nucleo_matcher::Config::DEFAULT);
+    let pattern = pattern::Pattern::parse(
+        &_params.query,
+        pattern::CaseMatching::Smart,
+        Normalization::Smart,
+    );
+    let mut buf = Vec::new();
+
+    // Collect symbols and order by fuzzy matching score
     let referenceables = vault.select_referenceable_nodes(None);
     let symbol_informations = referenceables
         .into_iter()
@@ -46,6 +60,20 @@ pub fn workspace_symbol(
                 deprecated: None,
             })
         })
+        // Fuzzy matcher - compute match score
+        .map(|symbol| {
+            let score = pattern.score(
+                nucleo_matcher::Utf32Str::new(symbol.name.as_str(), &mut buf),
+                &mut matcher,
+            );
+            (score, symbol)
+        })
+        // Remove all items with no matches
+        .filter(|(score, _)| score.is_some() && score.unwrap() > 0)
+        // Sort by match score descending
+        .sorted_by(|(a, _), (b, _)| Option::cmp(b, a))
+        // Strip the score from the result
+        .map(|(_score, symbol)| symbol)
         .collect_vec();
 
     Some(symbol_informations)
