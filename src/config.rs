@@ -93,9 +93,11 @@ impl Settings {
                 }
             )?
             .build()
-            .map_err(|err| anyhow!("Build err: {err}"))?; // AI this should be an expect
+            .expect("Config build failed despite having defaults for all values");
 
-        let settings = settings.try_deserialize::<Settings>()?; // AI this should also be an expect
+        let settings = settings
+            .try_deserialize::<Settings>()
+            .expect("Settings deserialization failed despite having valid defaults");
 
         anyhow::Ok(settings)
     }
