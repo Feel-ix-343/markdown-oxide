@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
+use ::itertools::Itertools;
+use ::rayon::prelude::*;
+use ::tree_sitter::{Query, TextProvider};
+use ::tree_sitter_md::MarkdownParser;
+use ::tree_sitter_md::{inline_language, language};
 use tree_sitter::QueryCursor;
-use::tree_sitter_md::{MarkdownParser};
-use::tree_sitter_md::{language, inline_language};
-use::tree_sitter::{Query, TextProvider};
-use::itertools::Itertools;
-use::rayon::prelude::*;
 
 fn main() {
     // Read the ../TestFiles/Test.md
@@ -21,7 +21,6 @@ fn main() {
         .map(|p| (p.to_str().unwrap().to_owned(), std::fs::read(p).unwrap()))
         .collect();
 
-
     let links: Vec<(&String, Vec<&str>)> = test_files
         .par_iter()
         .map(|(file, source)| {
@@ -32,17 +31,16 @@ fn main() {
 
     // Pring the matches
     println!("LOOK HERE; the links in the file:\n{:#?}", links)
-
 }
 
 struct MarkdownLinkParser {
-    parser: MarkdownParser
+    parser: MarkdownParser,
 }
 
 impl MarkdownLinkParser {
     fn new() -> MarkdownLinkParser {
         MarkdownLinkParser {
-            parser: MarkdownParser::default()
+            parser: MarkdownParser::default(),
         }
     }
     fn links_for_file<'a>(self, source_code: &'a [u8]) -> Vec<&'a str> {
@@ -69,12 +67,17 @@ impl MarkdownLinkParser {
         let links: Vec<&str> = inline_trees // There are multiple inline trees
             .iter() // Iterate over each of them
             .flat_map(|tree| {
-                let captures = query_cursor.captures(&query, tree.root_node(), text_provider).collect_vec();
-                return captures.into_iter().flat_map(|(q, _)| q.captures).map(|c| c.node.utf8_text(source_code).unwrap()).collect_vec()
+                let captures = query_cursor
+                    .captures(&query, tree.root_node(), text_provider)
+                    .collect_vec();
+                return captures
+                    .into_iter()
+                    .flat_map(|(q, _)| q.captures)
+                    .map(|c| c.node.utf8_text(source_code).unwrap())
+                    .collect_vec();
             }) // Map each tree to its query captures, then flatten all trees to a collection of their query captures
             .collect(); // TODO: I still want to refactor this more
 
-        return links
+        return links;
     }
 }
-
