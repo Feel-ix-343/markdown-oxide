@@ -43,19 +43,19 @@ pub enum EmbeddedBlockTransclusionLength {
 }
 
 impl Settings {
-    pub fn new(root_dir: &Path, disable_semantic_tokens: bool) -> Settings {
+    fn build_settings(root_dir: &Path, disable_semantic_tokens: bool) -> anyhow::Result<Settings> {
         let obsidian_daily_note_config = obsidian_daily_note_config(root_dir).unwrap_or_default();
         let obsidian_new_file_folder_path = obsidian_new_file_folder_path(root_dir);
         let expanded = shellexpand::tilde("~/.config/moxide/settings");
+        
+        let root_dir_str = root_dir
+            .to_str()
+            .ok_or_else(|| anyhow!("Can't convert root_dir to str"))?;
+
         let settings = Config::builder()
             .add_source(File::with_name(&expanded).required(false))
             .add_source(
-                File::with_name(&format!(
-                    "{}/.moxide",
-                    root_dir
-                        .to_str()
-                        .expect("Can't convert root_dir to str")
-                ))
+                File::with_name(&format!("{}/.moxide", root_dir_str))
                 .required(false),
             )
             .set_default(
@@ -91,16 +91,15 @@ impl Settings {
                     true => Some(false),
                     false => None
                 }
-            )
-            .expect("Failed to set config defaults")
-            .build()
-            .expect("Config build failed despite having defaults for all values");
+            )?
+            .build()?;
 
-        let settings = settings
-            .try_deserialize::<Settings>()
-            .expect("Settings deserialization failed despite having valid defaults");
+        settings.try_deserialize().map_err(|e| anyhow!("Failed to deserialize settings: {}", e))
+    }
 
-        settings
+    pub fn new(root_dir: &Path, disable_semantic_tokens: bool) -> Settings {
+        Self::build_settings(root_dir, disable_semantic_tokens)
+            .expect("Failed to build settings despite having valid defaults")
     }
 }
 
