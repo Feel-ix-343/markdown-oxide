@@ -43,7 +43,7 @@ pub enum EmbeddedBlockTransclusionLength {
 }
 
 impl Settings {
-    pub fn new(root_dir: &Path, capabilities: &ClientCapabilities) -> anyhow::Result<Settings> {
+    pub fn new(root_dir: &Path, disable_semantic_tokens: bool) -> anyhow::Result<Settings> {
         let obsidian_daily_note_config = obsidian_daily_note_config(root_dir).unwrap_or_default();
         let obsidian_new_file_folder_path = obsidian_new_file_folder_path(root_dir);
         let expanded = shellexpand::tilde("~/.config/moxide/settings");
@@ -87,17 +87,15 @@ impl Settings {
             .set_default("block_transclusion_length", "Full")?
             .set_override_option(
                 "semantic_tokens",
-                capabilities.text_document.as_ref().and_then(|it| {
-                    match it.semantic_tokens.is_none() {
-                        true => Some(false),
-                        false => None,
-                    }
-                }),
+                match disable_semantic_tokens {
+                    true => Some(false),
+                    false => None
+                }
             )?
             .build()
-            .map_err(|err| anyhow!("Build err: {err}"))?;
+            .map_err(|err| anyhow!("Build err: {err}"))?; // AI this should be an expect
 
-        let settings = settings.try_deserialize::<Settings>()?;
+        let settings = settings.try_deserialize::<Settings>()?; // AI this should also be an expect
 
         anyhow::Ok(settings)
     }
