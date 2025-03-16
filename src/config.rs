@@ -97,9 +97,12 @@ impl Settings {
         settings.try_deserialize().map_err(|e| anyhow!("Failed to deserialize settings: {}", e))
     }
 
+    /// This will fail if settings is defined wrongly by the user. This is the case because if the user defines some config, and that
+    /// config is not resolved, then the user's software will not behave the way the user intentds, which is a contradictory case that 
+    /// we won't handle.
     pub fn new(root_dir: &Path, disable_semantic_tokens: bool) -> Settings {
         Self::build_settings(root_dir, disable_semantic_tokens)
-            .expect("Failed to build settings despite having valid defaults")
+            .expect("Failed to build settings despite having valid defaults. There's likely an error in your settings file, and note that this would not fail if the settings file is not defined")
     }
 }
 
