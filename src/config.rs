@@ -43,7 +43,7 @@ pub enum EmbeddedBlockTransclusionLength {
 }
 
 impl Settings {
-    pub fn new(root_dir: &Path, disable_semantic_tokens: bool) -> anyhow::Result<Settings> {
+    pub fn new(root_dir: &Path, disable_semantic_tokens: bool) -> Settings {
         let obsidian_daily_note_config = obsidian_daily_note_config(root_dir).unwrap_or_default();
         let obsidian_new_file_folder_path = obsidian_new_file_folder_path(root_dir);
         let expanded = shellexpand::tilde("~/.config/moxide/settings");
@@ -54,7 +54,7 @@ impl Settings {
                     "{}/.moxide",
                     root_dir
                         .to_str()
-                        .ok_or(anyhow!("Can't convert root_dir to str"))?
+                        .expect("Can't convert root_dir to str")
                 ))
                 .required(false),
             )
@@ -91,7 +91,8 @@ impl Settings {
                     true => Some(false),
                     false => None
                 }
-            )?
+            )
+            .expect("Failed to set config defaults")
             .build()
             .expect("Config build failed despite having defaults for all values");
 
@@ -99,7 +100,7 @@ impl Settings {
             .try_deserialize::<Settings>()
             .expect("Settings deserialization failed despite having valid defaults");
 
-        anyhow::Ok(settings)
+        settings
     }
 }
 
