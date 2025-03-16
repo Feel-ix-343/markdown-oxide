@@ -22,7 +22,7 @@ use tower_lsp::lsp_types::Position;
 use walkdir::WalkDir;
 
 impl Vault {
-    pub fn construct_vault(context: &Settings, root_dir: &Path) -> Vault { // AI? where would Err be returned?
+    pub fn construct_vault(context: &Settings, root_dir: &Path) -> Vault {
         let md_file_paths = WalkDir::new(root_dir)
             .into_iter()
             .filter_entry(|e| {

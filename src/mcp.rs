@@ -97,10 +97,11 @@ pub async fn start(root_dir: PathBuf) -> Result<()> {
             Some("initialize") => {
                 log_to_file("Handling initialize request")?;
 
-
-                // AI! time this and log the time
+                // Time the initialization
+                let start = std::time::Instant::now();
                 oxide = Some(Oxide::new(&root_dir));
-                log_to_file("Handling initialize request")?;
+                let duration = start.elapsed();
+                log_to_file(&format!("Oxide initialization took: {:?}", duration))?;
 
                 json!({
                     "jsonrpc": "2.0",
