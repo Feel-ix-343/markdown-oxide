@@ -25,7 +25,73 @@ pub async fn start(root_dir: PathBuf) -> Result<()> {
     let input = std::io::stdin();
     let mut output = std::io::stdout();
 
-    let mut oxide: Option<Oxide> = None;
+    // Create Oxide wrapped in Arc<RwLock> so we can update it from the watcher thread
+    let oxide_arc = Arc::new(RwLock::new(None::<Oxide>));
+
+    // Clone for the file watcher
+    let oxide_watcher = oxide_arc.clone();
+    let root_dir_clone = root_dir.clone();
+
+    // Spawn a tokio task for file watching
+    tokio::spawn(async move {
+        use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+
+        // Create a channel to receive events
+        let (tx, mut rx) = tokio::sync::mpsc::channel(100);
+
+        // Create the file watcher
+        let mut watcher = RecommendedWatcher::new(
+            move |result: Result<Event, notify::Error>| {
+                if let Ok(event) = result {
+                    // Only consider events for markdown files
+                    if event
+                        .paths
+                        .iter()
+                        .any(|p| p.extension().map_or(false, |ext| ext == "md"))
+                    {
+                        let _ = tx.try_send(event);
+                    }
+                }
+            },
+            Config::default(),
+        )
+        .expect("Failed to create file watcher");
+
+        // Start watching the vault directory
+        if let Err(e) = watcher.watch(&root_dir_clone, RecursiveMode::Recursive) {
+            log_with_level("error", &format!("Error watching directory: {}", e)).unwrap_or(());
+        } else {
+            log("File watcher started successfully").unwrap_or(());
+        }
+
+        // Process events
+        while let Some(event) = rx.recv().await {
+            // Only react to create, modify, or delete events
+            match event.kind {
+                EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_) => {
+                    log(&format!("File change detected: {:?}", event)).unwrap_or(());
+
+                    // Quick lock to check if Oxide is initialized
+                    {
+                        let mut oxide_guard = oxide_watcher.write().await;
+                        match *oxide_guard {
+                            Some(_) => {
+                                // Oxide exists, rebuild it
+                                let new_oxide = Oxide::new(&root_dir_clone);
+                                *oxide_guard = Some(new_oxide);
+                                log("Oxide instance rebuilt successfully").unwrap_or(());
+                            }
+                            None => {
+                                log("Skipping vault rebuild - Oxide not yet initialized")
+                                    .unwrap_or(());
+                            }
+                        }
+                    }
+                }
+                _ => {} // Ignore other event types
+            }
+        }
+    });
 
     // Log server start
     log_to_file("MCP server started")?;
@@ -104,7 +170,14 @@ pub async fn start(root_dir: PathBuf) -> Result<()> {
 
                 // Time the initialization
                 let start = std::time::Instant::now();
-                oxide = Some(Oxide::new(&root_dir));
+                let new_oxide = Oxide::new(&root_dir);
+
+                // Store the initialized Oxide in the RwLock
+                {
+                    let mut oxide_guard = oxide_arc.write().await;
+                    *oxide_guard = Some(new_oxide);
+                }
+
                 let duration = start.elapsed();
                 log_to_file(&format!("Oxide initialization took: {:?}", duration))?;
 
@@ -144,8 +217,11 @@ pub async fn start(root_dir: PathBuf) -> Result<()> {
                 })
             }
             Some(method) => {
-                let oxide =
-                    oxide.as_ref().expect("Oxide should be initialized after MCP initialization life cycle");
+                // Get a read lock on the oxide
+                let oxide_guard = oxide_arc.read().await;
+                let oxide = oxide_guard
+                    .as_ref()
+                    .expect("Oxide should be initialized after MCP initialization life cycle");
 
                 match method {
                     "tools/list" => {
@@ -172,10 +248,30 @@ pub async fn start(root_dir: PathBuf) -> Result<()> {
                         },
                         {
                             "name": "daily_context",
-                            "description": "Get the user's daily note",
+                            "description": "Get the user's daily note. You should almost always call this when answering questions",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {},
+                                "$schema": "http://json-schema.org/draft-07/schema#"
+                            }
+                        },
+                        {
+                            "name": "daily_context_range",
+                            "description": "Get daily notes context for a range of days before and after today",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "past_days": {
+                                        "type": "integer",
+                                        "description": "Number of past days to include",
+                                        "default": 5
+                                    },
+                                    "future_days": {
+                                        "type": "integer",
+                                        "description": "Number of future days to include",
+                                        "default": 5
+                                    }
+                                },
                                 "$schema": "http://json-schema.org/draft-07/schema#"
                             }
                         }
@@ -251,7 +347,68 @@ pub async fn start(root_dir: PathBuf) -> Result<()> {
                                         })
                                     }
                                 }
-                            },
+                            }
+                            Some("daily_context_range") => {
+                                log("Processing daily_context_range request")?;
+
+                                let arguments = params
+                                    .get("arguments")
+                                    .cloned()
+                                    .unwrap_or_else(|| json!({}));
+
+                                let past_days = arguments
+                                    .get("past_days")
+                                    .and_then(|d| d.as_i64())
+                                    .unwrap_or(5)
+                                    as usize;
+
+                                let future_days = arguments
+                                    .get("future_days")
+                                    .and_then(|d| d.as_i64())
+                                    .unwrap_or(5)
+                                    as usize;
+
+                                log(&format!(
+                                    "Getting daily context range: past_days={}, future_days={}",
+                                    past_days, future_days
+                                ))?;
+
+                                match oxide.daily_note_context_range(past_days, future_days) {
+                                    Ok(context) => {
+                                        log(&format!(
+                                            "Daily context range generated, length: {}",
+                                            context.len()
+                                        ))?;
+
+                                        json!({
+                                            "jsonrpc": "2.0",
+                                            "id": id,
+                                            "result": {
+                                                "content": [
+                                                    {
+                                                        "type": "text",
+                                                        "text": context
+                                                    }
+                                                ]
+                                            }
+                                        })
+                                    }
+                                    Err(e) => {
+                                        let error_msg =
+                                            format!("Error generating daily context range: {}", e);
+                                        log(&error_msg)?;
+
+                                        json!({
+                                            "jsonrpc": "2.0",
+                                            "id": id,
+                                            "error": {
+                                                "code": -32603,
+                                                "message": error_msg
+                                            }
+                                        })
+                                    }
+                                }
+                            }
                             _ => {
                                 log_to_file(&format!("Unknown tool: {:?}", tool_name))?;
                                 json!({
@@ -369,8 +526,11 @@ mod connector {
             
             // Get paths for daily notes
             let daily_note_format = &self.settings.dailynote;
-            let daily_note_path = self.vault.root_dir().join(&self.settings.daily_notes_folder);
-            
+            let daily_note_path = self
+                .vault
+                .root_dir()
+                .join(&self.settings.daily_notes_folder);
+
             // Use today's date
             let datetime = Local::now().naive_local();
             
@@ -380,6 +540,56 @@ mod connector {
             
             // Return contextualized document for this path
             self.contextualize_doc(&path)
+        }
+
+        pub fn daily_note_context_range(
+            &self,
+            past_days: usize,
+            future_days: usize,
+        ) -> Result<String, anyhow::Error> {
+            use chrono::{Duration, Local, NaiveDate};
+
+            // Get today's date
+            let today = Local::now().naive_local().date();
+            let daily_note_format = &self.settings.dailynote;
+            let daily_note_path = self
+                .vault
+                .root_dir()
+                .join(&self.settings.daily_notes_folder);
+
+            // Generate a range of dates from past_days ago to future_days ahead
+            let start_date = today - Duration::days(past_days as i64);
+            let end_date = today + Duration::days(future_days as i64);
+
+            let mut result = String::new();
+            let mut current_date = start_date;
+
+            // For each date in the range, try to get the daily note
+            while current_date <= end_date {
+                // Format the date according to the configured pattern
+                let filename = current_date.format(daily_note_format).to_string();
+                let path = daily_note_path.join(&filename).with_extension("md");
+
+                // Check if the file exists in the vault
+                if let Some(rope) = self.vault.ropes.get(&path) {
+                    // Add a date header
+                    result.push_str(&format!(
+                        "# Daily Note: {}\n\n",
+                        current_date.format("%Y-%m-%d")
+                    ));
+
+                    // Add the content
+                    result.push_str(&rope.to_string());
+                    result.push_str("\n\n---\n\n");
+                }
+
+                // Move to the next day
+                current_date = current_date
+                    .succ_opt()
+                    .unwrap_or(current_date + Duration::days(1));
+            }
+
+            Ok(result)
         }
 
         /// Given a document reference, return a contextualized version of the document.
