@@ -7,7 +7,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::vault::Vault;
 
 // Helper function to log to a file for debugging
 fn log_to_file(message: &str) -> Result<()> {
@@ -58,10 +57,8 @@ pub async fn start(root_dir: PathBuf) -> Result<()> {
         .expect("Failed to create file watcher");
 
         // Start watching the vault directory
-        if let Err(e) = watcher.watch(&root_dir_clone, RecursiveMode::Recursive) {
-            log_with_level("error", &format!("Error watching directory: {}", e)).unwrap_or(());
+        if let Err(_) = watcher.watch(&root_dir_clone, RecursiveMode::Recursive) {
         } else {
-            log("File watcher started successfully").unwrap_or(());
         }
 
         // Process events
@@ -69,7 +66,6 @@ pub async fn start(root_dir: PathBuf) -> Result<()> {
             // Only react to create, modify, or delete events
             match event.kind {
                 EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_) => {
-                    log(&format!("File change detected: {:?}", event)).unwrap_or(());
 
                     // Quick lock to check if Oxide is initialized
                     {
@@ -79,11 +75,8 @@ pub async fn start(root_dir: PathBuf) -> Result<()> {
                                 // Oxide exists, rebuild it
                                 let new_oxide = Oxide::new(&root_dir_clone);
                                 *oxide_guard = Some(new_oxide);
-                                log("Oxide instance rebuilt successfully").unwrap_or(());
                             }
                             None => {
-                                log("Skipping vault rebuild - Oxide not yet initialized")
-                                    .unwrap_or(());
                             }
                         }
                     }
@@ -257,7 +250,7 @@ pub async fn start(root_dir: PathBuf) -> Result<()> {
                         },
                         {
                             "name": "daily_context_range",
-                            "description": "Get daily notes context for a range of days before and after today",
+                            "description": "Get daily notes context for a range of days before and after today. If you cannot find information in daily context, you should use this method to search harder",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
@@ -349,7 +342,6 @@ pub async fn start(root_dir: PathBuf) -> Result<()> {
                                 }
                             }
                             Some("daily_context_range") => {
-                                log("Processing daily_context_range request")?;
 
                                 let arguments = params
                                     .get("arguments")
@@ -368,17 +360,9 @@ pub async fn start(root_dir: PathBuf) -> Result<()> {
                                     .unwrap_or(5)
                                     as usize;
 
-                                log(&format!(
-                                    "Getting daily context range: past_days={}, future_days={}",
-                                    past_days, future_days
-                                ))?;
 
                                 match oxide.daily_note_context_range(past_days, future_days) {
                                     Ok(context) => {
-                                        log(&format!(
-                                            "Daily context range generated, length: {}",
-                                            context.len()
-                                        ))?;
 
                                         json!({
                                             "jsonrpc": "2.0",
@@ -396,7 +380,6 @@ pub async fn start(root_dir: PathBuf) -> Result<()> {
                                     Err(e) => {
                                         let error_msg =
                                             format!("Error generating daily context range: {}", e);
-                                        log(&error_msg)?;
 
                                         json!({
                                             "jsonrpc": "2.0",
@@ -511,6 +494,7 @@ mod connector {
         path: PathBuf,
         reference_text: String,
         content: String,
+        backlinks: Vec<LinkedContent>,
     }
 
     impl Oxide {
@@ -547,7 +531,7 @@ mod connector {
             past_days: usize,
             future_days: usize,
         ) -> Result<String, anyhow::Error> {
-            use chrono::{Duration, Local, NaiveDate};
+            use chrono::{Duration, Local};
 
             // Get today's date
             let today = Local::now().naive_local().date();
@@ -624,10 +608,14 @@ mod connector {
                             .map(|rope| rope.to_string())
                             .unwrap_or_default();
 
+                        // Find backlinks to this linked entity
+                        let linked_entity_backlinks = self.get_backlinks_for_path(target_path);
+
                         LinkedContent {
                             path: target_path.to_path_buf(),
                             reference_text: reference.data().reference_text.clone(),
                             content: target_rope,
+                            backlinks: linked_entity_backlinks,
                         }
                     })
                 })
@@ -662,6 +650,7 @@ mod connector {
                             path: ref_path.to_path_buf(),
                             reference_text: reference.data().reference_text.clone(),
                             content: ref_rope,
+                            backlinks: Vec::new(), // No need for nested backlinks for backlinks themselves
                         })
                     } else {
                         None
@@ -674,6 +663,44 @@ mod connector {
                 outgoing_links,
                 backlinks,
             })
+        }
+        
+        /// Helper function to get backlinks for a specific path
+        fn get_backlinks_for_path(&self, target_path: &Path) -> Vec<LinkedContent> {
+            self.vault
+                .select_references(None)
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|(ref_path, reference)| {
+                    // Filter references that come from the target path itself
+                    if ref_path == target_path {
+                        return None;
+                    }
+
+                    // Check if this reference points to our target
+                    let md_file = self.vault.md_files.get(target_path)?;
+                    let target_path_buf = target_path.to_path_buf();
+                    let referenceable = Referenceable::File(&target_path_buf, md_file);
+
+                    if referenceable.matches_reference(self.vault.root_dir(), reference, ref_path) {
+                        let ref_rope = self
+                            .vault
+                            .ropes
+                            .get(ref_path)
+                            .map(|rope| rope.to_string())
+                            .unwrap_or_default();
+
+                        Some(LinkedContent {
+                            path: ref_path.to_path_buf(),
+                            reference_text: reference.data().reference_text.clone(),
+                            content: ref_rope,
+                            backlinks: Vec::new(), // No need for nested backlinks of backlinks
+                        })
+                    } else {
+                        None
+                    }
+                })
+                .collect()
         }
     }
 
@@ -688,32 +715,57 @@ mod connector {
             // Add outgoing links section
             if !self.outgoing_links.is_empty() {
                 result.push_str("---\n\n");
-                result.push_str("Outgoing Links:\n\n");
+                result.push_str("# Outgoing Links:\n\n");
                 
                 for link in &self.outgoing_links {
                     result.push_str("---\n\n");
-                    result.push_str(&format!("Link to: {}\n", link.reference_text));
+                    result.push_str(&format!("## Link to: {}\n", link.reference_text));
                     result.push_str(&format!("File path: {}\n\n", link.path.display()));
                     
-                    // Include the full content
+                    // Include the full content with markdown separator for proper formatting
+                    result.push_str("```md\n");
                     result.push_str(&link.content);
-                    result.push_str("\n\n");
+                    result.push_str("\n```\n\n");
+                    
+                    // Include backlinks to this linked entity
+                    if !link.backlinks.is_empty() {
+                        result.push_str("### Backlinks to this linked entity:\n\n");
+                        
+                        for backlink in &link.backlinks {
+                            result.push_str(&format!("#### Referenced from: {}\n", backlink.path.display()));
+                            result.push_str(&format!("Reference text: {}\n\n", backlink.reference_text));
+                            
+                            // Include the backlink content with markdown separator for proper formatting
+                            result.push_str("```md\n");
+                            
+                            // Include summary of the backlink content (first 400 chars)
+                            let summary = if backlink.content.len() > 400 {
+                                format!("{}...", &backlink.content[..400])
+                            } else {
+                                backlink.content.clone()
+                            };
+                            
+                            result.push_str(&summary);
+                            result.push_str("\n```\n\n");
+                        }
+                    }
                 }
             }
             
             // Add backlinks section
             if !self.backlinks.is_empty() {
                 result.push_str("---\n\n");
-                result.push_str("Backlinks:\n\n");
+                result.push_str("# Backlinks:\n\n");
                 
                 for link in &self.backlinks {
                     result.push_str("---\n\n");
-                    result.push_str(&format!("Referenced from: {}\n", link.path.display()));
+                    result.push_str(&format!("## Referenced from: {}\n", link.path.display()));
                     result.push_str(&format!("Reference text: {}\n\n", link.reference_text));
                     
-                    // Include the full content
+                    // Include the full content with markdown separator for proper formatting
+                    result.push_str("```md\n");
                     result.push_str(&link.content);
-                    result.push_str("\n\n");
+                    result.push_str("\n```\n\n");
                 }
             }
 
