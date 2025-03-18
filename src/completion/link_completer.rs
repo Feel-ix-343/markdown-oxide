@@ -159,9 +159,25 @@ impl<'a> LinkCompleter<'a> for MarkdownLinkCompleter<'a> {
             ""
         };
 
-        let link_ref_text = match refname.contains(' ') {
-            true => format!("<{}{}>", refname, ext),
-            false => format!("{}{}", refname, ext),
+        let format_link = |name: &str, suffix: &str| {
+            if refname.contains(' ') {
+                format!("<{}{}{}>", name, ext, suffix)
+            } else {
+                format!("{}{}{}", name, ext, suffix)
+            }
+        };
+
+        // Handle block links foobar#^123 -> foobar.md#^123
+        let link_ref_text = if let Some(pos) = refname.find("#^") {
+            let (name, suffix) = refname.split_at(pos);
+            format_link(name, suffix)
+        // Handle headings links foobar#myheading -> foobar.md#myheading
+        } else if let Some(pos) = refname.find('#') {
+            let (name, suffix) = refname.split_at(pos);
+            format_link(name, suffix)
+        } else {
+            // default case foobar -> foobar.md
+            format_link(refname, "")
         };
 
         CompletionTextEdit::Edit(TextEdit {
