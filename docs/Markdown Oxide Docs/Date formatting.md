@@ -1,28 +1,60 @@
+# Date Formatting in Markdown Oxide
 
+Markdown Oxide uses the [Chrono](https://docs.rs/chrono/latest/chrono/) Rust library for date formatting. This allows you to customize how dates appear in your daily notes and other date-related features.
 
-The date formatting in the config follows the rust library Chrono's formatting. 
+## Configuration
 
-The full specification can be found here: https://docs.rs/chrono/latest/chrono/format/strftime/index.html
+You can configure the date format pattern in your `.moxide` configuration file:
 
-Some examples are:
+```yaml
+dailynote: "%Y-%m-%d" # Default format: 2024-07-15
+```
 
-- Year
-    * `%Y`: Is the four digit year
-    * `%y`: Is the two digit year: 1979 -> 79
-- Month
-    * `%m`: Is the two digit month
-    * `%b`: Is the abbreviated month name; 3 letters
-    * `%B`: Full moth name or 3 letter abbreviation
-- Day
-    * `%d`: Is the two digit day of month
-    * `%e`: Is the one or two digit day of month
-    * `%a`: 3 letter abbreviated weekday name
-    * `%A`: Abbreviated or full weekday name
+## Format Specifiers
 
+Markdown Oxide supports the standard Chrono date format specifiers, which are similar to strftime patterns used in many programming languages.
 
+### Common Format Specifiers
 
-+ =>
-    * (the default) `YYYY-MM-DD` -> `%Y-%m-%d`
-    * "1 Jan 2024" => `%d %b %Y`
+#### Year
+
+| Specifier | Description  | Example |
+| --------- | ------------ | ------- |
+| `%Y`      | 4-digit year | 2024    |
+| `%y`      | 2-digit year | 24      |
+
+#### Month
+
+| Specifier | Description                | Example |
+| --------- | -------------------------- | ------- |
+| `%m`      | Zero-padded month          | 07      |
+| `%-m`     | Month without leading zero | 7       |
+| `%B`      | Full month name            | July    |
+| `%b`      | Abbreviated month name     | Jul     |
+
+#### Day
+
+| Specifier | Description                       | Example |
+| --------- | --------------------------------- | ------- |
+| `%d`      | Zero-padded day of month          | 05      |
+| `%-d`     | Day of month without leading zero | 5       |
+| `%A`      | Full weekday name                 | Monday  |
+| `%a`      | Abbreviated weekday name          | Mon     |
+
+### Example Formats
+
+| Description                   | Format String | Example Output  |
+| ----------------------------- | ------------- | --------------- |
+| ISO format (default)          | `%Y-%m-%d`    | 2024-07-15      |
+| US style with full month      | `%B %d, %Y`   | July 15, 2024   |
+| Short format with abbr. month | `%d %b %Y`    | 15 Jul 2024     |
+| Day-first format              | `%d/%m/%Y`    | 15/07/2024      |
+| With weekday                  | `%A, %B %d`   | Monday, July 15 |
+
+## Obsidian Compatibility
+
+If you're migrating from Obsidian, Markdown Oxide automatically converts Moment.js date formats (used by Obsidian) to Chrono format.
+
+For full documentation on all available format specifiers, see the [Chrono documentation](https://docs.rs/chrono/latest/chrono/format/strftime/index.html).
 
 ---

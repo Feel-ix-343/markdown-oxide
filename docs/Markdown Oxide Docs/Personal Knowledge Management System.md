@@ -1,6 +1,6 @@
 ---
 aliases:
-    - PKM
+  - PKM
 ---
 
 PKM: Personal Knowledge Management System

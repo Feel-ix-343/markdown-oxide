@@ -1,41 +1,71 @@
+# Block Queries for Enhanced Linking
 
+One of Markdown Oxide's powerful features is the ability to link directly to specific blocks (paragraphs, list items) within your notes. Block queries make this process more efficient by providing targeted filtering.
 
-When linking to a [block](Block), enter a query with specific filters to easily find the block that you want. 
+## The Challenge of Block Discovery
 
-## The Problem
+Finding the exact block you want to link to can be challenging in a large knowledge base. Standard block completions offer full-text search across your vault, but this approach has limitations:
 
-Perhaps the hardest part of block linking is finding the block that you want to link to. [Markdown Oxide v0 block completions](<Block Completions>) allow users to do a full-text search, but this rarely gets us the results we want
+- **Daily note overload**: When you want to link to content in yesterday's note, searching across all notes makes finding it difficult
+- **Research organization**: As you collect thoughts in various notes, retrieving specific ideas can be like finding a needle in a haystack
+- **Context specificity**: Sometimes you need to find blocks related to specific topics or within certain documents
 
-For example:
+## How Block Queries Solve This
 
-- You want to link to a block that was in yesterday's note, but current markdown oxide does not allow you to search the text of only yesterday's note, so you have to search all text in your vault, and you cannot find what you want. 
-- While researching, you write down your thoughts in a list, but when it is time to outline your writing, you struggle to find these thoughts. You know you wrote something down, you want to link to it, but you cannot find it!
+Block queries provide a targeted approach to finding and linking blocks by allowing you to apply filters before performing a text search. This powerful feature surfaces relevant blocks through your editor's LSP completions. ^4b1be
 
+## Query Syntax and Usage
 
+To use block queries, start typing a Markdown or Wiki link with specific query patterns:
 
-## Block Queries as the solution
+```markdown
+[[{query}]]    # Wiki-link format
+[{display}]({query})    # Markdown link format
+```
 
-Block Queries allow you to link to the blocks that you want by first specifying filters, then entering a text search. You do this by entering a query (with markdown-link style syntax) in your notes document, and results are presented through LSP completions.     ^4b1be
+Where:
 
-### Filters and syntax
+- `{query}` is your filter expression
+- `{display}` (optional in Markdown links) is display text that remains unchanged when the completion is selected
 
-The query syntax is quite simple. Declare the query with an empty Markdown Link or Wiki link: `[[{query}` or `[{display}]({query}` where `query` is the query and `display`, if you are using markdown links, any display text will remain unchanged. 
+### Available Filters
 
-Here are the filters[^1]. The section in code blocks replaces `{query}` above. `{search}` is the search string that the selected block will be fuzzy matched by. 
+The following filters can be used in your queries:
 
-- [ ] File: filter blocks by which file they are contained in
-    - [ ] Current file: `# {search}`. Note the space
-    - [ ] File name: `{filename}# {search}`
-    - [ ] Daily note syntax: `{daily-note name}# {search}` where daily-note name is the [[Daily Notes#Completion Names|daily-note relative name]]
-- [ ] Outgoing references: filter blocks by outgoing references they have or do not have: `out:{refname}`
-- [ ] ...
+| Filter Type         | Syntax                   | Description                                                     |
+| ------------------- | ------------------------ | --------------------------------------------------------------- |
+| Current file        | `# {search}`             | Search only in the current file                                 |
+| Specific file       | `{filename}# {search}`   | Search in a specific file                                       |
+| Daily note          | `{daily-note}# {search}` | Search in a daily note using [relative names](Daily%20Notes.md) |
+| Outgoing references | `out:{refname}`          | Filter blocks that link to specific references                  |
 
+### Examples
 
+```markdown
+[[# meeting notes]]    # Find blocks containing "meeting notes" in current file
+[[yesterday# action items]]    # Find "action items" in yesterday's daily note
+```
 
-### Query syntax
+> [!note] Development Status
+> Block queries functionality is still under development. While the basic block structure and linking are fully implemented (using the `^blockid` syntax), the advanced query filtering described here represents planned functionality.
+>
+> Currently, block links work with the following syntax:
+>
+> - `[[file#^blockid]]` (Wiki-style links)
+> - `[display text](file#^blockid)` (Markdown links)
 
+## Implementation Details
 
-How will this work? You will try 
+Markdown Oxide identifies blocks in your notes and allows you to reference them:
 
+1. **Block ID**: Each block can have a unique ID preceded by a caret (`^`), such as `^ab12c`
+2. **Auto-ID Generation**: When you reference an unindexed block, the system can automatically generate a random ID
+3. **Block Navigation**: You can navigate to blocks using "go to definition" in your editor
 
-[^1]: ![[Documentation Notes#^workinprogress]]
+## Future Enhancements
+
+This feature is under active development. Future updates will include:
+
+- Tag filters to find blocks with specific tags
+- Date range filters for temporal queries
+- Combining multiple filters for complex queries

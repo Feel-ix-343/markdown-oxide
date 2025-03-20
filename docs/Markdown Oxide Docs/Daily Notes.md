@@ -1,224 +1,95 @@
+# Daily Notes in Markdown Oxide
 
+Daily notes are a cornerstone of many knowledge management systems. Markdown Oxide makes creating, navigating, and linking to daily notes seamless across any supported editor.
 
+## Configuration
 
+Daily notes follow a configurable date format (default: `%Y-%m-%d`) and can be stored in a dedicated folder. You can customize:
 
+- Date format pattern
+- Daily notes folder location
+- Default location for new daily notes
 
-# Relative Names
+These settings can be configured either through a `.moxide` config file in your vault root or through your editor's settings.
 
-## Completion Names
+## Using Relative Names in Links
 
-There are a set of predefined relative names for referencing your daily notes. 
+Markdown Oxide provides smart completions for linking to daily notes using natural language date references.
 
-Here it is: 
+### Predefined Relative Names
 
 ![[Daily Notes#^predefinedNames]]
 
-These can be used in completions by `[[{relativename}` or `[{display?}]({relativename}`. 
+These can be used in completions by typing:
 
-- For example
-    * write `[[today` + select completion -> `[[2024-07-14]]`
-    * write `[[tomorrow` + select completion -> `[[2024-07-15]]`
-    * write `[](tomorrow` + select completion -> `[tomorrow](2024-07-15)`
-    * write `[Tomorrow](tomorrow` + select completion -> `[Tomorrow](2024-07-15)`
-        + notice that the display text was not changed
+- `[[{relativename}` for wiki-links
+- `[{display?}]({relativename})` for markdown links
 
-## Opening Daily Notes
+### Examples
 
-These follow https://docs.rs/fuzzydate/latest/fuzzydate/ where the relative name must follow the specification for `<datetime>` in...
+When you type these patterns and select the completion:
 
-- <details><summary>fuzzydate's specification</summary>
+| What you type         | What gets inserted       |
+| --------------------- | ------------------------ |
+| `[[today`             | `[[2024-07-14]]`         |
+| `[[tomorrow`          | `[[2024-07-15]]`         |
+| `[](tomorrow`         | `[tomorrow](2024-07-15)` |
+| `[Tomorrow](tomorrow` | `[Tomorrow](2024-07-15)` |
 
-    ```
-    <datetime> ::= <time>
-                 | <date> <time>
-                 | <date> , <time>
-                 | <duration> after <datetime>
-                 | <duration> from <datetime>
-                 | <duration> before <datetime>
-                 | <duration> ago
-                 | now
+Note: The display text in markdown links is preserved when you select a completion.
 
-    <article> ::= a
-               | an
-               | the
+## Navigating to Daily Notes
 
-    <date> ::= today
-             | tomorrow
-             | yesterday
-             | <num> / <num> / <num>
-             | <num> - <num> - <num>
-             | <num> . <num> . <num>
-             | <month> <num> <num>
-             | <relative_specifier> <unit>
-             | <relative_specifier> <weekday>
-             | <weekday>
+Markdown Oxide provides powerful navigation capabilities for daily notes using natural language date expressions.
 
-    <relative_specifier> ::= this
-                           | next
-                           | last
+### Natural Language Date Support
 
-    <weekday> ::= monday
-                | tuesday
-                | wednesday
-                | thursday
-                | friday
-                | saturday
-                | sunday
-                | mon
-                | tue
-                | wed
-                | thu
-                | fri
-                | sat
-                | sun
+Markdown Oxide uses the [fuzzydate](https://docs.rs/fuzzydate/latest/fuzzydate/) library to parse natural language date expressions. This allows you to navigate to daily notes using intuitive phrases.
 
-    <month> ::= january
-              | february
-              | march
-              | april
-              | may
-              | june
-              | july
-              | august
-              | september
-              | october
-              | november
-              | december
-              | jan
-              | feb
-              | mar
-              | apr
-              | jun
-              | jul
-              | aug
-              | sep
-              | oct
-              | nov
-              | dec
+Some common expressions you can use:
 
-    <duration> ::= <num> <unit>
-                 | <article> <unit>
-                 | <duration> and <duration>
+- `today`, `tomorrow`, `yesterday`
+- `next monday`, `last friday`
+- `2 days ago`, `3 weeks from now`
+- `january 15`, `may 4 2025`
 
-    <time> ::= <num>:<num>
-             | <num>:<num> am
-             | <num>:<num> pm
-             |
+<details>
+<summary>Click to see more advanced date expression examples</summary>
 
-    <unit> ::= day
-             | days
-             | week
-             | weeks
-             | hour
-             | hours
-             | minute
-             | minutes
-             | min
-             | mins
-             | month
-             | months
-             | year
-             | years
-
-    <num> ::= <num_triple> <num_triple_unit> and <num>
-            | <num_triple> <num_triple_unit> <num>
-            | <num_triple> <num_triple_unit>
-            | <num_triple_unit> and <num>
-            | <num_triple_unit> <num>
-            | <num_triple_unit>
-            | <num_triple>
-            | NUM   ; number literal greater than or equal to 1000
-
-    <num_triple> ::= <ones> hundred and <num_double>
-                   | <ones> hundred <num_double>
-                   | <ones> hundred
-                   | hundred and <num_double>
-                   | hundred <num_double>
-                   | hundred
-                   | <num_double>
-                   | NUM    ; number literal less than 1000 and greater than 99
-
-    <num_triple_unit> ::= thousand
-                        | million
-                        | billion
-
-    <num_double> ::= <ones>
-                   | <tens> - <ones>
-                   | <tens> <ones>
-                   | <tens>
-                   | <teens>
-                   | NUM    ; number literal less than 100 and greater than 19
-
-    <tens> ::= twenty
-             | thirty
-             | forty
-             | fifty
-             | sixty
-             | seventy
-             | eighty
-             | ninety
-
-    <teens> ::= ten
-              | eleven
-              | twelve
-              | thirteen
-              | fourteen
-              | fifteen
-              | sixteen
-              | seventeen
-              | eighteen
-              | nineteen
-              | NUM     ; number literal less than 20 and greater than 9
-
-    <ones> ::= one
-             | two
-             | three
-             | four
-             | five
-             | six
-             | seven
-             | eight
-             | nine
-             | NUM      ; number literal less than 10
-    ```
+- Date formats: `7/4/2024`, `2024-12-25`, `3.14.2025`
+- Relative dates: `next tuesday`, `last month`
+- Duration expressions: `3 days ago`, `2 weeks from now`
+- Combined expressions: `2 days after next monday`
 
 </details>
 
+### Editor-Specific Commands
 
-Instead of memorizing this, however, I'd recommend just trying relative names out. 
+#### Neovim
 
-### Neovim
-
-Here are some examples for neovim daily note commands (as specified in the setup [here](README#^nvimconfigsetup)
+If you've set up the `:Daily` command in Neovim (as shown in the [setup guide](README#^nvimconfigsetup)), you can navigate with:
 
 - examples ^nvimrelativenamescmds
-    * `:Daily two days ago`
-    * `:Daily 2 days ago`
-    * `:Daily next monday`
-    * `:Daily last friday`
-    * `:Daily today`
-    * `:Daily tomorrow`
+  - `:Daily two days ago`
+  - `:Daily 2 days ago`
+  - `:Daily next monday`
+  - `:Daily last friday`
+  - `:Daily today`
+  - `:Daily tomorrow`
 
-### Other
+#### Other Editors
 
-The neovim configuration uses the an [LSP Workspace Command]() called Daily accepting `arguments` as a string, which is the relative name. When not specified, the daily command will take you to today's note. 
+Markdown Oxide provides LSP workspace commands for daily note navigation. The main command is `jump`, which accepts a natural language date expression as an argument.
 
-In editors that support workspace commands with arguments, you may be able to configure them to work like neovim. (With [[Editor Specific Plugins]], one day this configuration may be done for you.)
-
-For editors that support commands but not arguments, there is a set of predefined commands for navigating daily notes. Here is the list:
-
-
+For editors with limited LSP command support, these predefined commands are available:
 
 - Predefined Relative Names: ^predefinedNames
-    * `today`
-    * `tomorrow`
-    * `yesterday`
-    * `next {monday,tuesday,..., sunday}`
-    * `last {monday,tuesday,...}`
+  - `today`
+  - `tomorrow`
+  - `yesterday`
+  - `next {monday,tuesday,..., sunday}`
+  - `last {monday,tuesday,...}`
 
-## 
+## Future Enhancements
 
-In the future we hope to also support jumping relative to an active opened note. For example, there would be a `prev dailynote` and a `next dailynote`. The issue for this can be found [here](https://github.com/Feel-ix-343/markdown-oxide/issues/101)
-
-
-
+We plan to add support for relative navigation between notes, such as "previous daily note" and "next daily note" from the currently open note. You can track this feature in [GitHub issue #101](https://github.com/Feel-ix-343/markdown-oxide/issues/101).
