@@ -26,6 +26,96 @@ const extId = "moxide"
 const versionTag = "v0.22.0"
 
 const releaseBaseUrl = "https://github.com/Feel-ix-343/markdown-oxide/releases/download"
+
+// Define DateQuickPickItem interface
+interface DateQuickPickItem extends vscode.QuickPickItem {
+	dateString: string; // Date string to pass to the backend
+}
+
+// Helper function: Format date as YYYY-MM-DD
+function formatDate(date: Date): string {
+	// Format date as YYYY-MM-DD
+	return date.toISOString().slice(0, 10);
+}
+
+// Get date object with specified offset days
+function getDateWithOffset(days: number): Date {
+	const date = new Date();
+	date.setDate(date.getDate() + days);
+	return date;
+}
+
+// Get specific weekday date (current week or relative week)
+function getWeekday(dayOfWeek: number, weekOffset: number = 0): Date {
+	const now = new Date();
+	const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+
+	// Calculate days until target weekday
+	const daysUntilTarget = (dayOfWeek + 7 - currentDay) % 7;
+
+	// Calculate date
+	const targetDate = new Date(now);
+	targetDate.setDate(now.getDate() + daysUntilTarget + (weekOffset * 7));
+
+	return targetDate;
+}
+
+// Generate common date options
+function generateDateOptions(): DateQuickPickItem[] {
+	const items: DateQuickPickItem[] = [];
+	const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+	const weekdayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+	// Today, Yesterday, Tomorrow
+	items.push({
+		label: `Today (${formatDate(new Date())})`,
+		description: 'today',
+		dateString: 'today'
+	});
+	items.push({
+		label: `Yesterday (${formatDate(getDateWithOffset(-1))})`,
+		description: 'yesterday',
+		dateString: 'yesterday'
+	});
+	items.push({
+		label: `Tomorrow (${formatDate(getDateWithOffset(1))})`,
+		description: 'tomorrow',
+		dateString: 'tomorrow'
+	});
+
+	// Days of current week
+	for (let i = 0; i < 7; i++) {
+		const date = getWeekday(i);
+		items.push({
+			label: `This ${weekdays[i]} (${formatDate(date)})`,
+			description: `this ${weekdayNames[i]}`,
+			dateString: `this ${weekdayNames[i]}`
+		});
+	}
+
+	// Days of last week
+	for (let i = 0; i < 7; i++) {
+		const date = getWeekday(i, -1);
+		items.push({
+			label: `Last ${weekdays[i]} (${formatDate(date)})`,
+			description: `last ${weekdayNames[i]}`,
+			dateString: `last ${weekdayNames[i]}`
+		});
+	}
+
+	// Days of next week
+	for (let i = 0; i < 7; i++) {
+		const date = getWeekday(i, 1);
+		items.push({
+			label: `Next ${weekdays[i]} (${formatDate(date)})`,
+			description: `next ${weekdayNames[i]}`,
+			dateString: `next ${weekdayNames[i]}`
+		});
+	}
+
+	return items;
+}
+
 export async function activate(context: ExtensionContext) {
 	// The server is implemented in node
 	// const serverModule = context.asAbsolutePath(
@@ -34,7 +124,44 @@ export async function activate(context: ExtensionContext) {
 	
 
 	let findReferencesCmd = vscode.commands.registerCommand(`${extId}.findReferences`, findReferencesCmdImpl);
-
+	
+	// Register semantic jump command
+	let semanticJumpCmd = vscode.commands.registerCommand('markdown-oxide.semanticJump', async () => {
+		if (!client) {
+			vscode.window.showWarningMessage('Markdown Oxide language client is not ready yet.');
+			return;
+		}
+		
+		const dateOptions = generateDateOptions(); // Generate date options
+    
+		const quickPick = vscode.window.createQuickPick<DateQuickPickItem>();
+		quickPick.items = dateOptions;
+		quickPick.placeholder = "Select or enter date to jump to (e.g.: today, yesterday, next monday)...";
+		quickPick.matchOnDescription = true; // Enable matching on description
+		
+		quickPick.onDidAccept(async () => {
+			const selectedItem = quickPick.selectedItems[0];
+			const dateStringToJump = selectedItem ? selectedItem.dateString : quickPick.value; // Get selected item or input value
+			
+			quickPick.hide(); // Hide first
+			
+			if (dateStringToJump) {
+				try {
+					// Send workspace/executeCommand request to LSP Server
+					await client.sendRequest('workspace/executeCommand', {
+						command: 'jump',
+						arguments: [dateStringToJump]
+					});
+				} catch (error) {
+					vscode.window.showErrorMessage(`Jump command execution failed: ${error}`);
+					console.error("Error executing jump command:", error);
+				}
+			}
+		});
+		
+		quickPick.onDidHide(() => quickPick.dispose()); // Clean up resources
+		quickPick.show(); // Show the list
+	});
 
   let path = await languageServerPath(context);
   console.log(path)
@@ -69,6 +196,9 @@ export async function activate(context: ExtensionContext) {
 
 	// Start the client. This will also launch the server
 	client.start();
+	
+	// 将命令处理器添加到订阅中
+	context.subscriptions.push(findReferencesCmd, semanticJumpCmd);
 }
 
 export function deactivate(): Thenable<void> | undefined {
