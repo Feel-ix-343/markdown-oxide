@@ -42,5 +42,14 @@
 		"eslint": "^8.56.0",
 		"mocha": "^10.2.0",
 		"typescript": "^5.3.3"
+	},
+	"contributes": {
+		"commands": [
+			{
+				"command": "markdown-oxide.semanticJump",
+				"title": "Semantic Jump",
+				"category": "Markdown Oxide"
+			}
+		]
 	}
 }
