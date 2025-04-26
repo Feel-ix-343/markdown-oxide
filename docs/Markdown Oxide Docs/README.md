@@ -1,5 +1,5 @@
 
-**markdown-oxide**: Robust, Minimalist, Unbundled PKM (Personal-Knowledge-Management System) for your favorite text-editor through the [Language-Server-Protocol](https://microsoft.github.io/language-server-protocol/).
+**markdown-oxide**: PKM (Personal-Knowledge-Management) Language Server for your favorite text-editor. 
 
 **[Quick Start](#quick-start)**
 
