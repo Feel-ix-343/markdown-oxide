@@ -1,5 +1,5 @@
 
-**markdown-oxide**: PKM (Personal-Knowledge-Management) Language Server for your favorite text-editor. 
+**markdown-oxide**: PKM (Personal-Knowledge-Management) Markdown Language Server for your favorite text-editor. 
 
 **[Quick Start](#quick-start)**
 
