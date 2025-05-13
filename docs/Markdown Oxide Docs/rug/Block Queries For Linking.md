@@ -1,4 +1,6 @@
 
+> [!NOTE]
+> This file is placed in the "rug" directory because it appears to document an unreleased/planned feature. Evidence includes: 1) All features described have unchecked checkboxes, 2) The document references a "work in progress" note, 3) The content is incomplete with sections ending abruptly, and 4) Documentation Notes confirms v1 features are "almost entirely unimplemented". This should be reviewed before inclusion in the main documentation.
 
 When linking to a [block](Block), enter a query with specific filters to easily find the block that you want. 
 
@@ -26,7 +28,7 @@ Here are the filters[^1]. The section in code blocks replaces `{query}` above. `
 - [ ] File: filter blocks by which file they are contained in
     - [ ] Current file: `# {search}`. Note the space
     - [ ] File name: `{filename}# {search}`
-    - [ ] Daily note syntax: `{daily-note name}# {search}` where daily-note name is the [[Daily Notes#Completion Names|daily-note relative name]]
+    - [ ] Daily note syntax: `{daily-note name}# {search}` where daily-note name is the [[References/Features/Daily Notes#Completion Names|daily-note relative name]]
 - [ ] Outgoing references: filter blocks by outgoing references they have or do not have: `out:{refname}`
 - [ ] ...
 
