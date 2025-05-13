@@ -1,5 +1,3 @@
-
-
 The date formatting in the config follows the rust library Chrono's formatting. 
 
 The full specification can be found here: https://docs.rs/chrono/latest/chrono/format/strftime/index.html
@@ -24,5 +22,3 @@ Some examples are:
 + =>
     * (the default) `YYYY-MM-DD` -> `%Y-%m-%d`
     * "1 Jan 2024" => `%d %b %Y`
-
----
