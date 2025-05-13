@@ -1,4 +1,8 @@
-I am Felix, the maintainer of Markdown-Oxide
+---
+alias: Felix Zeller
+---
+
+I am Felix Zeller, the maintainer of Markdown-Oxide
 
 - I spend hours each day using markdown-oxide to...
     * **Learn**, which currently involves...
