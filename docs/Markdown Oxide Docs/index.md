@@ -1,4 +1,4 @@
-
+# Markdown-Oxide
 
 ![[References/What Is Markdown-Oxide#^whatIsMarkdownOxide]]
 
@@ -61,8 +61,6 @@ Some examples of the commands in Neovim are
 - `:Daily two days ago`
 - `:Daily next monday`
 
-
-
 ### Linking to Daily Notes
 
 ![[Features#^implDailyNoteComp]]
@@ -106,15 +104,17 @@ When you want to query your tagged files, you have the following options...
 
 ![[Features#^footnoteReferences]]
 
-
 # Getting Started
 
 If the features support your PKM needs and you have a desire to PKM in your favorite text editor, the setup guide is [here](<Getting Started.md>). I hope you enjoy it!
 
 If Markdown-Oxide is not quite what you are looking for at this time, good luck on your PKM journey and consider checking back in the future!
 
+## ![[README#Recommended Links]]
+
+> [!note] Github
+> If you want to view the code, open pull-requests, participate in discussions, report bugs, and/or request features, visit the github repo: https://github.com/Feel-ix-343/markdown-oxide
+
 -[Felix](<References/Author>)
-
-
 
 [^1]: ![[rug/Documentation Notes#^docEmbeds]]
