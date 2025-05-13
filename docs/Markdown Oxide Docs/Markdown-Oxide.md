@@ -1,8 +1,6 @@
 
 
-# What is Markdown-Oxide?
-
-![[What Is Markdown-Oxide#^whatIsMarkdownOxide]]
+![[References/What Is Markdown-Oxide#^whatIsMarkdownOxide]]
 
 It also is inspired by and highly compatible with Obsidian. 
 
@@ -19,7 +17,7 @@ In this article, I give an overview of the features Markdown-oxide so that you c
 
 # PKM Features
 
-I will not cover all of Markdown-Oxide's features but instead, list how Markdown-oxide fulfills common PKM needs. If you are looking for all of the features we have, visit the [[References/Features Reference]].
+I will not cover all of Markdown-Oxide's features but instead, list how Markdown-oxide fulfills common PKM needs. If you are looking for all of the features we have, visit the [[Features]].
 
 ## Linking
 
@@ -29,15 +27,15 @@ We support links as a means of organization and provide several features to late
 
 You can create links between sections of documents through editor completions -- or Intellisense as VSCode calls it.
 
-![[References/Features Reference#^linking]]
+![[Features#^linking]]
 
-![[References/Features Reference#^unresolvedCompletions]]
+![[Features#^unresolvedCompletions]]
 
 ### Using linked notes
 
 - Use your editor's go-to-definition command to follow a Wiki or Markdown-link link
 - Backlinks
-    ![[References/Features Reference#^backlinks]]
+    ![[Features#^backlinks]]
     * Also included are several enhancements to your editor's UI to view information on backlinks more easily. For example, we provide a code lens with the count of references to headings and files; it can be seen in some of the previews.
         + Note this does not work on Zed and Helix yet
 
@@ -47,7 +45,7 @@ A challenge of linked notes is that they become difficult to edit. For example, 
 
 For this reason, we implement your editor's *rename* command so that you can rename files and headings as well as all related links.
 
-![[References/Features#^renameLinked]]
+![[Features#^renameLinked]]
 
 ## Daily Notes
 
@@ -61,13 +59,13 @@ Some examples of the commands in Neovim are
 - `:Tomorrow`
 - `:Yesterday`
 - `:Daily two days ago`
-- `:Daily two days ago`
+- `:Daily next monday`
 
 
 
 ### Linking to Daily Notes
 
-![[References/Features#^implDailyNoteComp]]
+![[Features#^implDailyNoteComp]]
 
 > [!info]
 > This allows you to give yourself reminders in the future. 
@@ -80,15 +78,15 @@ Some examples of the commands in Neovim are
 
 Use tag completions to add previously defined tags to files
 
-![[References/Features#^tagCompletions]]
+![[Features#^tagCompletions]]
 
 ### Using Tags
 
 When you want to query your tagged files, you have the following options...
 
-![[References/Features#^tagReferences]]
+![[Features#^tagReferences]]
 
-![[References/Features#^workspaceTag]]
+![[Features#^workspaceTag]]
 
 - Find all references to a tag by typing the tag name into workspace symbols
 
@@ -96,27 +94,27 @@ When you want to query your tagged files, you have the following options...
 
 ### Callout Completions
 
-![[References/Features#^calloutCompletions]]
+![[Features#^calloutCompletions]]
 
 ### Footnotes
 
 #### Completions
 
-![[References/Features#^footnoteCompletions]]
+![[Features#^footnoteCompletions]]
 
 #### References
 
-![[References/Features#^footnoteReferences]]
+![[Features#^footnoteReferences]]
 
 
 # Getting Started
 
-If the features support your PKM needs and you have a desire to PKM in your favorite text editor, the setup guide is [here](<Getting Started With Markdown-Oxide Version 0.md>). I hope you enjoy it!
+If the features support your PKM needs and you have a desire to PKM in your favorite text editor, the setup guide is [here](<Getting Started.md>). I hope you enjoy it!
 
 If Markdown-Oxide is not quite what you are looking for at this time, good luck on your PKM journey and consider checking back in the future!
 
--[Felix](<Felix Zeller>)
+-[Felix](<References/Author>)
 
 
 
-[^1]: ![[Documentation Notes#^docEmbeds]]
+[^1]: ![[rug/Documentation Notes#^docEmbeds]]
