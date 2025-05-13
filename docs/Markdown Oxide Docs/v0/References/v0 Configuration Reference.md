@@ -89,7 +89,7 @@ This is used in the following places
 
 ## Date Formatting
 
-![[Date formatting]]
+![[Date Formatting]]
 
 
 # Settings From Obsidian

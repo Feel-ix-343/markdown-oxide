@@ -4,7 +4,7 @@ An index of potentially relevant files. Some have not been created yet.
 - [[Documentation Notes]]
 - [[Daily Notes]]
 - v1
-    * [[Block Queries for Linking]]
+    * [[Block Queries For Linking]]
     * [[Editor Specific Plugins]]
     * [[Block Organization]]
 
