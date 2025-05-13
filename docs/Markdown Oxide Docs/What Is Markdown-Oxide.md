@@ -2,6 +2,6 @@
 
 - ^whatIsMarkdownOxide
 
-    Markdown-Oxide is a [[Personal Knowledge Management System|Personal Knowledge Management System(PKM)]] that composes with your favorite text-editor through the [Language Server Protocol(LSP)](https://microsoft.github.io/language-server-protocol/). 
+    Markdown-Oxide is a [[References/Glossary/PKMS|PKMS]] that composes with your favorite text-editor through the [[References/Glossary/LSP|LSP]]. 
     
-    While other PKMs implement their own text-editors, markdown-oxide is *unbundled*: it leaves text-editing to a dedicated text-editor and focuses solely on robust, performant knowledge management.
+    While other [[References/Glossary/PKMS|PKMS]] implementations include their own text-editors, markdown-oxide is *unbundled*: it leaves text-editing to a dedicated text-editor and focuses solely on robust, performant knowledge management.
