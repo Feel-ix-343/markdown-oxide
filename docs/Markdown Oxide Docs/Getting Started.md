@@ -20,15 +20,15 @@ Navigate to the setup for your editor using the table-of-contents to the right.
 
 ## Configuration
 
-![[v0 Configuration Reference#^configurationinfo]]
+![[References/Configuration#^configurationinfo]]
 
 You can probably leave the settings as their defaults for now, but here are a few you may want to set.
 
-- [Daily Note Format](<v0 Configuration Reference#Daily Note Format Config Option>). If you have obsidian, this one is automatically imported if not set. 
-- Do you *not* use the first heading of your markdown files as the file title? You probably want to disable [[v0 Configuration Reference#Default Config File|title headings]]
-- Do you have a specific folder where your daily notes are? Try [Daily Notes Folder](<v0 Configuration Reference#Default Config File>). *This may be imported from Obsidian*
-- Do you have a specific folder where new files should be created? Try [[v0 Configuration Reference#Default Config File|New Files Folder]]. *This may be imported from Obsidian*
-- Do you want `.md` parsed and appended in your links? [[v0 Configuration Reference#Default Config File|MD Extension]]
+- [Daily Note Format](<References/Configuration#Daily Note Format Config Option>). If you have obsidian, this one is automatically imported if not set. 
+- Do you *not* use the first heading of your markdown files as the file title? You probably want to disable [[References/Configuration#Default Config File|title headings]]
+- Do you have a specific folder where your daily notes are? Try [Daily Notes Folder](<References/Configuration#Default Config File>). *This may be imported from Obsidian*
+- Do you have a specific folder where new files should be created? Try [[References/Configuration#Default Config File|New Files Folder]]. *This may be imported from Obsidian*
+- Do you want `.md` parsed and appended in your links? [[References/Configuration#Default Config File|MD Extension]]
 
 # Using markdown-oxide
 

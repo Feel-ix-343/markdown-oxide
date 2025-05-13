@@ -19,7 +19,7 @@ In this article, I give an overview of the features Markdown-oxide so that you c
 
 # PKM Features
 
-I will not cover all of Markdown-Oxide's features but instead, list how Markdown-oxide fulfills common PKM needs. If you are looking for all of the features we have, visit the [[v0 Features Reference]].
+I will not cover all of Markdown-Oxide's features but instead, list how Markdown-oxide fulfills common PKM needs. If you are looking for all of the features we have, visit the [[References/Features Reference]].
 
 ## Linking
 
@@ -29,15 +29,15 @@ We support links as a means of organization and provide several features to late
 
 You can create links between sections of documents through editor completions -- or Intellisense as VSCode calls it.
 
-![[v0 Features Reference#^linking]]
+![[References/Features Reference#^linking]]
 
-![[v0 Features Reference#^unresolvedCompletions]]
+![[References/Features Reference#^unresolvedCompletions]]
 
 ### Using linked notes
 
 - Use your editor's go-to-definition command to follow a Wiki or Markdown-link link
 - Backlinks
-    ![[v0 Features Reference#^backlinks]]
+    ![[References/Features Reference#^backlinks]]
     * Also included are several enhancements to your editor's UI to view information on backlinks more easily. For example, we provide a code lens with the count of references to headings and files; it can be seen in some of the previews.
         + Note this does not work on Zed and Helix yet
 
@@ -47,7 +47,7 @@ A challenge of linked notes is that they become difficult to edit. For example, 
 
 For this reason, we implement your editor's *rename* command so that you can rename files and headings as well as all related links.
 
-![[v0 Features Reference#^renameLinked]]
+![[References/Features#^renameLinked]]
 
 ## Daily Notes
 
@@ -67,7 +67,7 @@ Some examples of the commands in Neovim are
 
 ### Linking to Daily Notes
 
-![[v0 Features Reference#^implDailyNoteComp]]
+![[References/Features#^implDailyNoteComp]]
 
 > [!info]
 > This allows you to give yourself reminders in the future. 
@@ -80,15 +80,15 @@ Some examples of the commands in Neovim are
 
 Use tag completions to add previously defined tags to files
 
-![[v0 Features Reference#^tagCompletions]]
+![[References/Features#^tagCompletions]]
 
 ### Using Tags
 
 When you want to query your tagged files, you have the following options...
 
-![[v0 Features Reference#^tagReferences]]
+![[References/Features#^tagReferences]]
 
-![[v0/References/v0 Features Reference#^workspaceTag]]
+![[References/Features#^workspaceTag]]
 
 - Find all references to a tag by typing the tag name into workspace symbols
 
@@ -96,17 +96,17 @@ When you want to query your tagged files, you have the following options...
 
 ### Callout Completions
 
-![[v0 Features Reference#^calloutCompletions]]
+![[References/Features#^calloutCompletions]]
 
 ### Footnotes
 
 #### Completions
 
-![[v0 Features Reference#^footnoteCompletions]]
+![[References/Features#^footnoteCompletions]]
 
 #### References
 
-![[v0/References/v0 Features Reference#^footnoteReferences]]
+![[References/Features#^footnoteReferences]]
 
 
 # Getting Started
