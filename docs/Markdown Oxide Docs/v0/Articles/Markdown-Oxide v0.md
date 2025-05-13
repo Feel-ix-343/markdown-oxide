@@ -111,7 +111,7 @@ When you want to query your tagged files, you have the following options...
 
 # Getting Started
 
-If the features support your PKM needs and you have a desire to PKM in your favorite text editor, the setup guide is [here](<Getting started with Markdown Oxide Version 0>). I hope you enjoy it!
+If the features support your PKM needs and you have a desire to PKM in your favorite text editor, the setup guide is [here](<Getting Started With Markdown-Oxide Version 0.md>). I hope you enjoy it!
 
 If Markdown-Oxide is not quite what you are looking for at this time, good luck on your PKM journey and consider checking back in the future!
 
