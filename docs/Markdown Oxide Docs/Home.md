@@ -1,8 +1,7 @@
 # Home
 
-This is the homepage for the Markdown-Oxide documentation! 
 
-If below does not link to the information you want, browse the navigation bar on the side of this site and/or use the search above it. 
+![[What Is Markdown-Oxide#^whatIsMarkdownOxide]]
 
 ## ![[README#Recommended Links]]
 
