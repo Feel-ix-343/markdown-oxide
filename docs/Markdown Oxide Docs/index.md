@@ -110,8 +110,6 @@ If the features support your PKM needs and you have a desire to PKM in your favo
 
 If Markdown-Oxide is not quite what you are looking for at this time, good luck on your PKM journey and consider checking back in the future!
 
-## ![[README#Recommended Links]]
-
 > [!note] Github
 > If you want to view the code, open pull-requests, participate in discussions, report bugs, and/or request features, visit the github repo: https://github.com/Feel-ix-343/markdown-oxide
 
