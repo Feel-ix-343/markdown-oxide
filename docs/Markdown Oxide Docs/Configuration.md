@@ -1,5 +1,3 @@
-
-
 `Markdown-Oxide` supports several configuration options. All can be specified in a `~/.config/moxide/settings.toml` or `.moxide.toml` file. Moxide also tries to import some settings from Obsidian directly.   ^configurationinfo
 
 # Default Config File
@@ -90,7 +88,6 @@ This is used in the following places
 ## Date Formatting
 
 ![[References/Features/Date Formatting]]
-
 
 # Settings From Obsidian
 

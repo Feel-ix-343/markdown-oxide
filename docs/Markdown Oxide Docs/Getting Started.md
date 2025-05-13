@@ -36,7 +36,7 @@ Now that you are set up, it is time to start using your new PKM!
 
 Most editors have an LSP interface that makes using Markdown-oxide's features intuitive. Over time, you will figure out a workflow that fits your needs. 
 
-Additionally, you can reference the gifs and descriptions in the [[References/Features]] to figure out how to use different features. 
+Additionally, you can reference the gifs and descriptions in the [[Features]] to figure out how to use different features. 
 
 I am working toward a future where all of markdown-oxide's features are thoroughly documented, but we are not there yet!
 
@@ -47,7 +47,5 @@ As you use Markdown Oxide more, there may be behavior you want to configure. For
 And if you want to have local access to the settings, here is the [default config file](<Configuration#Default Config File>) for you to copy and paste. 
 
 I hope you enjoy! Feel free to open issues for bugs and features on the GitHub repo: https://github.com/Feel-ix-343/markdown-oxide
-
-
 
 [^1]: ![[rug/Documentation Notes#^docEmbeds]]

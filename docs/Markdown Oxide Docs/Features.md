@@ -1,4 +1,3 @@
-
 When clicking on each drop-down, you will be presented with a demo of the feature in Neovim following [my configuration](https://github.com/Feel-ix-343/Neovim-Config) ^demoExpl
 
 # Completions
@@ -19,7 +18,6 @@ When clicking on each drop-down, you will be presented with a demo of the featur
             <summary>Markdown Link Completions to Files and Headings</summary>
 
         ![markdownlinkcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/16c8565a-6a28-4df1-a312-e4b158fb9f03)
-
             
         </details>
 
@@ -32,14 +30,11 @@ When clicking on each drop-down, you will be presented with a demo of the featur
             
         </details>  
 
-
     - ^tagCompletions
-
         <details>
             <summary>Tag Completions</summary>
 
         ![tagcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/bf20d7ac-171a-4d95-b510-ba323073c0b8)
-
             
         </details>
 
@@ -57,9 +52,7 @@ When clicking on each drop-down, you will be presented with a demo of the featur
             
         For those who like to reference things before they are written, `markdown-oxide` has terrific support for unresolved references! It provides completions for unresolved references, provides lsp_references for them, and provides code actions to create files + append headings.  
 
-
        ![unresolvedcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/96ed1a8e-eea3-4d3f-9557-e51b076fb3fb)
-
             
         </details>
 
@@ -68,8 +61,6 @@ When clicking on each drop-down, you will be presented with a demo of the featur
             <summary>Callout Completions following Obsidian's callout syntax</summary>
 
         ![calloutcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/11cd44f1-cf2e-4f27-92b4-1ed4914356ca)
-
-
             
         </details>
 
@@ -78,7 +69,6 @@ When clicking on each drop-down, you will be presented with a demo of the featur
             <summary>Nested Callout Completions</summary>
 
         ![nestedcalloutcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/2ae86432-86fd-4327-b6e1-a94a5074db06)
-
             
         </details>
 
@@ -87,10 +77,8 @@ When clicking on each drop-down, you will be presented with a demo of the featur
             <summary>Alias Completions</summary>
 
         ![alias_completions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/d83b2a6a-7b04-4cd4-92a2-ce78eccb4c3a)
-
             
         </details>
-
 
 ## Unimplemented Completions Features
 
@@ -103,11 +91,9 @@ When clicking on each drop-down, you will be presented with a demo of the featur
 - [ ] Semantic Search unindexed block completions
 - [ ] Contextual linking completions using vector database
 
-
 # References
 
 - ^implReference
-
 
     - ^backlinks
         <details>
@@ -119,24 +105,19 @@ When clicking on each drop-down, you will be presented with a demo of the featur
 
         <details>
             <summary>Heading References</summary>
-
             
         ![headingreferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/50598628-ed27-4a9b-adba-861ca8f933ea)
             
         </details>
 
-
         <details>
             <summary>Indexed Block References</summary>
 
         ![indexedblockreferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/5d92257e-56b8-4209-b990-d25bbaa75a69)
-
             
         </details>
 
-
     - ^tagReferences
-
         <details>
             <summary>Tag References: Gets all references to the tag and subtags</summary>
 
@@ -157,12 +138,10 @@ When clicking on each drop-down, you will be presented with a demo of the featur
 
     ![unresolvedreferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/5e5c89c1-fda0-4e80-98b5-3ccce4bd3dbf)
 
-
     </details>
 
 > [!NOTE]
 > If in neovim, I strongly recommend using [Lspsaga](https://github.com/nvimdev/lspsaga.nvim) for references for two reasons. First because this LS sorts references by the date their files were modified and unlike `vim.lsp.buf.references()` and `Telescope lsp_references`, `Lspsaga finder` maintains this sorting order. Second it also allows you to edit the references in place, similar to Logseq
-
 
 # Hover
 
@@ -189,23 +168,18 @@ When clicking on each drop-down, you will be presented with a demo of the featur
 - ^implCodeAction
 
     - ^unresolvedLinkCodeAction
-
         <details>
             <summary>Create file for unresolved file link</summary>
 
         ![codeactionsfile](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/707955e4-1e54-4f61-ac54-979d9f95b13c)
-
 
         </details> 
 
     - 
         <details>
             <summary>Append heading to file and create the file if necessary</summary>
-
             
         ![codeactionsheading](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/02af43aa-5185-406c-adb3-4c2792902761)
-
-
 
         </details>
 
@@ -219,7 +193,6 @@ When clicking on each drop-down, you will be presented with a demo of the featur
 # Diagnostics
 
 ## Implemented Diagnostics
-
 
 - ^implDiagnostics
 
@@ -243,19 +216,14 @@ When clicking on each drop-down, you will be presented with a demo of the featur
 
 - [ ] Lists and indented lists
 
-
-
-
 # Rename
 
 - ^implRename
     * ^renameLinked
-
         <details>
             <summary>(not zed) Rename File and all references</summary>
 
         ![renamefile](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/3ac404fb-cfcd-4943-81ba-8ab3645831b7)
-
 
         </details>
 
@@ -271,7 +239,6 @@ When clicking on each drop-down, you will be presented with a demo of the featur
 
     ![renametag](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/48b8a825-2342-477c-8440-198ab9273a83)
 
-
     </details>
 
 # Daily Notes
@@ -284,7 +251,6 @@ When clicking on each drop-down, you will be presented with a demo of the featur
         <summary>...for wikilinks</summary>
 
         ![dailynoteswiki](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/d2505535-ef5e-491a-bd88-ef12be2402ef)
-
 
     </details>
 
@@ -304,4 +270,3 @@ When clicking on each drop-down, you will be presented with a demo of the featur
     * Open or create daily notes through predefined relative names.  `:Today`
         + The names are as follow: ![[References/Features/Daily Notes#^predefinedNames]]
         + Each of these names have their own workspace commands
-
