@@ -6,7 +6,7 @@ There are a set of predefined relative names for referencing your daily notes.
 
 Here it is: 
 
-![[Daily Notes#^predefinedNames]]
+![[References/Features/Daily Notes#^predefinedNames]]
 
 These can be used in completions by `[[{relativename}` or `[{display?}]({relativename}`. 
 

@@ -83,13 +83,13 @@ From Obsidian, this works as follows ![[#^1862g]]
 
 This is used in the following places
 
-* Generating [relative date name completions](<Daily Notes#Completion Names>) with ![[Daily Notes#^predefinedNames|predefined relative names]] such that we get [[v0 Features Reference#^implDailyNoteComp|V0 Daily Note Completions]]
-* Creating new daily notes in [[v0 Features Reference#Opening Daily Notes]]
-* [Creating files from unresolved references](<v0 Features Reference#Code Actions>) when the files match the specified format
+* Generating [relative date name completions](<References/Features/Daily Notes#Completion Names>) with ![[References/Features/Daily Notes#^predefinedNames|predefined relative names]] such that we get [[Features#^implDailyNoteComp|Daily Note Completions]]
+* Creating new daily notes in [[Features#Opening Daily Notes]]
+* [Creating files from unresolved references](<Features#Code Actions>) when the files match the specified format
 
 ## Date Formatting
 
-![[Date Formatting]]
+![[References/Features/Date Formatting]]
 
 
 # Settings From Obsidian
@@ -97,6 +97,6 @@ This is used in the following places
 - ... ^someobsidiansettings
     * Daily Note:
         + `dailynote`: checks if you have the dailynote Obsidian plugin and translates this formatting to Markdown Oxide's date formatting   ^1862g
-        + Info on this date formatting can be found [here](<Date Formatting>)
-    * `new_file_folder_path`: uses the specific folder for new files you set in Obsidian if you have it enabled. This is relevant to the [Create Unresolved File Code Action](<v0 Features Reference#^implCodeAction>)
-    * `daily_notes_folder_path`: uses the specific folder for new daily notes you set in the Obsidian Daily Notes plugin, if you have this option enabled. This is relevant to the path for [opening daily notes](<v0 Features Reference#Opening Daily Notes>) and for [the code action that creates unresolved links](<v0 Features Reference#^implCodeAction>) if they have the `dailynote` format.
+        + Info on this date formatting can be found [here](<References/Features/Date Formatting>)
+    * `new_file_folder_path`: uses the specific folder for new files you set in Obsidian if you have it enabled. This is relevant to the [Create Unresolved File Code Action](<Features#^implCodeAction>)
+    * `daily_notes_folder_path`: uses the specific folder for new daily notes you set in the Obsidian Daily Notes plugin, if you have this option enabled. This is relevant to the path for [opening daily notes](<Features#Opening Daily Notes>) and for [the code action that creates unresolved links](<Features#^implCodeAction>) if they have the `dailynote` format.
