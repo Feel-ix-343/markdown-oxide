@@ -7,5 +7,3 @@
     * Since I do not want to reuse the headings, I am doing some hackery with lists and block embeds. Practically, this works, but for now you will notice it is a little ugly. If I chose not to do this hackery, you will see an odd heading name in the document outline
     * If the page looks wrong, reload
     * If the table of contents is not working, just wait a few seconds and it will. 
-
-

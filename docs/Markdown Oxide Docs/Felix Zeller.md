@@ -1,5 +1,3 @@
-
-
 I am Felix, the maintainer of Markdown-Oxide
 
 - I spend hours each day using markdown-oxide to...
@@ -13,3 +11,4 @@ I am Felix, the maintainer of Markdown-Oxide
 - other than this, I lift weights, do cycling, socialize, and *do* nothing. 
 
 [Here]: https://github.com/Feel-ix-343
+

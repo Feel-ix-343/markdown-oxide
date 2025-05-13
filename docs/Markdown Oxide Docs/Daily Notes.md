@@ -1,8 +1,3 @@
-
-
-
-
-
 # Relative Names
 
 ## Completion Names
@@ -219,6 +214,4 @@ For editors that support commands but not arguments, there is a set of predefine
 ## 
 
 In the future we hope to also support jumping relative to an active opened note. For example, there would be a `prev dailynote` and a `next dailynote`. The issue for this can be found [here](https://github.com/Feel-ix-343/markdown-oxide/issues/101)
-
-
 
