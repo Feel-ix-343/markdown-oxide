@@ -1325,7 +1325,7 @@ impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
         let path = &self.path.clone()?;
 
-        let last = path.split('/').last()?;
+        let last = path.split('/').next_back()?;
 
         Some(last.to_string())
     }
