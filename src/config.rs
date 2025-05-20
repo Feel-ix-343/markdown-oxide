@@ -76,8 +76,8 @@ impl Settings {
             .set_default("unresolved_diagnostics", true)?
             .set_default("title_headings", true)?
             .set_default("semantic_tokens", true)?
-            .set_default("tags_in_codeblocks", true)?
-            .set_default("references_in_codeblocks", true)?
+            .set_default("tags_in_codeblocks", false)?
+            .set_default("references_in_codeblocks", false)?
             .set_default("include_md_extension_md_link", false)?
             .set_default("include_md_extension_wikilink", false)?
             .set_default("hover", true)?

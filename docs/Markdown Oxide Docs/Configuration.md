@@ -26,9 +26,9 @@ unresolved_diagnostics = true
 semantic_tokens = true
 
 # Resolve tags in code blocks
-tags_in_codeblocks = true
+tags_in_codeblocks = false
 # Resolve references in code blocks
-references_in_codeblocks = true
+references_in_codeblocks = false
 
 # The folder for new files to be created in; this is relevant for the code action that creates
 # from an unresolved link. If not specified, it will import from your obsidian config option titled
