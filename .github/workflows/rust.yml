@@ -22,8 +22,11 @@ jobs:
       uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
         toolchain: nightly
+        components: rustfmt
         override: true
         rustflags: ""
+    - name: Rustfmt Check
+      uses: actions-rust-lang/rustfmt@v1
     - name: Build
       run: cargo build --verbose
     - name: Run tests
