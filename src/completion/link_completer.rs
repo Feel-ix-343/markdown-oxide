@@ -234,11 +234,18 @@ impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
 
         let line_string = String::from_iter(&line_chars);
 
-        let file_name = context.path.file_stem().expect("File name is not valid").to_string_lossy();
-        let reference_under_cursor = Reference::new(&line_string, &file_name).into_iter().find(|reference| {
-            reference.range.start.character <= character as u32
-                && reference.range.end.character >= character as u32
-        });
+        let file_name = context
+            .path
+            .file_stem()
+            .expect("File name is not valid")
+            .to_string_lossy();
+        let reference_under_cursor =
+            Reference::new(&line_string, &file_name)
+                .into_iter()
+                .find(|reference| {
+                    reference.range.start.character <= character as u32
+                        && reference.range.end.character >= character as u32
+                });
 
         let full_range = match reference_under_cursor {
             Some(
@@ -264,7 +271,14 @@ impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
         });
 
         let partial = Some(MarkdownLinkCompleter {
-            path: (reftext.map(|it| it.as_str().to_string()).unwrap_or(file_name.to_string()), reftext.map(|it| it.range()).unwrap_or(character-1..character-1)), // range shouldn't matter if no path specified.
+            path: (
+                reftext
+                    .map(|it| it.as_str().to_string())
+                    .unwrap_or(file_name.to_string()),
+                reftext
+                    .map(|it| it.range())
+                    .unwrap_or(character - 1..character - 1),
+            ), // range shouldn't matter if no path specified.
             display: (display.as_str().to_string(), display.range()),
             infile_ref: partial_infileref,
             full_range,
