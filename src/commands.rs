@@ -48,7 +48,7 @@ pub async fn jump(
         let _ = uri.to_file_path().map(|path| {
             path.parent().map(std::fs::create_dir_all);
 
-            let _ = File::create_new(path.as_path().to_owned());
+            let _ = File::create_new(path.as_path());
         });
 
         client
