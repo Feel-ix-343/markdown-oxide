@@ -36,9 +36,7 @@ impl<'a> Completer<'a> for TagCompleter<'a> {
     where
         Self: Sized + Completer<'a>,
     {
-        if context.settings.tags_in_codeblocks == false
-            && check_in_code_block(&context, line, character)
-        {
+        if !context.settings.tags_in_codeblocks && check_in_code_block(&context, line, character) {
             return None;
         }
 

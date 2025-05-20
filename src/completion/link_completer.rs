@@ -201,7 +201,7 @@ impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
     where
         Self: Sized,
     {
-        if context.settings.references_in_codeblocks == false
+        if !context.settings.references_in_codeblocks
             && check_in_code_block(&context, line, character)
         {
             return None;
@@ -234,8 +234,12 @@ impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
 
         let line_string = String::from_iter(&line_chars);
 
-        let file_name = context.path.file_stem().expect("File name is not valid").to_string_lossy();
-        let reference_under_cursor = Reference::new(&line_string, &file_name).into_iter().find(|reference| {
+        let file_name = context
+            .path
+            .file_stem()
+            .expect("File name is not valid")
+            .to_string_lossy();
+        let reference_under_cursor = Reference::new(&line_string, &file_name).find(|reference| {
             reference.range.start.character <= character as u32
                 && reference.range.end.character >= character as u32
         });
@@ -264,7 +268,14 @@ impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
         });
 
         let partial = Some(MarkdownLinkCompleter {
-            path: (reftext.map(|it| it.as_str().to_string()).unwrap_or(file_name.to_string()), reftext.map(|it| it.range()).unwrap_or(character-1..character-1)), // range shouldn't matter if no path specified.
+            path: (
+                reftext
+                    .map(|it| it.as_str().to_string())
+                    .unwrap_or(file_name.to_string()),
+                reftext
+                    .map(|it| it.range())
+                    .unwrap_or(character - 1..character - 1),
+            ), // range shouldn't matter if no path specified.
             display: (display.as_str().to_string(), display.range()),
             infile_ref: partial_infileref,
             full_range,
@@ -316,11 +327,11 @@ pub enum PartialInfileRef {
     BlockRef(String),
 }
 
-impl ToString for PartialInfileRef {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for PartialInfileRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::HeadingRef(string) => string.to_owned(),
-            Self::BlockRef(string) => format!("^{}", string),
+            Self::HeadingRef(string) => write!(f, "{}", string),
+            Self::BlockRef(string) => write!(f, "^{}", string),
         }
     }
 }
@@ -405,7 +416,7 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
     where
         Self: Sized,
     {
-        if context.settings.references_in_codeblocks == false
+        if !context.settings.references_in_codeblocks
             && check_in_code_block(&context, line, character)
         {
             return None;
@@ -870,7 +881,7 @@ impl MDDailyNote<'_> {
         referenceable: Referenceable<'a>,
         completer: &impl LinkCompleter<'a>,
     ) -> Option<MDDailyNote<'a>> {
-        let Some((filerefname, filter_refname)) = (match referenceable {
+        let (filerefname, filter_refname) = (match referenceable {
             Referenceable::File(&ref path, _) | Referenceable::UnresovledFile(ref path, _) => {
                 let filename = path.file_name();
                 let dailynote_format = &completer.settings().dailynote;
@@ -887,9 +898,7 @@ impl MDDailyNote<'_> {
                     .map(|thing| (filename.clone(), format!("{}: {}", thing, filename)))
             }
             _ => None,
-        }) else {
-            return None;
-        };
+        })?;
 
         Some(MDDailyNote {
             match_string: filter_refname,

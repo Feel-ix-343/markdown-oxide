@@ -6,7 +6,7 @@ use tower_lsp::lsp_types::{
     RenameFile, RenameParams, ResourceOp, TextDocumentEdit, TextEdit, Url, WorkspaceEdit,
 };
 
-use crate::vault::{MDHeading, Reference, Referenceable, Vault};
+use crate::vault::{Reference, Referenceable, Vault};
 
 pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<WorkspaceEdit> {
     let position = params.text_document_position.position;
@@ -29,7 +29,11 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                 });
 
                 // {path name}#{new name}
-                let name = format!("{}#{}", path.file_stem()?.to_string_lossy().to_owned(), params.new_name);
+                let name = format!(
+                    "{}#{}",
+                    path.file_stem()?.to_string_lossy().clone(),
+                    params.new_name
+                );
 
                 (Some(change_op), name.to_string())
             }

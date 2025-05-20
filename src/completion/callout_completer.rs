@@ -31,12 +31,12 @@ impl<'a> Completer<'a> for CalloutCompleter {
 
         let nested_level = preceding.as_str().matches('>').count();
 
-        return Some(Self {
+        Some(Self {
             nested_level,
             preceding_text: preceding.as_str().to_string(),
             line: line as u32,
             character: character as u32,
-        });
+        })
     }
 
     fn completions(&self) -> Vec<impl super::Completable<'a, Self>>

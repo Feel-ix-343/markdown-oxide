@@ -41,7 +41,7 @@ impl Vault {
                 let text = std::fs::read_to_string(p.path())?;
                 let md_file = MDFile::new(context, &text, PathBuf::from(p.path()));
 
-                return Ok::<(PathBuf, MDFile), std::io::Error>((p.path().into(), md_file));
+                Ok::<(PathBuf, MDFile), std::io::Error>((p.path().into(), md_file))
             })
             .collect();
 
@@ -51,7 +51,7 @@ impl Vault {
                 let text = std::fs::read_to_string(p.path())?;
                 let rope = Rope::from_str(&text);
 
-                return Ok::<(PathBuf, Rope), std::io::Error>((p.path().into(), rope));
+                Ok::<(PathBuf, Rope), std::io::Error>((p.path().into(), rope))
             })
             .collect();
 
@@ -193,7 +193,7 @@ impl Vault {
         &'a self,
         path: &'a Path,
         position: Position,
-    ) -> Option<&Reference> {
+    ) -> Option<&'a Reference> {
         let links = self.select_references(Some(path))?;
 
         let (_path, reference) = links.into_iter().find(|&l| {
@@ -554,7 +554,11 @@ pub struct MDFile {
 impl MDFile {
     fn new(context: &Settings, text: &str, path: PathBuf) -> MDFile {
         let code_blocks = MDCodeBlock::new(text).collect_vec();
-        let file_name = path.file_stem().expect("file should have file stem").to_str().unwrap_or_default();
+        let file_name = path
+            .file_stem()
+            .expect("file should have file stem")
+            .to_str()
+            .unwrap_or_default();
         let links = match context {
             Settings {
                 references_in_codeblocks: false,
@@ -728,12 +732,12 @@ impl Reference {
 
         let wiki_links = WIKI_LINK_RE
             .captures_iter(text)
-            .filter(
-                |captures| match captures.name("ending").map(|ending| ending.as_str()) {
-                    Some(".md") | None => true,
-                    _ => false,
-                },
-            )
+            .filter(|captures| {
+                matches!(
+                    captures.name("ending").map(|ending| ending.as_str()),
+                    Some(".md") | None
+                )
+            })
             .flat_map(RegexTuple::new)
             .flat_map(|regextuple| {
                 generic_link_constructor::<WikiReferenceConstructor>(text, file_name, regextuple)
@@ -746,12 +750,12 @@ impl Reference {
 
         let md_links = MD_LINK_RE
             .captures_iter(text)
-            .filter(
-                |captures| match captures.name("ending").map(|ending| ending.as_str()) {
-                    Some(".md") | None => true,
-                    _ => false,
-                },
-            )
+            .filter(|captures| {
+                matches!(
+                    captures.name("ending").map(|ending| ending.as_str()),
+                    Some(".md") | None
+                )
+            })
             .flat_map(RegexTuple::new)
             .flat_map(|regextuple| {
                 generic_link_constructor::<MDReferenceConstructor>(text, file_name, regextuple)
@@ -765,7 +769,9 @@ impl Reference {
             })
         });
 
-        static FOOTNOTE_LINK_RE: Lazy<Regex> = Lazy::new(|| {Regex::new(r"(?<start>\[?)(?<full>\[(?<index>\^[^\[\] ]+)\])(?<end>:?)").unwrap()});
+        static FOOTNOTE_LINK_RE: Lazy<Regex> = Lazy::new(|| {
+            Regex::new(r"(?<start>\[?)(?<full>\[(?<index>\^[^\[\] ]+)\])(?<end>:?)").unwrap()
+        });
         let footnote_references = FOOTNOTE_LINK_RE
             .captures_iter(text)
             .filter(|capture| matches!(
@@ -1003,14 +1009,20 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
         display_text,
     }: RegexTuple,
 ) -> Option<Reference> {
-    if file_path.is_some_and(|path| path.as_str().starts_with("http://")
-        || path.as_str().starts_with("https://")
-        || path.as_str().starts_with("data:"))
-    {
+    if file_path.is_some_and(|path| {
+        path.as_str().starts_with("http://")
+            || path.as_str().starts_with("https://")
+            || path.as_str().starts_with("data:")
+    }) {
         return None;
     }
 
-    match (range, file_path.map(|it| it.as_str()).unwrap_or(file_name), infile_ref, display_text) {
+    match (
+        range,
+        file_path.map(|it| it.as_str()).unwrap_or(file_name),
+        infile_ref,
+        display_text,
+    ) {
         // Pure file reference as there is no infileref such as #... for headings or #^... for indexed blocks
         (full, filepath, None, display) => Some(T::new_file_link(ReferenceData {
             reference_text: filepath.into(),
@@ -1127,12 +1139,10 @@ impl MDHeading {
                     _ => None,
                 },
             )
-            .map(|(full_heading, heading_match, starter)| {
-                return MDHeading {
-                    heading_text: heading_match.as_str().trim_end().into(),
-                    range: MyRange::from_range(&Rope::from_str(text), full_heading.range()),
-                    level: HeadingLevel(starter.as_str().len()),
-                };
+            .map(|(full_heading, heading_match, starter)| MDHeading {
+                heading_text: heading_match.as_str().trim_end().into(),
+                range: MyRange::from_range(&Rope::from_str(text), full_heading.range()),
+                level: HeadingLevel(starter.as_str().len()),
             });
 
         headings
@@ -1315,7 +1325,7 @@ impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
         let path = &self.path.clone()?;
 
-        let last = path.split('/').last()?;
+        let last = path.split('/').next_back()?;
 
         Some(last.to_string())
     }
@@ -1348,7 +1358,6 @@ impl From<&str> for Refname {
 
 impl Referenceable<'_> {
     /// Gets the generic reference name for a referenceable. This will not include any display text. If trying to determine if text is a reference of a particular referenceable, use the `is_reference` function
-
     pub fn get_refname(&self, root_dir: &Path) -> Option<Refname> {
         match self {
             Referenceable::File(path, _) => {
@@ -1431,7 +1440,7 @@ impl Referenceable<'_> {
                         let refname_split = refname.split('/').collect_vec();
                         let text_split = text.split('/').collect_vec();
 
-                        return text_split.get(0..refname_split.len()) == Some(&refname_split);
+                        text_split.get(0..refname_split.len()) == Some(&refname_split)
                     })
             }
             Referenceable::Footnote(path, _footnote) => match reference {

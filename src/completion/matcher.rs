@@ -76,7 +76,7 @@ pub fn fuzzy_match_completions<'a, 'b, C: Completer<'a>, T: Matchable + Completa
         .collect::<Vec<_>>()
 }
 
-pub fn fuzzy_match<'a, T: Matchable>(
+pub fn fuzzy_match<T: Matchable>(
     filter_text: &str,
     items: impl IntoIterator<Item = T>,
     case: &Case,
