@@ -46,7 +46,7 @@ pub async fn jump(
         // to open the file on the off chance the client knows what to do
         // TODO: log failure to create file
         let _ = uri.to_file_path().map(|path| {
-            path.parent().map(|parent| std::fs::create_dir_all(parent));
+            path.parent().map(std::fs::create_dir_all);
 
             let _ = File::create_new(path.as_path().to_owned());
         });
