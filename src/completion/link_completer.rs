@@ -327,11 +327,11 @@ pub enum PartialInfileRef {
     BlockRef(String),
 }
 
-impl ToString for PartialInfileRef {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for PartialInfileRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::HeadingRef(string) => string.to_owned(),
-            Self::BlockRef(string) => format!("^{}", string),
+            Self::HeadingRef(string) => write!(f, "{}", string),
+            Self::BlockRef(string) => write!(f, "^{}", string),
         }
     }
 }
