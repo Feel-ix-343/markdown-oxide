@@ -135,9 +135,9 @@ fn obsidian_new_file_folder_path(root_dir: &Path) -> Option<String> {
             .map(String::from);
 
         if config.get("newFileLocation").and_then(|v| v.as_str()) == Some(&"folder") {
-            return path;
+            path
         } else {
-            return None;
+            None
         }
     });
 
