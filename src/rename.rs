@@ -31,7 +31,7 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                 // {path name}#{new name}
                 let name = format!(
                     "{}#{}",
-                    path.file_stem()?.to_string_lossy().to_owned(),
+                    path.file_stem()?.to_string_lossy().clone(),
                     params.new_name
                 );
 
