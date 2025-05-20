@@ -881,7 +881,7 @@ impl MDDailyNote<'_> {
         referenceable: Referenceable<'a>,
         completer: &impl LinkCompleter<'a>,
     ) -> Option<MDDailyNote<'a>> {
-        let Some((filerefname, filter_refname)) = (match referenceable {
+        let (filerefname, filter_refname) = (match referenceable {
             Referenceable::File(&ref path, _) | Referenceable::UnresovledFile(ref path, _) => {
                 let filename = path.file_name();
                 let dailynote_format = &completer.settings().dailynote;
@@ -898,9 +898,7 @@ impl MDDailyNote<'_> {
                     .map(|thing| (filename.clone(), format!("{}: {}", thing, filename)))
             }
             _ => None,
-        }) else {
-            return None;
-        };
+        })?;
 
         Some(MDDailyNote {
             match_string: filter_refname,
