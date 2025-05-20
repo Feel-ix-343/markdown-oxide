@@ -239,13 +239,10 @@ impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
             .file_stem()
             .expect("File name is not valid")
             .to_string_lossy();
-        let reference_under_cursor =
-            Reference::new(&line_string, &file_name)
-                .into_iter()
-                .find(|reference| {
-                    reference.range.start.character <= character as u32
-                        && reference.range.end.character >= character as u32
-                });
+        let reference_under_cursor = Reference::new(&line_string, &file_name).find(|reference| {
+            reference.range.start.character <= character as u32
+                && reference.range.end.character >= character as u32
+        });
 
         let full_range = match reference_under_cursor {
             Some(
