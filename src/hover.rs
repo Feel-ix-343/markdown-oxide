@@ -2,11 +2,7 @@ use std::path::Path;
 
 use tower_lsp::lsp_types::{Hover, HoverContents, HoverParams};
 
-use crate::{
-    config::Settings,
-    ui::{preview_reference, preview_referenceable},
-    vault::Vault,
-};
+use crate::{config::Settings, ui::preview_reference, vault::Vault};
 
 pub fn hover(
     vault: &Vault,

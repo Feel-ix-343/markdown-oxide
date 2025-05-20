@@ -6,7 +6,7 @@ use tower_lsp::lsp_types::{
     RenameFile, RenameParams, ResourceOp, TextDocumentEdit, TextEdit, Url, WorkspaceEdit,
 };
 
-use crate::vault::{MDHeading, Reference, Referenceable, Vault};
+use crate::vault::{Reference, Referenceable, Vault};
 
 pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<WorkspaceEdit> {
     let position = params.text_document_position.position;
