@@ -87,14 +87,14 @@ jobs:
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
             7z a "$dirname.zip" "$dirname"
             echo "ASSET=$dirname.zip" >> $GITHUB_ENV
-            
+
             rm -rd $dirname
             cp "target/${{ matrix.target }}/release/$binary_name.exe" "$dirname.exe"
             echo "BIN=$dirname.exe" >> $GITHUB_ENV
           else
             tar -czf "$dirname.tar.gz" "$dirname"
             echo "ASSET=$dirname.tar.gz" >> $GITHUB_ENV
-            
+
             rm -rd $dirname
             cp "target/${{ matrix.target }}/release/$binary_name" "$dirname"
             echo "BIN=$dirname" >> $GITHUB_ENV
@@ -106,4 +106,3 @@ jobs:
           files: |
             ${{ env.ASSET }}
             ${{ env.BIN }}
-          
