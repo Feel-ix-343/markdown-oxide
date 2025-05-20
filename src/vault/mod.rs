@@ -554,7 +554,11 @@ pub struct MDFile {
 impl MDFile {
     fn new(context: &Settings, text: &str, path: PathBuf) -> MDFile {
         let code_blocks = MDCodeBlock::new(text).collect_vec();
-        let file_name = path.file_stem().expect("file should have file stem").to_str().unwrap_or_default();
+        let file_name = path
+            .file_stem()
+            .expect("file should have file stem")
+            .to_str()
+            .unwrap_or_default();
         let links = match context {
             Settings {
                 references_in_codeblocks: false,
@@ -765,7 +769,9 @@ impl Reference {
             })
         });
 
-        static FOOTNOTE_LINK_RE: Lazy<Regex> = Lazy::new(|| {Regex::new(r"(?<start>\[?)(?<full>\[(?<index>\^[^\[\] ]+)\])(?<end>:?)").unwrap()});
+        static FOOTNOTE_LINK_RE: Lazy<Regex> = Lazy::new(|| {
+            Regex::new(r"(?<start>\[?)(?<full>\[(?<index>\^[^\[\] ]+)\])(?<end>:?)").unwrap()
+        });
         let footnote_references = FOOTNOTE_LINK_RE
             .captures_iter(text)
             .filter(|capture| matches!(
@@ -1003,14 +1009,20 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
         display_text,
     }: RegexTuple,
 ) -> Option<Reference> {
-    if file_path.is_some_and(|path| path.as_str().starts_with("http://")
-        || path.as_str().starts_with("https://")
-        || path.as_str().starts_with("data:"))
-    {
+    if file_path.is_some_and(|path| {
+        path.as_str().starts_with("http://")
+            || path.as_str().starts_with("https://")
+            || path.as_str().starts_with("data:")
+    }) {
         return None;
     }
 
-    match (range, file_path.map(|it| it.as_str()).unwrap_or(file_name), infile_ref, display_text) {
+    match (
+        range,
+        file_path.map(|it| it.as_str()).unwrap_or(file_name),
+        infile_ref,
+        display_text,
+    ) {
         // Pure file reference as there is no infileref such as #... for headings or #^... for indexed blocks
         (full, filepath, None, display) => Some(T::new_file_link(ReferenceData {
             reference_text: filepath.into(),
