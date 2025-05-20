@@ -1358,7 +1358,6 @@ impl From<&str> for Refname {
 
 impl Referenceable<'_> {
     /// Gets the generic reference name for a referenceable. This will not include any display text. If trying to determine if text is a reference of a particular referenceable, use the `is_reference` function
-
     pub fn get_refname(&self, root_dir: &Path) -> Option<Refname> {
         match self {
             Referenceable::File(path, _) => {
