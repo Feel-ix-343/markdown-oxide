@@ -193,7 +193,7 @@ impl Vault {
         &'a self,
         path: &'a Path,
         position: Position,
-    ) -> Option<&Reference> {
+    ) -> Option<&'a Reference> {
         let links = self.select_references(Some(path))?;
 
         let (_path, reference) = links.into_iter().find(|&l| {
