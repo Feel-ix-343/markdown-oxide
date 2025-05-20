@@ -33,10 +33,10 @@ pub async fn jump(
     let note_file = match jump_to {
         Some(jmp_str) => parse(jmp_str)
             .ok()
-            .and_then(|dt| datetime_to_file(dt, &daily_note_format, &daily_note_path)),
+            .and_then(|dt| datetime_to_file(dt, daily_note_format, &daily_note_path)),
         None => datetime_to_file(
             Local::now().naive_local(),
-            &daily_note_format,
+            daily_note_format,
             &daily_note_path,
         ),
     };
