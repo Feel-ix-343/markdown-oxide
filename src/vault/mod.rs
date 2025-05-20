@@ -732,12 +732,12 @@ impl Reference {
 
         let wiki_links = WIKI_LINK_RE
             .captures_iter(text)
-            .filter(
-                |captures| match captures.name("ending").map(|ending| ending.as_str()) {
-                    Some(".md") | None => true,
-                    _ => false,
-                },
-            )
+            .filter(|captures| {
+                matches!(
+                    captures.name("ending").map(|ending| ending.as_str()),
+                    Some(".md") | None
+                )
+            })
             .flat_map(RegexTuple::new)
             .flat_map(|regextuple| {
                 generic_link_constructor::<WikiReferenceConstructor>(text, file_name, regextuple)
@@ -750,12 +750,12 @@ impl Reference {
 
         let md_links = MD_LINK_RE
             .captures_iter(text)
-            .filter(
-                |captures| match captures.name("ending").map(|ending| ending.as_str()) {
-                    Some(".md") | None => true,
-                    _ => false,
-                },
-            )
+            .filter(|captures| {
+                matches!(
+                    captures.name("ending").map(|ending| ending.as_str()),
+                    Some(".md") | None
+                )
+            })
             .flat_map(RegexTuple::new)
             .flat_map(|regextuple| {
                 generic_link_constructor::<MDReferenceConstructor>(text, file_name, regextuple)
