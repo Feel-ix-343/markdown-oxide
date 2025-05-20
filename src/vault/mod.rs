@@ -41,7 +41,7 @@ impl Vault {
                 let text = std::fs::read_to_string(p.path())?;
                 let md_file = MDFile::new(context, &text, PathBuf::from(p.path()));
 
-                return Ok::<(PathBuf, MDFile), std::io::Error>((p.path().into(), md_file));
+                Ok::<(PathBuf, MDFile), std::io::Error>((p.path().into(), md_file))
             })
             .collect();
 
@@ -51,7 +51,7 @@ impl Vault {
                 let text = std::fs::read_to_string(p.path())?;
                 let rope = Rope::from_str(&text);
 
-                return Ok::<(PathBuf, Rope), std::io::Error>((p.path().into(), rope));
+                Ok::<(PathBuf, Rope), std::io::Error>((p.path().into(), rope))
             })
             .collect();
 
@@ -1139,12 +1139,10 @@ impl MDHeading {
                     _ => None,
                 },
             )
-            .map(|(full_heading, heading_match, starter)| {
-                return MDHeading {
-                    heading_text: heading_match.as_str().trim_end().into(),
-                    range: MyRange::from_range(&Rope::from_str(text), full_heading.range()),
-                    level: HeadingLevel(starter.as_str().len()),
-                };
+            .map(|(full_heading, heading_match, starter)| MDHeading {
+                heading_text: heading_match.as_str().trim_end().into(),
+                range: MyRange::from_range(&Rope::from_str(text), full_heading.range()),
+                level: HeadingLevel(starter.as_str().len()),
             });
 
         headings
@@ -1443,7 +1441,7 @@ impl Referenceable<'_> {
                         let refname_split = refname.split('/').collect_vec();
                         let text_split = text.split('/').collect_vec();
 
-                        return text_split.get(0..refname_split.len()) == Some(&refname_split);
+                        text_split.get(0..refname_split.len()) == Some(&refname_split)
                     })
             }
             Referenceable::Footnote(path, _footnote) => match reference {
