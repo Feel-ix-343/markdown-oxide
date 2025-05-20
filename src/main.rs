@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use completion::get_completions;
@@ -811,7 +811,7 @@ impl LanguageServer for Backend {
 async fn jump_to_specific(
     day: &str,
     client: &Client,
-    root_dir: &PathBuf,
+    root_dir: &Path,
     settings: &Settings,
 ) -> Result<Option<Value>> {
     commands::jump(client, root_dir, settings, Some(day)).await
