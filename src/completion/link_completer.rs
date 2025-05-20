@@ -201,7 +201,7 @@ impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
     where
         Self: Sized,
     {
-        if context.settings.references_in_codeblocks == false
+        if !context.settings.references_in_codeblocks
             && check_in_code_block(&context, line, character)
         {
             return None;
@@ -419,7 +419,7 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
     where
         Self: Sized,
     {
-        if context.settings.references_in_codeblocks == false
+        if !context.settings.references_in_codeblocks
             && check_in_code_block(&context, line, character)
         {
             return None;

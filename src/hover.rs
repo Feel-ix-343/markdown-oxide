@@ -10,7 +10,7 @@ pub fn hover(
     path: &Path,
     settings: &Settings,
 ) -> Option<Hover> {
-    if settings.hover == false {
+    if !settings.hover {
         return None;
     }
 
