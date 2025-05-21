@@ -43,19 +43,19 @@ pub enum EmbeddedBlockTransclusionLength {
 }
 
 impl Settings {
-    pub fn new(root_dir: &Path, capabilities: &ClientCapabilities) -> anyhow::Result<Settings> {
+    fn build_settings(root_dir: &Path, disable_semantic_tokens: bool) -> anyhow::Result<Settings> {
         let obsidian_daily_note_config = obsidian_daily_note_config(root_dir).unwrap_or_default();
         let obsidian_new_file_folder_path = obsidian_new_file_folder_path(root_dir);
         let expanded = shellexpand::tilde("~/.config/moxide/settings");
+        
+        let root_dir_str = root_dir
+            .to_str()
+            .ok_or_else(|| anyhow!("Can't convert root_dir to str"))?;
+
         let settings = Config::builder()
             .add_source(File::with_name(&expanded).required(false))
             .add_source(
-                File::with_name(&format!(
-                    "{}/.moxide",
-                    root_dir
-                        .to_str()
-                        .ok_or(anyhow!("Can't convert root_dir to str"))?
-                ))
+                File::with_name(&format!("{}/.moxide", root_dir_str))
                 .required(false),
             )
             .set_default(
@@ -87,19 +87,22 @@ impl Settings {
             .set_default("block_transclusion_length", "Full")?
             .set_override_option(
                 "semantic_tokens",
-                capabilities.text_document.as_ref().and_then(|it| {
-                    match it.semantic_tokens.is_none() {
-                        true => Some(false),
-                        false => None,
-                    }
-                }),
+                match disable_semantic_tokens {
+                    true => Some(false),
+                    false => None
+                }
             )?
-            .build()
-            .map_err(|err| anyhow!("Build err: {err}"))?;
+            .build()?;
 
-        let settings = settings.try_deserialize::<Settings>()?;
+        settings.try_deserialize().map_err(|e| anyhow!("Failed to deserialize settings: {}", e))
+    }
 
-        anyhow::Ok(settings)
+    /// This will fail if settings is defined wrongly by the user. This is the case because if the user defines some config, and that
+    /// config is not resolved, then the user's software will not behave the way the user intentds, which is a contradictory case that 
+    /// we won't handle.
+    pub fn new(root_dir: &Path, disable_semantic_tokens: bool) -> Settings {
+        Self::build_settings(root_dir, disable_semantic_tokens)
+            .expect("Failed to build settings despite having valid defaults. There's likely an error in your settings file, and note that this would not fail if the settings file is not defined")
     }
 }
 

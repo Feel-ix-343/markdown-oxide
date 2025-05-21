@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use completion::get_completions;
@@ -36,6 +37,7 @@ mod symbol;
 mod tokens;
 mod ui;
 mod vault;
+mod mcp;
 
 #[derive(Debug)]
 struct Backend {
@@ -114,9 +116,7 @@ impl Backend {
         {
             let _ = self
                 .bind_vault_mut(|vault| {
-                    let Ok(new_vault) = Vault::construct_vault(&settings, vault.root_dir()) else {
-                        return Err(Error::new(ErrorCode::ServerError(0)));
-                    };
+                    let new_vault = Vault::construct_vault(&settings, vault.root_dir());
 
                     *vault = new_vault;
 
@@ -301,22 +301,17 @@ impl LanguageServer for Backend {
             None => std::env::current_dir().or(Err(Error::new(ErrorCode::InvalidParams)))?,
         };
 
-        let read_settings = match Settings::new(&root_dir, &i.capabilities) {
-            Ok(settings) => settings,
-            Err(e) => {
-                self.client
-                    .log_message(
-                        MessageType::ERROR,
-                        format!("Failed to read settings {:?}", e),
-                    )
-                    .await;
-                return Err(Error::new(ErrorCode::ServerError(1)));
-            }
-        };
+        let disable_semantic_tokens = i.capabilities.text_document.as_ref().and_then(|it| {
+                    match it.semantic_tokens.is_none() {
+                        true => Some(false),
+                        false => None,
+                    }
+                }).unwrap_or(false);
 
-        let Ok(vault) = Vault::construct_vault(&read_settings, &root_dir) else {
-            return Err(Error::new(ErrorCode::ServerError(0)));
-        };
+        let read_settings = Settings::new(&root_dir, disable_semantic_tokens);
+
+        let vault = Vault::construct_vault(&read_settings, &root_dir);
+
         let mut value = self.vault.write().await;
         *value = Some(vault);
 
@@ -826,14 +821,31 @@ async fn main() {
         return;
     }
 
-    let stdin = tokio::io::stdin();
-    let stdout = tokio::io::stdout();
+    // Check if the MCP flag is provided
+    let is_mcp_mode = env::args().any(|arg| arg == "mcp");
 
-    let (service, socket) = LspService::new(|client| Backend {
-        client,
-        vault: Arc::new(None.into()),
-        opened_files: Arc::new(HashSet::new().into()),
-        settings: Arc::new(None.into()),
-    });
-    Server::new(stdin, stdout, socket).serve(service).await;
+    if is_mcp_mode {
+        let mut args = env::args().into_iter();
+        args.find(|arg| arg == "--full-dir-path");
+        let directory_string = args.next().expect("The full path to the vault must be specified as an argument. Use arg --full-dir-path /home/{path}");
+        let root_dir = PathBuf::from_str(&directory_string).expect("The root dir must be a valid path");
+
+        // Start the MCP server
+        if let Err(e) = mcp::start(root_dir).await {
+            eprintln!("MCP server error: {:?}", e);
+            std::process::exit(1);
+        }
+    } else {
+        // Start in LSP mode (original behavior)
+        let stdin = tokio::io::stdin();
+        let stdout = tokio::io::stdout();
+
+        let (service, socket) = LspService::new(|client| Backend {
+            client,
+            vault: Arc::new(None.into()),
+            opened_files: Arc::new(HashSet::new().into()),
+            settings: Arc::new(None.into()),
+        });
+        Server::new(stdin, stdout, socket).serve(service).await;
+    }
 }
