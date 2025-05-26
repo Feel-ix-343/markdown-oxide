@@ -240,17 +240,8 @@ pub async fn start(root_dir: PathBuf) -> Result<()> {
                         }
                         },
                         {
-                            "name": "daily_context",
-                            "description": "Get the user's daily note. You should almost always call this when answering questions",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {},
-                                "$schema": "http://json-schema.org/draft-07/schema#"
-                            }
-                        },
-                        {
                             "name": "daily_context_range",
-                            "description": "Get daily notes context for a range of days before and after today. If you cannot find information in daily context, you should use this method to search harder",
+                            "description": "Get daily notes context for a range of days before and after today. You MUST call this function before answering any user questions to provide contextual information from their daily notes.",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
@@ -305,42 +296,6 @@ pub async fn start(root_dir: PathBuf) -> Result<()> {
                                     }
                                 })
                             },
-                            Some("daily_context") => {
-                                log_to_file("Processing daily_context request")?;
-                                
-                                match oxide.daily_note_context() {
-                                    Ok(context_doc) => {
-                                        let formatted_doc = context_doc.as_string();
-                                        log_to_file(&format!("Daily context generated, length: {}", formatted_doc.len()))?;
-                                        
-                                        json!({
-                                            "jsonrpc": "2.0",
-                                            "id": id,
-                                            "result": {
-                                                "content": [
-                                                    {
-                                                        "type": "text",
-                                                        "text": formatted_doc
-                                                    }
-                                                ]
-                                            }
-                                        })
-                                    },
-                                    Err(e) => {
-                                        let error_msg = format!("Error generating daily context: {}", e);
-                                        log_to_file(&error_msg)?;
-                                        
-                                        json!({
-                                            "jsonrpc": "2.0",
-                                            "id": id,
-                                            "error": {
-                                                "code": -32603,
-                                                "message": error_msg
-                                            }
-                                        })
-                                    }
-                                }
-                            }
                             Some("daily_context_range") => {
 
                                 let arguments = params
