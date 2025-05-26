@@ -258,6 +258,21 @@ pub async fn start(root_dir: PathBuf) -> Result<()> {
                                 },
                                 "$schema": "http://json-schema.org/draft-07/schema#"
                             }
+                        },
+                        {
+                            "name": "entity_context",
+                            "description": "Get the content of an entity with its context, including the entity definition and all references to it",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "ref_id": {
+                                        "type": "string",
+                                        "description": "Reference ID of the entity as it would appear in a wikilink (e.g., 'filename', 'filename#heading', 'filename#^blockid', '#tag')"
+                                    }
+                                },
+                                "required": ["ref_id"],
+                                "$schema": "http://json-schema.org/draft-07/schema#"
+                            }
                         }
                         ]
                         }
@@ -335,6 +350,46 @@ pub async fn start(root_dir: PathBuf) -> Result<()> {
                                     Err(e) => {
                                         let error_msg =
                                             format!("Error generating daily context range: {}", e);
+
+                                        json!({
+                                            "jsonrpc": "2.0",
+                                            "id": id,
+                                            "error": {
+                                                "code": -32603,
+                                                "message": error_msg
+                                            }
+                                        })
+                                    }
+                                }
+                            },
+                            Some("entity_context") => {
+                                let arguments = params
+                                    .get("arguments")
+                                    .cloned()
+                                    .unwrap_or_else(|| json!({}));
+
+                                let ref_id = arguments
+                                    .get("ref_id")
+                                    .and_then(|r| r.as_str())
+                                    .unwrap_or("");
+
+                                match oxide.get_entity_context(ref_id) {
+                                    Ok(context) => {
+                                        json!({
+                                            "jsonrpc": "2.0",
+                                            "id": id,
+                                            "result": {
+                                                "content": [
+                                                    {
+                                                        "type": "text",
+                                                        "text": context
+                                                    }
+                                                ]
+                                            }
+                                        })
+                                    }
+                                    Err(e) => {
+                                        let error_msg = format!("Error getting entity context: {}", e);
 
                                         json!({
                                             "jsonrpc": "2.0",
@@ -428,6 +483,7 @@ mod connector {
 
     use crate::{
         config::Settings,
+        ui::{preview_referenceable_with_mode, PreviewMode},
         vault::{Referenceable, Vault},
     };
 
@@ -618,6 +674,26 @@ mod connector {
                 outgoing_links,
                 backlinks,
             })
+        }
+        
+        /// Get entity context for a given reference ID
+        pub fn get_entity_context(&self, ref_id: &str) -> Result<String, anyhow::Error> {
+            // Find referenceable directly by comparing refnames
+            let referenceable = self.vault
+                .select_referenceable_nodes(None)
+                .into_iter()
+                .find(|r| {
+                    r.get_refname(self.vault.root_dir())
+                        .map(|refname| refname.full_refname == ref_id)
+                        .unwrap_or(false)
+                })
+                .ok_or_else(|| anyhow::anyhow!("Entity not found: {}", ref_id))?;
+                
+            // Generate preview with full content using existing UI function
+            let preview = preview_referenceable_with_mode(&self.vault, &referenceable, PreviewMode::LlmContext)
+                .ok_or_else(|| anyhow::anyhow!("Could not generate preview"))?;
+                
+            Ok(preview.value)
         }
         
         /// Helper function to get backlinks for a specific path

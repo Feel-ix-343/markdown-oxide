@@ -5,10 +5,26 @@ use tower_lsp::lsp_types::{MarkupContent, MarkupKind};
 
 use crate::vault::{get_obsidian_ref_path, Preview, Reference, Referenceable, Vault};
 
+/// Preview mode controls the amount of content returned
+#[derive(Copy, Clone)]
+pub enum PreviewMode {
+    /// Hover mode with limited content (20 backlinks, 14 lines for files)
+    Hover,
+    /// LLM context mode with expanded content (100 backlinks, 200 lines for files)
+    LlmContext,
+}
+
 fn referenceable_string(vault: &Vault, referenceables: &[Referenceable]) -> Option<String> {
+    referenceable_string_with_mode(vault, referenceables, PreviewMode::Hover)
+}
+
+fn referenceable_string_with_mode(vault: &Vault, referenceables: &[Referenceable], mode: PreviewMode) -> Option<String> {
     let referenceable = referenceables.first()?;
 
-    let preview = vault.select_referenceable_preview(referenceable);
+    let preview = match mode {
+        PreviewMode::Hover => vault.select_referenceable_preview(referenceable),
+        PreviewMode::LlmContext => vault.select_referenceable_preview_with_mode(referenceable, mode),
+    };
 
     let written_text_preview = match preview {
         Some(Preview::Empty) => "No Text".into(),
@@ -28,9 +44,14 @@ fn referenceable_string(vault: &Vault, referenceables: &[Referenceable]) -> Opti
         .flatten()
         .collect_vec()
     {
-        references if !references.is_empty() => references
-            .into_iter()
-            .take(20)
+        references if !references.is_empty() => {
+            let backlinks_limit = match mode {
+                PreviewMode::Hover => 20,
+                PreviewMode::LlmContext => 100,
+            };
+            references
+                .into_iter()
+                .take(backlinks_limit)
             .flat_map(|(path, reference)| {
                 let line = String::from_iter(
                     vault.select_line(path, reference.data().range.start.line as isize)?,
@@ -40,7 +61,8 @@ fn referenceable_string(vault: &Vault, referenceables: &[Referenceable]) -> Opti
 
                 Some(format!("- `{}`: `{}`", path, line)) // and select indented list
             })
-            .join("\n"),
+                .join("\n")
+        }
         _ => "No Backlinks".to_string(),
     };
 
@@ -54,7 +76,15 @@ pub fn preview_referenceable(
     vault: &Vault,
     referenceable: &Referenceable,
 ) -> Option<MarkupContent> {
-    let display = referenceable_string(vault, &[referenceable.clone()])?;
+    preview_referenceable_with_mode(vault, referenceable, PreviewMode::Hover)
+}
+
+pub fn preview_referenceable_with_mode(
+    vault: &Vault,
+    referenceable: &Referenceable,
+    mode: PreviewMode,
+) -> Option<MarkupContent> {
+    let display = referenceable_string_with_mode(vault, &[referenceable.clone()], mode)?;
 
     Some(MarkupContent {
         kind: MarkupKind::Markdown,
@@ -69,6 +99,15 @@ pub fn preview_reference(
     reference_path: &Path,
     reference: &Reference,
 ) -> Option<MarkupContent> {
+    preview_reference_with_mode(vault, reference_path, reference, PreviewMode::Hover)
+}
+
+pub fn preview_reference_with_mode(
+    vault: &Vault,
+    reference_path: &Path,
+    reference: &Reference,
+    mode: PreviewMode,
+) -> Option<MarkupContent> {
     match reference {
         WikiFileLink(..)
         | WikiHeadingLink(..)
@@ -81,7 +120,7 @@ pub fn preview_reference(
             let referenceables_for_reference =
                 vault.select_referenceables_for_reference(reference, reference_path);
 
-            let display = referenceable_string(vault, &referenceables_for_reference)?;
+            let display = referenceable_string_with_mode(vault, &referenceables_for_reference, mode)?;
 
             Some(MarkupContent {
                 kind: MarkupKind::Markdown,

@@ -21,6 +21,8 @@ use serde::{Deserialize, Serialize};
 use tower_lsp::lsp_types::Position;
 use walkdir::WalkDir;
 
+use crate::ui::PreviewMode;
+
 impl Vault {
     pub fn construct_vault(context: &Settings, root_dir: &Path) -> Vault {
         let md_file_paths = WalkDir::new(root_dir)
@@ -422,6 +424,62 @@ impl Vault {
                 Some(
                     (0..=13)
                         .filter_map(|ln| self.select_line(referenceable.get_path(), ln as isize)) // flatten those options!
+                        .map(String::from_iter)
+                        .join("")
+                        .into(),
+                )
+            }
+            Referenceable::Tag(_, _) => None,
+            Referenceable::UnresovledFile(_, _) => None,
+            Referenceable::UnresolvedHeading(_, _, _) => None,
+            Referenceable::UnresovledIndexedBlock(_, _, _) => None,
+        }
+    }
+
+    pub fn select_referenceable_preview_with_mode(&self, referenceable: &Referenceable, mode: PreviewMode) -> Option<Preview> {
+        if self
+            .ropes
+            .get(referenceable.get_path())
+            .is_some_and(|rope| rope.len_lines() == 1)
+        {
+            return Some(Empty);
+        }
+
+        let (file_lines, heading_lines) = match mode {
+            PreviewMode::Hover => (14, 10),
+            PreviewMode::LlmContext => (200, 50),
+        };
+
+        match referenceable {
+            Referenceable::Footnote(_, _) | Referenceable::LinkRefDef(..) => {
+                let range = referenceable.get_range()?;
+                Some(
+                    String::from_iter(
+                        self.select_line(referenceable.get_path(), range.start.line as isize)?,
+                    )
+                    .into(),
+                )
+            }
+            Referenceable::Heading(_, _) => {
+                let range = referenceable.get_range()?;
+                Some(
+                    (range.start.line..=range.end.line + heading_lines)
+                        .filter_map(|ln| self.select_line(referenceable.get_path(), ln as isize))
+                        .map(String::from_iter)
+                        .join("")
+                        .into(),
+                )
+            }
+            Referenceable::IndexedBlock(_, _) => {
+                let range = referenceable.get_range()?;
+                self.select_line(referenceable.get_path(), range.start.line as isize)
+                    .map(String::from_iter)
+                    .map(Into::into)
+            }
+            Referenceable::File(_, _) => {
+                Some(
+                    (0..file_lines)
+                        .filter_map(|ln| self.select_line(referenceable.get_path(), ln as isize))
                         .map(String::from_iter)
                         .join("")
                         .into(),
