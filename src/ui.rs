@@ -14,9 +14,6 @@ pub enum PreviewMode {
     LlmContext,
 }
 
-fn referenceable_string(vault: &Vault, referenceables: &[Referenceable]) -> Option<String> {
-    referenceable_string_with_mode(vault, referenceables, PreviewMode::Hover)
-}
 
 fn referenceable_string_with_mode(vault: &Vault, referenceables: &[Referenceable], mode: PreviewMode) -> Option<String> {
     let referenceable = referenceables.first()?;

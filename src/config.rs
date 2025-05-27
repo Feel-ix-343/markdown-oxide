@@ -5,7 +5,7 @@ use config::{Config, File};
 use indexmap::IndexMap;
 use serde::Deserialize;
 use serde_json::Value;
-use tower_lsp::lsp_types::ClientCapabilities;
+
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Settings {
