@@ -14,7 +14,7 @@ use self::{
 mod callout_completer;
 mod footnote_completer;
 mod link_completer;
-mod matcher;
+pub mod matcher;
 mod tag_completer;
 mod unindexed_block_completer;
 mod util;

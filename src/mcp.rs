@@ -273,6 +273,33 @@ pub async fn start(root_dir: PathBuf) -> Result<()> {
                                 "required": ["ref_id"],
                                 "$schema": "http://json-schema.org/draft-07/schema#"
                             }
+                        },
+                        {
+                            "name": "entity_search",
+                            "description": "Search for entities in the vault by name pattern and/or type. Returns a list of matching entities with their reference IDs.",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "query": {
+                                        "type": "string",
+                                        "description": "Search query to match against entity names (case-insensitive partial match)"
+                                    },
+                                    "entity_type": {
+                                        "type": "string",
+                                        "enum": ["file", "heading", "tag", "footnote", "indexed_block", "all"],
+                                        "description": "Type of entity to search for. Use 'all' to search all types.",
+                                        "default": "all"
+                                    },
+                                    "limit": {
+                                        "type": "integer",
+                                        "description": "Maximum number of results to return",
+                                        "default": 50,
+                                        "minimum": 1,
+                                        "maximum": 200
+                                    }
+                                },
+                                "$schema": "http://json-schema.org/draft-07/schema#"
+                            }
                         }
                         ]
                         }
@@ -401,6 +428,57 @@ pub async fn start(root_dir: PathBuf) -> Result<()> {
                                         })
                                     }
                                 }
+                            },
+                            Some("entity_search") => {
+                                let arguments = params
+                                    .get("arguments")
+                                    .cloned()
+                                    .unwrap_or_else(|| json!({}));
+
+                                let query = arguments
+                                    .get("query")
+                                    .and_then(|q| q.as_str())
+                                    .unwrap_or("");
+
+                                let entity_type = arguments
+                                    .get("entity_type")
+                                    .and_then(|t| t.as_str())
+                                    .unwrap_or("all");
+
+                                let limit = arguments
+                                    .get("limit")
+                                    .and_then(|l| l.as_u64())
+                                    .unwrap_or(50)
+                                    .min(200) as usize;
+
+                                match oxide.search_entities(query, entity_type, limit) {
+                                    Ok(results) => {
+                                        json!({
+                                            "jsonrpc": "2.0",
+                                            "id": id,
+                                            "result": {
+                                                "content": [
+                                                    {
+                                                        "type": "text",
+                                                        "text": results
+                                                    }
+                                                ]
+                                            }
+                                        })
+                                    }
+                                    Err(e) => {
+                                        let error_msg = format!("Error searching entities: {}", e);
+
+                                        json!({
+                                            "jsonrpc": "2.0",
+                                            "id": id,
+                                            "error": {
+                                                "code": -32603,
+                                                "message": error_msg
+                                            }
+                                        })
+                                    }
+                                }
                             }
                             _ => {
                                 log_to_file(&format!("Unknown tool: {:?}", tool_name))?;
@@ -482,7 +560,8 @@ mod connector {
     use anyhow;
 
     use crate::{
-        config::Settings,
+        completion::matcher::{fuzzy_match, Matchable},
+        config::{Case, Settings},
         ui::{preview_referenceable_with_mode, PreviewMode},
         vault::{Referenceable, Vault},
     };
@@ -498,6 +577,18 @@ mod connector {
         content: String,
         outgoing_links: Vec<LinkedContent>,
         backlinks: Vec<LinkedContent>,
+    }
+
+    struct EntityCandidate {
+        refname: String,
+        entity_type: String,
+        path: PathBuf,
+    }
+
+    impl Matchable for EntityCandidate {
+        fn match_string(&self) -> &str {
+            &self.refname
+        }
     }
 
     #[derive(Debug)]
@@ -732,6 +823,77 @@ mod connector {
                     }
                 })
                 .collect()
+        }
+        
+        /// Search for entities in the vault by name pattern and type
+        pub fn search_entities(&self, query: &str, entity_type: &str, limit: usize) -> Result<String, anyhow::Error> {
+            let all_referenceables = self.vault.select_referenceable_nodes(None);
+            
+            // First filter by type and collect candidates
+            let candidates: Vec<EntityCandidate> = all_referenceables
+                .into_iter()
+                .filter_map(|referenceable| {
+                    // Filter by type
+                    let type_matches = match entity_type {
+                        "file" => matches!(referenceable, Referenceable::File(_, _)),
+                        "heading" => matches!(referenceable, Referenceable::Heading(_, _)),
+                        "tag" => matches!(referenceable, Referenceable::Tag(_, _)),
+                        "footnote" => matches!(referenceable, Referenceable::Footnote(_, _)),
+                        "indexed_block" => matches!(referenceable, Referenceable::IndexedBlock(_, _)),
+                        "all" => true,
+                        _ => false,
+                    };
+                    
+                    if !type_matches {
+                        return None;
+                    }
+                    
+                    // Get refname for searching
+                    let refname = referenceable.get_refname(self.vault.root_dir())?;
+                    
+                    let entity_type_str = match referenceable {
+                        Referenceable::File(_, _) => "File",
+                        Referenceable::Heading(_, _) => "Heading",
+                        Referenceable::Tag(_, _) => "Tag",
+                        Referenceable::Footnote(_, _) => "Footnote",
+                        Referenceable::IndexedBlock(_, _) => "Indexed Block",
+                        _ => "Unknown",
+                    };
+                    
+                    Some(EntityCandidate {
+                        refname: refname.full_refname,
+                        entity_type: entity_type_str.to_string(),
+                        path: referenceable.get_path().to_path_buf(),
+                    })
+                })
+                .collect();
+            
+            // Use fuzzy matching from completion system
+            let matching_entities = if query.is_empty() {
+                candidates.into_iter().map(|item| (item, u32::MAX)).collect()
+            } else {
+                fuzzy_match(query, candidates, &Case::Smart)
+            };
+            
+            // Sort by fuzzy match score (higher is better) and limit results
+            let mut sorted_entities = matching_entities;
+            sorted_entities.sort_by(|a, b| b.1.cmp(&a.1));
+            sorted_entities.truncate(limit);
+            
+            // Format results
+            if sorted_entities.is_empty() {
+                Ok("No entities found matching the search criteria.".to_string())
+            } else {
+                let mut result = format!("Found {} entities:\n\n", sorted_entities.len());
+                
+                for (candidate, _score) in sorted_entities {
+                    result.push_str(&format!("**{}** ({})\n", candidate.refname, candidate.entity_type));
+                    result.push_str(&format!("Path: {}\n", candidate.path.display()));
+                    result.push_str(&format!("Use `entity_context` with ref_id: `{}`\n\n", candidate.refname));
+                }
+                
+                Ok(result)
+            }
         }
     }
 

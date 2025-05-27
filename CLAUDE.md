@@ -26,6 +26,15 @@ cargo fmt
 - **Types**: Prefer strong typing with custom types over primitives
 - **Async**: Use `async/await` consistently, avoid mixing with direct futures
 
+## Development Approach
+- **Planning**: For tasks that involve multiple steps or components, first state your implementation plan before writing code
+- **Break Down Complex Tasks**: Identify the main components, dependencies, and sequence of implementation
+- **State Your Plan**: Clearly outline:
+  - What files need to be created or modified
+  - The order of implementation
+  - Key design decisions or trade-offs
+- **Then Implement**: After stating the plan, proceed with the actual code implementation
+
 ## Project Structure
 - `src/vault/`: Core data management
 - `src/completion/`: Editor completion providers
