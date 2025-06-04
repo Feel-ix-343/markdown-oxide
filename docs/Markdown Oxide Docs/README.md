@@ -29,7 +29,7 @@ Set up the PKM for your text editor...
 
 ## Neovim
 
-1. Give Neovim access to the binary.
+- Give Neovim access to the binary.
 
     - <details>
          <summary>Cargo Install (from source)</summary>
@@ -64,6 +64,8 @@ Set up the PKM for your text editor...
 
     - [Mason.nvim](https://github.com/williamboman/mason.nvim) (from hosted binary)
     - Nix: `pkgs.markdown-oxide`
+    - Alpine Linux: `apk add markdown-oxide`
+    - openSUSE: `zypper install markdown-oxide`
     
     - <details>
          <summary>Winget (Windows)</summary>
@@ -83,7 +85,7 @@ Set up the PKM for your text editor...
     
     </details>
   
-2. Modify your Neovim Configuration ^nvimconfigsetup
+- Modify your Neovim Configuration ^nvimconfigsetup
     - <details>
         <summary>Modify LSP Config (making sure to adjust capabilities as follows)</summary>
 
@@ -193,8 +195,8 @@ Set up the PKM for your text editor...
 ## VSCode
 
 Install the [vscode extension](https://marketplace.visualstudio.com/items?itemName=FelixZeller.markdown-oxide) (called `Markdown Oxide`). As for how the extension uses the language server, there are two options
-1. Recommended: the extension will download the server's binary and use that
-2. The extension will use `markdown-oxide` from path. To install to your path, there are the following methods for VSCode:
+- Recommended: the extension will download the server's binary and use that
+- The extension will use `markdown-oxide` from path. To install to your path, there are the following methods for VSCode:
 
     - <details>
          <summary>Cargo Install (from source)</summary>
@@ -228,6 +230,8 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
     </details>
     
     - Nix: `pkgs.markdown-oxide`
+    - Alpine Linux: `apk add markdown-oxide`
+    - openSUSE: `zypper install markdown-oxide`
     
     - <details>
          <summary>Winget (Windows)</summary>
@@ -250,8 +254,8 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
 ## Zed
 
 Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly to VSCode, there are two methods for this extension to access the language server
-1. Recommended: the extension will download the server's binary and use that
-2. The extension will use `markdown-oxide` from path. To install to your path, there are the following methods for Zed:
+- Recommended: the extension will download the server's binary and use that
+- The extension will use `markdown-oxide` from path. To install to your path, there are the following methods for Zed:
 
     - <details>
          <summary>Cargo Install (from source)</summary>
@@ -285,6 +289,8 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
     </details>
     
     - Nix: `pkgs.markdown-oxide`
+    - Alpine Linux: `apk add markdown-oxide`
+    - openSUSE: `zypper install markdown-oxide`
     
     - <details>
          <summary>Winget (Windows)</summary>
@@ -341,6 +347,8 @@ For Helix, all you must do is install the language server's binary to your path.
 </details>
 
 - Nix: `pkgs.markdown-oxide`
+- Alpine Linux: `apk add markdown-oxide`
+- openSUSE: `zypper install markdown-oxide`
 
 - <details>
      <summary>Winget (Windows)</summary>
