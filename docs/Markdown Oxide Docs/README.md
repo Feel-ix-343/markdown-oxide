@@ -66,6 +66,15 @@ Set up the PKM for your text editor...
     - Nix: `pkgs.markdown-oxide`
     
     - <details>
+         <summary>Winget (Windows)</summary>
+    
+        ```bash
+        winget install FelixZeller.markdown-oxide
+        ```
+    
+    </details>
+    
+    - <details>
          <summary>Homebrew (from package manager)</summary>
     
         ```bash
@@ -221,6 +230,15 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
     - Nix: `pkgs.markdown-oxide`
     
     - <details>
+         <summary>Winget (Windows)</summary>
+    
+        ```bash
+        winget install FelixZeller.markdown-oxide
+        ```
+    
+    </details>
+    
+    - <details>
          <summary>Homebrew (from package manager)</summary>
     
         ```bash
@@ -269,6 +287,15 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
     - Nix: `pkgs.markdown-oxide`
     
     - <details>
+         <summary>Winget (Windows)</summary>
+    
+        ```bash
+        winget install FelixZeller.markdown-oxide
+        ```
+    
+    </details>
+    
+    - <details>
          <summary>Homebrew (from package manager)</summary>
     
         ```bash
@@ -314,6 +341,15 @@ For Helix, all you must do is install the language server's binary to your path.
 </details>
 
 - Nix: `pkgs.markdown-oxide`
+
+- <details>
+     <summary>Winget (Windows)</summary>
+
+    ```bash
+    winget install FelixZeller.markdown-oxide
+    ```
+
+</details>
 
 - <details>
      <summary>Homebrew (from package manager)</summary>
