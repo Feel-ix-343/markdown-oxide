@@ -63,7 +63,7 @@ Set up the PKM for your text editor...
     </details>
 
     - [Mason.nvim](https://github.com/williamboman/mason.nvim) (from hosted binary)
-    - Nix Unstable: `pkgs.markdown-oxide`
+    - Nix: `pkgs.markdown-oxide`
     
     - <details>
          <summary>Homebrew (from package manager)</summary>
@@ -218,7 +218,7 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
     
     </details>
     
-    - Nix Unstable: `pkgs.markdown-oxide`
+    - Nix: `pkgs.markdown-oxide`
     
     - <details>
          <summary>Homebrew (from package manager)</summary>
@@ -266,7 +266,7 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
     
     </details>
     
-    - Nix Unstable: `pkgs.markdown-oxide`
+    - Nix: `pkgs.markdown-oxide`
     
     - <details>
          <summary>Homebrew (from package manager)</summary>
@@ -313,7 +313,7 @@ For Helix, all you must do is install the language server's binary to your path.
 
 </details>
 
-- Nix Unstable: `pkgs.markdown-oxide`
+- Nix: `pkgs.markdown-oxide`
 
 - <details>
      <summary>Homebrew (from package manager)</summary>
