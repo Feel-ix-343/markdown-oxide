@@ -66,6 +66,7 @@ Set up the PKM for your text editor...
     - Nix: `pkgs.markdown-oxide`
     - Alpine Linux: `apk add markdown-oxide`
     - openSUSE: `zypper install markdown-oxide`
+    - Conda: `conda install conda-forge::markdown-oxide`
     
     - <details>
          <summary>Winget (Windows)</summary>
@@ -232,6 +233,7 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
     - Nix: `pkgs.markdown-oxide`
     - Alpine Linux: `apk add markdown-oxide`
     - openSUSE: `zypper install markdown-oxide`
+    - Conda: `conda install conda-forge::markdown-oxide`
     
     - <details>
          <summary>Winget (Windows)</summary>
@@ -291,6 +293,7 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
     - Nix: `pkgs.markdown-oxide`
     - Alpine Linux: `apk add markdown-oxide`
     - openSUSE: `zypper install markdown-oxide`
+    - Conda: `conda install conda-forge::markdown-oxide`
     
     - <details>
          <summary>Winget (Windows)</summary>
@@ -349,6 +352,7 @@ For Helix, all you must do is install the language server's binary to your path.
 - Nix: `pkgs.markdown-oxide`
 - Alpine Linux: `apk add markdown-oxide`
 - openSUSE: `zypper install markdown-oxide`
+- Conda: `conda install conda-forge::markdown-oxide`
 
 - <details>
      <summary>Winget (Windows)</summary>
