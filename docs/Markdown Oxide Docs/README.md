@@ -32,6 +32,15 @@ Set up the PKM for your text editor...
 1. Give Neovim access to the binary.
 
     - <details>
+         <summary>Homebrew (from package manager)</summary>
+    
+        ```bash
+        brew install markdown-oxide
+        ```
+    
+    </details>
+
+    - <details>
          <summary>Cargo Install (from source)</summary>
     
         ```bash
@@ -179,6 +188,15 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
 2. The extension will use `markdown-oxide` from path. To install to your path, there are the following methods for VSCode:
 
     - <details>
+         <summary>Homebrew (from package manager)</summary>
+    
+        ```bash
+        brew install markdown-oxide
+        ```
+    
+    </details>
+
+    - <details>
          <summary>Cargo Install (from source)</summary>
     
         ```bash
@@ -218,6 +236,15 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
 2. The extension will use `markdown-oxide` from path. To install to your path, there are the following methods for Zed:
 
     - <details>
+         <summary>Homebrew (from package manager)</summary>
+    
+        ```bash
+        brew install markdown-oxide
+        ```
+    
+    </details>
+
+    - <details>
          <summary>Cargo Install (from source)</summary>
     
         ```bash
@@ -255,6 +282,15 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
 ## Helix
 
 For Helix, all you must do is install the language server's binary to your path. The following installation methods are available:
+- <details>
+     <summary>Homebrew (from package manager)</summary>
+
+    ```bash
+    brew install markdown-oxide
+    ```
+
+</details>
+
 - <details>
      <summary>Cargo Install (from source)</summary>
 
