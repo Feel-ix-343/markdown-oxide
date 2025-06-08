@@ -2,5 +2,6 @@
   "vimMode": true,
   "defaultViewMode": "source",
   "livePreview": true,
-  "showInlineTitle": false
+  "showInlineTitle": false,
+  "alwaysUpdateLinks": true
 }

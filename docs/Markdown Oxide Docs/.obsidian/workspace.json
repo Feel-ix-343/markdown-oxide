@@ -13,11 +13,22 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "v0/Articles/Markdown-Oxide v0.md",
+                "file": "Configuration.md",
                 "mode": "preview",
+                "source": false,
                 "backlinks": true,
-                "source": false
-              }
+                "backlinkOpts": {
+                  "collapseAll": false,
+                  "extraContext": false,
+                  "sortOrder": "alphabetical",
+                  "showSearch": false,
+                  "searchQuery": "",
+                  "backlinkCollapsed": false,
+                  "unlinkedCollapsed": true
+                }
+              },
+              "icon": "lucide-file",
+              "title": "Configuration"
             }
           }
         ]
@@ -39,8 +50,11 @@
             "state": {
               "type": "file-explorer",
               "state": {
-                "sortOrder": "alphabetical"
-              }
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
             }
           },
           {
@@ -55,7 +69,9 @@
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical"
-              }
+              },
+              "icon": "lucide-search",
+              "title": "Search"
             }
           },
           {
@@ -63,7 +79,9 @@
             "type": "leaf",
             "state": {
               "type": "bookmarks",
-              "state": {}
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
             }
           }
         ]
@@ -86,7 +104,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "v0/Articles/Markdown-Oxide v0.md",
+                "file": "Configuration.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -94,7 +112,9 @@
                 "searchQuery": "",
                 "backlinkCollapsed": false,
                 "unlinkedCollapsed": true
-              }
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for Configuration"
             }
           },
           {
@@ -103,10 +123,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "v0/Articles/Markdown-Oxide v0.md",
+                "file": "Configuration.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
-              }
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from Configuration"
             }
           },
           {
@@ -116,8 +138,12 @@
               "type": "tag",
               "state": {
                 "sortOrder": "frequency",
-                "useHierarchy": true
-              }
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
             }
           },
           {
@@ -126,8 +152,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "v0/Articles/Markdown-Oxide v0.md"
-              }
+                "file": "Configuration.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of Configuration"
             }
           }
         ]
@@ -150,6 +181,23 @@
   },
   "active": "d695463100ad962a",
   "lastOpenFiles": [
+    "Features Index.md",
+    "Date Formatting.md",
+    "Daily Notes.md",
+    "References/Features",
+    "Author.md",
+    "What Is Markdown-Oxide.md",
+    "PKMS.md",
+    "LSP.md",
+    "Configuration.md",
+    "Setup Instructions.md",
+    "rug/README.md",
+    "rug/Index.md",
+    "rug/Documentation Notes.md",
+    "rug/Block Queries For Linking.md",
+    "rug/Block Organization.md",
+    "index.md",
+    "README.md",
     "What Is Markdown-Oxide.md",
     "v0/Articles/Markdown-Oxide v0.md",
     "Home.md",
@@ -166,24 +214,7 @@
     "README.md~",
     "v0/References/v0 Features Reference.md",
     "v0/Guides/Getting started with Markdown Oxide Version 0.md",
-    "publish.css",
     "v0/References/v0 Configuration Reference.md",
-    "Daily Notes.md",
-    "v0/Guides/v0 Getting Started Guide.md",
-    "Setup.md",
-    "Personal Knowledge Management System.md",
-    "Block Queries for Linking.md",
-    "Documentation Notes.md",
-    "Felix.md",
-    "What is Markdown Oxide.md",
-    "What is Markdown Oxide?.md",
-    "v0/Articles/Markdown Oxide Version 0.md",
-    "Date formatting.md",
-    "MXIDE.md",
-    "Setup'.md",
-    "v0 Setup.md",
-    "Block Completions.md",
-    "v0.md",
-    "v1.md"
+    "Daily Notes.md"
   ]
 }
