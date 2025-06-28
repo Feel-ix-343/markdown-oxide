@@ -744,7 +744,7 @@ impl Reference {
             });
 
         static MD_LINK_RE: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r"\[(?<display>[^\[\]\.]*)\]\(<?(?<filepath>(\.?\/)?[^\[\]\|\.\#<>]+)?(?<ending>\.[^\# <>]+)?(\#(?<infileref>[^\[\]\.\|<>]+))?>?\)")
+            Regex::new(r"\[(?<display>[^\[\]\.]*?)\]\(<?(?<filepath>(\.?\/)?[^\[\]\|\.\#<>]+?)?(?<ending>\.[^\# <>]+?)?(\#(?<infileref>[^\[\]\.\|<>]+?))?>?\)")
                 .expect("MD Link Not Constructing")
         }); // [display](relativePath)
 
@@ -1954,6 +1954,41 @@ mod vault_tests {
         )];
 
         assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn md_link_with_trailing_parentheses_parsing() {
+        // [Issue 260](https://github.com/Feel-ix-343/markdown-oxide/issues/260) covers an issue with parentheses on a new line after a mdlink being parsed as another link.
+
+        let text = r#"
+            Buggy cross [link](path/to/link#^index1):
+
+            (this causes bug)
+        "#;
+
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        let expected = vec![Reference::MDIndexedBlockLink(
+            ReferenceData {
+                reference_text: "path/to/link#^index1".into(),
+                display_text: Some("link".into()),
+                range: Range {
+                    start: Position {
+                        line: 1,
+                        character: 24,
+                    },
+                    end: Position {
+                        line: 1,
+                        character: 52,
+                    },
+                }
+                .into(),
+            },
+            "path/to/link".into(),
+            "index1".into(),
+        )];
+
+        assert_eq!(parsed, expected);
     }
 
     #[test]
