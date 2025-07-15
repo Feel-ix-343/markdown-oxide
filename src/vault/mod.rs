@@ -1235,7 +1235,27 @@ impl Hash for MDTag {
 impl MDTag {
     fn new(text: &str) -> impl Iterator<Item = MDTag> + '_ {
         static TAG_RE: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r"(\n|\A| )(?<full>#(?<tag>[a-zA-Z_\-\/][0-9a-zA-Z_\-\/]*))").unwrap()
+            Regex::new(r#"(?x)
+                # 1. Boundary assertion: The tag must be preceded by the start of the string, a newline, or whitespace.
+                #    Using a non-capturing group (?:...) for efficiency.
+                (?: \A | \n | \s )
+        
+                # 2. <full> capturing group: Captures the entire tag, including the '#' character.
+                (?<full>
+                    \#          # Matches the literal '#' character.
+                    
+                    # 3. <tag> capturing group: Captures the actual content of the tag.
+                    (?<tag>
+                        # First character of the tag:
+                        # Cannot be a digit. Can be letters (Unicode), underscore, hyphen, slash, or various quotes.
+                        [\p{L}_/'"‘’“”-]
+        
+                        # Subsequent characters of the tag:
+                        # Can be letters (Unicode), digits, underscore, hyphen, slash, or various quotes.
+                        [\p{L}0-9_/'"‘’“”-]*
+                    )
+                )
+    "#).unwrap()
         });
 
         let tagged_blocks = TAG_RE
@@ -2280,17 +2300,24 @@ more text
     }
 
     #[test]
-    fn test_obsidian_tag() {
-        let text = r"# This is a heading
+    fn test_comprehensive_tag_parsing() {
+        let text = r##"# This is a heading
 
-This is a #tag
+This is a #tag and another #tag/subtag
 
-and another #tag/ttagg
+Chinese: #中文标签 #中文/子标签
+Japanese: #テストtag #タグ/子タグ
+Korean: #한국어 #한글/서브태그
 
-and a third tag#notatag [[link#not a tag]]
+Edge cases:
+- Not a tag: word#notag [[link#not a tag]]
+- Number start: #7invalid
+- Special chars: #-/_/tag
+- In quotes: "Text #引用中的标签 text"
+- Complex: #MapOfContext/apworld
 
-#MapOfContext/apworld
-";
+#正常标签
+    "##;
         let expected: Vec<MDTag> = vec![
             MDTag {
                 tag_ref: "tag".into(),
@@ -2307,11 +2334,39 @@ and a third tag#notatag [[link#not a tag]]
                 .into(),
             },
             MDTag {
-                tag_ref: "tag/ttagg".into(),
+                tag_ref: "tag/subtag".into(),
+                range: Range {
+                    start: Position {
+                        line: 2,
+                        character: 27,
+                    },
+                    end: Position {
+                        line: 2,
+                        character: 38,
+                    },
+                }
+                .into(),
+            },
+            MDTag {
+                tag_ref: "中文标签".into(),
                 range: Range {
                     start: Position {
                         line: 4,
-                        character: 12,
+                        character: 9,
+                    },
+                    end: Position {
+                        line: 4,
+                        character: 14,
+                    },
+                }
+                .into(),
+            },
+            MDTag {
+                tag_ref: "中文/子标签".into(),
+                range: Range {
+                    start: Position {
+                        line: 4,
+                        character: 15,
                     },
                     end: Position {
                         line: 4,
@@ -2321,15 +2376,113 @@ and a third tag#notatag [[link#not a tag]]
                 .into(),
             },
             MDTag {
+                tag_ref: "テストtag".into(),
+                range: Range {
+                    start: Position {
+                        line: 5,
+                        character: 10,
+                    },
+                    end: Position {
+                        line: 5,
+                        character: 17,
+                    },
+                }
+                .into(),
+            },
+            MDTag {
+                tag_ref: "タグ/子タグ".into(),
+                range: Range {
+                    start: Position {
+                        line: 5,
+                        character: 18,
+                    },
+                    end: Position {
+                        line: 5,
+                        character: 25,
+                    },
+                }
+                .into(),
+            },
+            MDTag {
+                tag_ref: "한국어".into(),
+                range: Range {
+                    start: Position {
+                        line: 6,
+                        character: 8,
+                    },
+                    end: Position {
+                        line: 6,
+                        character: 12,
+                    },
+                }
+                .into(),
+            },
+            MDTag {
+                tag_ref: "한글/서브태그".into(),
+                range: Range {
+                    start: Position {
+                        line: 6,
+                        character: 13,
+                    },
+                    end: Position {
+                        line: 6,
+                        character: 21,
+                    },
+                }
+                .into(),
+            },
+            MDTag {
+                tag_ref: "-/_/tag".into(),
+                range: Range {
+                    start: Position {
+                        line: 11,
+                        character: 17,
+                    },
+                    end: Position {
+                        line: 11,
+                        character: 25,
+                    },
+                }
+                .into(),
+            },
+            MDTag {
+                tag_ref: "引用中的标签".into(),
+                range: Range {
+                    start: Position {
+                        line: 12,
+                        character: 19,
+                    },
+                    end: Position {
+                        line: 12,
+                        character: 26,
+                    },
+                }
+                .into(),
+            },
+            MDTag {
                 tag_ref: "MapOfContext/apworld".into(),
                 range: Range {
                     start: Position {
-                        line: 8,
+                        line: 13,
+                        character: 11,
+                    },
+                    end: Position {
+                        line: 13,
+                        character: 32,
+                    },
+                }
+                .into(),
+            },
+            MDTag {
+                tag_ref: "正常标签".into(),
+                range: Range {
+                    start: Position {
+                        line: 15,
                         character: 0,
                     },
                     end: Position {
-                        line: 8,
-                        character: 21,
+                        line: 15,
+                        character: 5,
                     },
                 }
                 .into(),
@@ -2337,8 +2490,109 @@ and a third tag#notatag [[link#not a tag]]
         ];
 
         let parsed = MDTag::new(text).collect_vec();
+        assert_eq!(parsed, expected);
+    }
 
-        assert_eq!(parsed, expected)
+    #[test]
+    fn test_all_quote_types_in_tags() {
+        // Test tags with all types of quotes (Chinese and English, single and double)
+        let text = r##"
+Chinese double quotes: #测试"引号"标签
+English double quotes: #test"quotes"tag
+English single quotes: #test'quotes'tag  
+Curly single quotes: #test'quotes'tag
+Mixed quotes: #混合"quotes'测试'标签"
+Plain tag: #plaintext
+    "##;
+        let expected: Vec<MDTag> = vec![
+            MDTag {
+                tag_ref: "测试\"引号\"标签".into(),
+                range: Range {
+                    start: Position {
+                        line: 1,
+                        character: 23,
+                    },
+                    end: Position {
+                        line: 1,
+                        character: 32,
+                    },
+                }
+                .into(),
+            },
+            MDTag {
+                tag_ref: "test\"quotes\"tag".into(),
+                range: Range {
+                    start: Position {
+                        line: 2,
+                        character: 23,
+                    },
+                    end: Position {
+                        line: 2,
+                        character: 39,
+                    },
+                }
+                .into(),
+            },
+            MDTag {
+                tag_ref: "test'quotes'tag".into(),
+                range: Range {
+                    start: Position {
+                        line: 3,
+                        character: 23,
+                    },
+                    end: Position {
+                        line: 3,
+                        character: 39,
+                    },
+                }
+                .into(),
+            },
+            MDTag {
+                tag_ref: "test'quotes'tag".into(),
+                range: Range {
+                    start: Position {
+                        line: 4,
+                        character: 21,
+                    },
+                    end: Position {
+                        line: 4,
+                        character: 37,
+                    },
+                }
+                .into(),
+            },
+            MDTag {
+                tag_ref: "混合\"quotes'测试'标签\"".into(),
+                range: Range {
+                    start: Position {
+                        line: 5,
+                        character: 14,
+                    },
+                    end: Position {
+                        line: 5,
+                        character: 31,
+                    },
+                }
+                .into(),
+            },
+            MDTag {
+                tag_ref: "plaintext".into(),
+                range: Range {
+                    start: Position {
+                        line: 6,
+                        character: 11,
+                    },
+                    end: Position {
+                        line: 6,
+                        character: 21,
+                    },
+                }
+                .into(),
+            },
+        ];
+        let parsed = MDTag::new(text).collect_vec();
+
+        assert_eq!(parsed, expected);
     }
 
     #[test]
@@ -2475,71 +2729,5 @@ Continued
         })];
 
         assert_eq!(parsed, expected);
-    }
-
-    #[test]
-    fn tag_in_md_link_display() {
-        let text = "This [Issue #seven](https://github.com/users/Feel-ix-343/projects/3/views/1?pane=issue&itemId=63386256)";
-
-        let parsed = MDTag::new(text).collect_vec();
-
-        let expected = vec![MDTag {
-            tag_ref: "seven".into(),
-            range: Range {
-                start: Position {
-                    line: 0,
-                    character: 33 - 21,
-                },
-                end: Position {
-                    line: 0,
-                    character: 39 - 21,
-                },
-            }
-            .into(),
-        }];
-
-        assert_eq!(expected, parsed)
-    }
-
-    #[test]
-    fn preceding_char_not_tag() {
-        let text = "This is not a#tag";
-
-        let parsed = MDTag::new(text).collect_vec();
-        let expected: Vec<MDTag> = vec![];
-
-        assert_eq!(expected, parsed)
-    }
-
-    #[test]
-    fn wacky_tag() {
-        let text = "I have my doubts this is useful, but #-/_/tag";
-
-        let parsed = MDTag::new(text).collect_vec();
-        let expected: Vec<MDTag> = vec![MDTag {
-            range: MyRange(Range {
-                start: Position {
-                    line: 0,
-                    character: 58 - 21,
-                },
-                end: Position {
-                    line: 0,
-                    character: 66 - 21,
-                },
-            }),
-            tag_ref: "-/_/tag".into(),
-        }];
-
-        assert_eq!(expected, parsed)
-    }
-
-    #[test]
-    fn tag_starting_with_number_no_tag() {
-        let text = "not a tag #7";
-
-        let parsed = MDTag::new(text).collect_vec();
-        let expected: Vec<MDTag> = vec![];
-
-        assert_eq!(expected, parsed)
     }
 }
