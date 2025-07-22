@@ -66,6 +66,11 @@ block_transclusion = true
 # Full or Partial, for Partial, block_transclusion_length = { partial = 10 }
 # block_transclusion must be enabled for this to take effect
 block_transclusion_length = "Full"
+
+# Link file names only
+# Enables autocompleting by heading but inserting link to filename (instead of filename + heading)
+# Useful for unique notes / Zettelkasten users
+link_filenames_only = false
 ```
 
 # Daily Note Format Config Option
