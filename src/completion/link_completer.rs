@@ -170,11 +170,21 @@ impl<'a> LinkCompleter<'a> for MarkdownLinkCompleter<'a> {
         // Handle block links foobar#^123 -> foobar.md#^123
         let link_ref_text = if let Some(pos) = refname.find("#^") {
             let (name, suffix) = refname.split_at(pos);
-            format_link(name, suffix)
+
+            if self.settings().link_filenames_only {
+                format_link(name, "")
+            } else {
+                format_link(name, suffix)
+            }
         // Handle headings links foobar#myheading -> foobar.md#myheading
         } else if let Some(pos) = refname.find('#') {
             let (name, suffix) = refname.split_at(pos);
-            format_link(name, suffix)
+
+            if self.settings().link_filenames_only {
+                format_link(name, "")
+            } else {
+                format_link(name, suffix)
+            }
         } else {
             // default case foobar -> foobar.md
             format_link(refname, "")
