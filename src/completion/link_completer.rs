@@ -160,7 +160,7 @@ impl<'a> LinkCompleter<'a> for MarkdownLinkCompleter<'a> {
         };
 
         let format_link = |name: &str, suffix: &str| {
-            if refname.contains(' ') {
+            if name.contains(' ') || suffix.contains(' ') {
                 format!("<{}{}{}>", name, ext, suffix)
             } else {
                 format!("{}{}{}", name, ext, suffix)
