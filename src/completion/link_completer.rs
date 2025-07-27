@@ -392,11 +392,17 @@ impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
     }
 
     fn completion_text_edit(&self, display: Option<&str>, refname: &str) -> CompletionTextEdit {
-        let ext = if self.settings().include_md_extension_wikilink {
-            ".md"
+        let formatted_refname = if self.settings().include_md_extension_wikilink {
+            if let Some(hash_pos) = refname.find('#') {
+                let (filename, heading) = refname.split_at(hash_pos);
+                format!("{}.md{}", filename, heading)
+            } else {
+                format!("{}.md", refname)
+            }
         } else {
-            ""
+            refname.to_string()
         };
+
         CompletionTextEdit::Edit(TextEdit {
             range: Range {
                 start: Position {
@@ -410,9 +416,8 @@ impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
             },
 
             new_text: format!(
-                "{}{}{}]]${{2:}}",
-                refname,
-                ext,
+                "{}{}]]${{2:}}",
+                formatted_refname,
                 display
                     .map(|display| format!("|{}", display))
                     .unwrap_or("".to_string())
