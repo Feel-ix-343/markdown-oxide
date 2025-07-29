@@ -84,14 +84,8 @@ impl Settings {
                 "unique_notes_format",
                 obsidian_unique_note_config
                     .format
-                    .map(|v| {
-                        if v.len() > 0 {
-                            v
-                        } else {
-                            "%Y%m%d%H%M".to_string()
-                        }
-                    })
-                    .unwrap_or("%Y%m%d%h%m".to_string()),
+                    .filter(|v| v.len() > 0)
+                    .unwrap_or("%Y%m%d%H%M".to_string()),
             )?
             .set_default("heading_completions", true)?
             .set_default("unresolved_diagnostics", true)?
