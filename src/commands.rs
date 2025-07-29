@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::config::Settings;
 use chrono::offset::Local;
@@ -71,6 +71,66 @@ pub async fn jump(
             "Could not parse journal format ({jump_to:?}) as a valid uri: {:?}.",
             jump_to.map(parse)
         )))
+    }
+}
+
+pub async fn create_unique_note(
+    client: &tower_lsp::Client,
+    root_dir: &Path,
+    settings: &Settings,
+) -> Result<Option<Value>> {
+    let unique_notes_format = &settings.unique_notes_format;
+    let unique_notes_path = root_dir.join(&settings.unique_notes_folder);
+
+    let now = Local::now().naive_local();
+
+    let filename = now.format(unique_notes_format).to_string();
+    let extension = "md";
+
+    let file_path = find_unique_file_path(unique_notes_path, filename, extension, None);
+
+    // file creation can fail and return an Err, ignore this and try
+    // to open the file on the off chance the client knows what to do
+    // TODO: log failure to create file
+
+    let _ = file_path.parent().map(std::fs::create_dir_all).unwrap();
+
+    File::create_new(file_path.as_path()).unwrap();
+
+    client
+        .show_document(ShowDocumentParams {
+            uri: Url::from_file_path(file_path).unwrap(),
+            external: Some(false),
+            take_focus: Some(true),
+            selection: None,
+        })
+        .await
+        .map(|success| Some(success.into()))
+}
+
+fn find_unique_file_path(
+    path: PathBuf,
+    filename: String,
+    extension: &str,
+    postfix: Option<i32>,
+) -> PathBuf {
+    let curr_filename = format!(
+        "{}{}",
+        filename,
+        postfix.map_or("".to_string(), |n| n.to_string())
+    );
+
+    let filepath = path.join(&curr_filename).with_extension(extension);
+
+    if filepath.exists() {
+        find_unique_file_path(
+            path,
+            filename,
+            extension,
+            postfix.map_or(Some(0), |n| Some(n + 1)),
+        )
+    } else {
+        filepath
     }
 }
 

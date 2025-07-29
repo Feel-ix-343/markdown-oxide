@@ -378,6 +378,7 @@ impl LanguageServer for Backend {
                 execute_command_provider: Some(ExecuteCommandOptions {
                     commands: vec![
                         "apply_edits".into(),
+                        "create_unique_note".into(),
                         "jump".into(),
                         "tomorrow".into(),
                         "today".into(),
@@ -614,6 +615,15 @@ impl LanguageServer for Backend {
                 }
 
                 Ok(None)
+            }
+            ExecuteCommandParams { command, .. } if *command == *"create_unique_note" => {
+                let settings = self
+                    .bind_settings(|settings| Ok(settings.to_owned()))
+                    .await?;
+                let root_dir = self
+                    .bind_vault(|vault| Ok(vault.root_dir().to_owned()))
+                    .await?;
+                commands::create_unique_note(&self.client, &root_dir, &settings).await
             }
             ExecuteCommandParams { command, .. } if *command == *"jump" => {
                 let jump_to = params.arguments.first().and_then(|val| val.as_str());
