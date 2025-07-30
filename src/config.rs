@@ -74,6 +74,7 @@ impl Settings {
                 "dailynote",
                 obsidian_daily_note_config
                     .format
+                    .filter(|v| v.len() > 0)
                     .unwrap_or("%Y-%m-%d".to_string()),
             )?
             .set_default(
