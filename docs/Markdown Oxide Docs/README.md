@@ -11,8 +11,8 @@ Here are some recommended links from our documentation website, <https://oxide.m
 ## Recommended Links
 
 * [What is markdown-oxide?](https://oxide.md/): An overview of our PKM features to help you determine if markdown-oxide is for you
-* [Markdown-oxide getting-started guide](https://oxide.md/Getting+Started): A guide to setting up your text editor, configuring the PKM, and using the features.
-* [Features Reference](https://oxide.md/Features): An organized list of all features
+* [Markdown-oxide getting-started guide](https://oxide.md/index#Getting+Started): A guide to setting up your text editor, configuring the PKM, and using the features.
+* [Features Reference](https://oxide.md/Features+Index): An organized list of all features
 * [Configuration Reference](https://oxide.md/Configuration): Configuration information to reference
     + [Default Config File](https://oxide.md/Configuration#Default+Config+File)
 
