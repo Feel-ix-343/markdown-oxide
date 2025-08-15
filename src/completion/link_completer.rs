@@ -403,24 +403,36 @@ impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
             refname.to_string()
         };
 
+        // Check if there are already closing brackets after the cursor
+        // This prevents duplication of closing brackets during completion
+        let line_chars = self
+            .vault
+            .select_line(self.context_path, self.line as isize)
+            .unwrap_or_default();
+
+        let chars_after_cursor = line_chars.get(self.character as usize..).unwrap_or(&[]);
+        let has_trailing_brackets = chars_after_cursor.starts_with(&[']', ']']);
+
+        let closing_brackets = if has_trailing_brackets { "" } else { "]]" };
+
+        let position = Position {
+            line: self.line,
+            character: self.index + 1_u32, // index is right at the '[' in [[link]]; we want one more than that
+        };
+
         CompletionTextEdit::Edit(TextEdit {
             range: Range {
-                start: Position {
-                    line: self.line,
-                    character: self.index + 1_u32, // index is right at the '[' in [[link]]; we want one more than that
-                },
-                end: Position {
-                    line: self.line,
-                    character: (self.chars_in_line - 1).min(self.character + 2_u32), // TODO: in zed, you cannot zed end to be out of the line count index
-                },
+                start: position,
+                end: position,
             },
 
             new_text: format!(
-                "{}{}]]${{2:}}",
+                "{}{}{}${{2:}}",
                 formatted_refname,
                 display
                     .map(|display| format!("|{}", display))
-                    .unwrap_or("".to_string())
+                    .unwrap_or("".to_string()),
+                closing_brackets
             ),
         })
     }
