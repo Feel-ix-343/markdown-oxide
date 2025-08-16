@@ -31,3 +31,7 @@ do-notation = "0.1.3"
 
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/v{ version }/{ name }-v{ version }-{ target }{ archive-suffix }"
+
+[profile.release]
+codegen-units = 1
+lto = true
