@@ -1024,12 +1024,7 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
         })
         .unwrap_or_else(|| file_name.to_string());
 
-    match (
-        range,
-        decoded_filepath.as_str(),
-        infile_ref,
-        display_text,
-    ) {
+    match (range, decoded_filepath.as_str(), infile_ref, display_text) {
         // Pure file reference as there is no infileref such as #... for headings or #^... for indexed blocks
         (full, filepath, None, display) => Some(T::new_file_link(ReferenceData {
             reference_text: filepath.into(),
