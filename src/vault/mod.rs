@@ -1023,33 +1023,40 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
             urlencoding::decode(file_path).map_or_else(|_| file_path.to_string(), |d| d.to_string())
         })
         .unwrap_or_else(|| file_name.to_string());
-    let range = MyRange::from_range(&Rope::from_str(text), range.range());
-    let display_text = display_text.map(|d| d.as_str().into());
 
-    if let Some(infile) = infile_ref {
-        let ref_data = ReferenceData {
-            reference_text: format!("{}#{}", decoded_filepath, infile.as_str()),
-            range,
-            display_text,
-        };
-        if infile.as_str().get(0..1) == Some("^") {
-            T::new_indexed_block_link(
-                ref_data,
-                &decoded_filepath,
-                &infile.as_str()[1..], // drop the ^ for the index
-            )
-        } else {
-            T::new_heading(ref_data, &decoded_filepath, infile.as_str())
-        }
-    } else {
+    match (
+        range,
+        decoded_filepath.as_str(),
+        infile_ref,
+        display_text,
+    ) {
         // Pure file reference as there is no infileref such as #... for headings or #^... for indexed blocks
-        T::new_file_link(ReferenceData {
-            reference_text: decoded_filepath.into(),
-            range,
-            display_text,
-        })
+        (full, filepath, None, display) => Some(T::new_file_link(ReferenceData {
+            reference_text: filepath.into(),
+            range: MyRange::from_range(&Rope::from_str(text), full.range()),
+            display_text: display.map(|d| d.as_str().into()),
+        })),
+        (full, filepath, Some(infile), display) if infile.as_str().get(0..1) == Some("^") => {
+            Some(T::new_indexed_block_link(
+                ReferenceData {
+                    reference_text: format!("{}#{}", filepath, infile.as_str()),
+                    range: MyRange::from_range(&Rope::from_str(text), full.range()),
+                    display_text: display.map(|d| d.as_str().into()),
+                },
+                filepath,
+                &infile.as_str()[1..], // drop the ^ for the index
+            ))
+        }
+        (full, filepath, Some(infile), display) => Some(T::new_heading(
+            ReferenceData {
+                reference_text: format!("{}#{}", filepath, infile.as_str()),
+                range: MyRange::from_range(&Rope::from_str(text), full.range()),
+                display_text: display.map(|d| d.as_str().into()),
+            },
+            filepath,
+            infile.as_str(),
+        )),
     }
-    .into()
 }
 
 #[derive(Eq, PartialEq, Debug, PartialOrd, Ord, Clone, Hash)]
