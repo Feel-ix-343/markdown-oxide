@@ -1017,39 +1017,39 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
         return None;
     }
 
-    match (
-        range,
-        file_path.map(|it| it.as_str()).unwrap_or(file_name),
-        infile_ref,
-        display_text,
-    ) {
-        // Pure file reference as there is no infileref such as #... for headings or #^... for indexed blocks
-        (full, filepath, None, display) => Some(T::new_file_link(ReferenceData {
-            reference_text: filepath.into(),
-            range: MyRange::from_range(&Rope::from_str(text), full.range()),
-            display_text: display.map(|d| d.as_str().into()),
-        })),
-        (full, filepath, Some(infile), display) if infile.as_str().get(0..1) == Some("^") => {
-            Some(T::new_indexed_block_link(
-                ReferenceData {
-                    reference_text: format!("{}#{}", filepath, infile.as_str()),
-                    range: MyRange::from_range(&Rope::from_str(text), full.range()),
-                    display_text: display.map(|d| d.as_str().into()),
-                },
-                filepath,
+    let decoded_filepath = file_path
+        .map(|file_path| {
+            let file_path = file_path.as_str();
+            urlencoding::decode(file_path).map_or_else(|_| file_path.to_string(), |d| d.to_string())
+        })
+        .unwrap_or_else(|| file_name.to_string());
+    let range = MyRange::from_range(&Rope::from_str(text), range.range());
+    let display_text = display_text.map(|d| d.as_str().into());
+
+    if let Some(infile) = infile_ref {
+        let ref_data = ReferenceData {
+            reference_text: format!("{}#{}", decoded_filepath, infile.as_str()),
+            range,
+            display_text,
+        };
+        if infile.as_str().get(0..1) == Some("^") {
+            T::new_indexed_block_link(
+                ref_data,
+                &decoded_filepath,
                 &infile.as_str()[1..], // drop the ^ for the index
-            ))
+            )
+        } else {
+            T::new_heading(ref_data, &decoded_filepath, infile.as_str())
         }
-        (full, filepath, Some(infile), display) => Some(T::new_heading(
-            ReferenceData {
-                reference_text: format!("{}#{}", filepath, infile.as_str()),
-                range: MyRange::from_range(&Rope::from_str(text), full.range()),
-                display_text: display.map(|d| d.as_str().into()),
-            },
-            filepath,
-            infile.as_str(),
-        )),
+    } else {
+        // Pure file reference as there is no infileref such as #... for headings or #^... for indexed blocks
+        T::new_file_link(ReferenceData {
+            reference_text: decoded_filepath.into(),
+            range,
+            display_text,
+        })
     }
+    .into()
 }
 
 #[derive(Eq, PartialEq, Debug, PartialOrd, Ord, Clone, Hash)]
@@ -2726,6 +2726,54 @@ Continued
             }
             .into(),
             ..ReferenceData::default()
+        })];
+
+        assert_eq!(parsed, expected);
+    }
+    #[test]
+    fn parse_url_encoded_link() {
+        let text = " [f](file%20with%20spaces)";
+
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        let expected = vec![Reference::MDFileLink(ReferenceData {
+            reference_text: "file with spaces".into(),
+            display_text: Some("f".into()),
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 1,
+                },
+                end: Position {
+                    line: 0,
+                    character: 26,
+                },
+            }
+            .into(),
+        })];
+
+        assert_eq!(parsed, expected);
+    }
+    #[test]
+    fn parse_weird_url_encoded_file_link() {
+        let text = "[f](%D1%84%D0%B0%D0%B9%D0%BB%20with%20%C3%A9mojis%20%F0%9F%9A%80%20%26%20symbols%20%21%23%40%24%25%26%2A%28%29%2B%3D%7B%7D%7C%5C%22%5C%5C%3A%3B%3F)".into();
+
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        let expected = vec![Reference::MDFileLink(ReferenceData {
+            reference_text: r##"файл with émojis 🚀 & symbols !#@$%&*()+={}|\"\\:;?"##.into(),
+            display_text: Some("f".into()),
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 0,
+                    character: 147,
+                },
+            }
+            .into(),
         })];
 
         assert_eq!(parsed, expected);
