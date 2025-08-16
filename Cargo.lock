@@ -802,7 +802,7 @@ dependencies = [
 
 [[package]]
 name = "markdown-oxide"
-version = "0.25.6"
+version = "0.25.8"
 dependencies = [
  "anyhow",
  "chrono",
