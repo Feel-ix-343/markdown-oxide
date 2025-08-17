@@ -423,6 +423,7 @@ impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
                     line: self.line,
                     character: self.character
                         + if has_trailing_brackets {
+                            // extend the range by 2 to replace pre-existing closing brackets
                             2_u32
                         } else {
                             0_u32
