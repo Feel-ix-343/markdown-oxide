@@ -492,7 +492,18 @@ pub trait Rangeable {
                 || (self_range.end.line == other_range.end.line
                     && self_range.end.character >= other_range.end.character))
     }
+    /// Returns `true` if ranges have any overlap
+    fn intersects(&self, other: &impl Rangeable) -> bool {
+        let self_range = self.range();
+        let other_range = other.range();
 
+        (self_range.end.line > other_range.start.line
+            || (self_range.end.line == other_range.start.line
+                && self_range.end.character >= other_range.start.character))
+            && (other_range.end.line > self_range.start.line
+                || (other_range.end.line == self_range.start.line
+                    && other_range.end.character >= self_range.start.character))
+    }
     fn includes_position(&self, position: Position) -> bool {
         let range = self.range();
         (range.start.line < position.line
@@ -564,9 +575,24 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| {
+                    // Reject links that overlap with codeblocks, unless
+                    // the codeblock is contained within the link
+                    code_blocks
+                        .iter()
+                        .all(|codeblock| !codeblock.intersects(it) || it.includes(codeblock))
+                })
                 .collect_vec(),
-            _ => Reference::new(text, file_name).collect_vec(),
+            _ => Reference::new(text, file_name)
+                .filter(|it| {
+                    // Reject links that only *partially* overlap with codeblocks
+                    code_blocks.iter().all(|codeblock| {
+                        !codeblock.intersects(it)
+                            || codeblock.includes(it)
+                            || it.includes(codeblock)
+                    })
+                })
+                .collect_vec(),
         };
         let headings = MDHeading::new(text)
             .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
@@ -1569,11 +1595,12 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
 // tests
 #[cfg(test)]
 mod vault_tests {
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use itertools::Itertools;
     use tower_lsp::lsp_types::{Position, Range};
 
+    use crate::config::Settings;
     use crate::vault::{HeadingLevel, MyRange, ReferenceData};
     use crate::vault::{MDLinkReferenceDefinition, Refname};
 
@@ -2777,6 +2804,58 @@ Continued
             }
             .into(),
         })];
+
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn filter_out_references_that_partially_overlap_with_codeblocks() {
+        let text = "`[[` not a link `]]`";
+
+        let expected = vec![];
+
+        let mut settings = Settings::new(&Path::new(""), &Default::default()).unwrap();
+
+        settings.references_in_codeblocks = true;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+
+        assert_eq!(parsed, expected);
+
+        settings.references_in_codeblocks = false;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn allow_codeblocks_in_references() {
+        let text = "[[`codeblock`]]";
+
+        let expected = vec![Reference::WikiFileLink(ReferenceData {
+            reference_text: "`codeblock`".into(),
+            display_text: None,
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 0,
+                    character: 15,
+                },
+            }
+            .into(),
+        })];
+
+        let mut settings = Settings::new(&Path::new(""), &Default::default()).unwrap();
+
+        settings.references_in_codeblocks = false;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+
+        assert_eq!(parsed, expected);
+
+        settings.references_in_codeblocks = true;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
 
         assert_eq!(parsed, expected);
     }
