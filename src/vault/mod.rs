@@ -568,8 +568,13 @@ impl MDFile {
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
-        let headings = MDHeading::new(text)
-            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
+        let metadata = MDMetadata::new(text);
+        let headings = MDHeading::new(text).filter(|it| {
+            !code_blocks.iter().any(|codeblock| codeblock.includes(it))
+                && !metadata
+                    .iter()
+                    .any(|metadata| metadata.comments().contains(&it.heading_text))
+        });
         let footnotes = MDFootnote::new(text)
             .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
         let link_refs = MDLinkReferenceDefinition::new(text)
@@ -585,7 +590,6 @@ impl MDFile {
                 .collect_vec(),
             _ => MDTag::new(text).collect_vec(),
         };
-        let metadata = MDMetadata::new(text);
 
         MDFile {
             references: links,
