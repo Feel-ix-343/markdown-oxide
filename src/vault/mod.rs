@@ -2014,6 +2014,51 @@ mod vault_tests {
     }
 
     #[test]
+    fn md_empty_link_parsing() {
+        let text = "[]()";
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        let expected = vec![Reference::MDFileLink(ReferenceData {
+            reference_text: "test.md".into(),
+            display_text: Some("".into()),
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 0,
+                    character: 4,
+                },
+            }
+            .into(),
+        })];
+
+        assert_eq!(parsed, expected);
+
+        let text = "[]()\n)";
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        let expected = vec![Reference::MDFileLink(ReferenceData {
+            reference_text: "test.md".into(),
+            display_text: Some("".into()),
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 0,
+                    character: 4,
+                },
+            }
+            .into(),
+        })];
+
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
     fn footnote_link_parsing() {
         let text = "This is a footnote[^1]
 
