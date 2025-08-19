@@ -744,7 +744,7 @@ impl Reference {
             });
 
         static MD_LINK_RE: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r"\[(?<display>[^\[\]\.]*?)\]\(<?(?<filepath>(\.?\/)?[^\[\]\|\.\#<>]+?)?(?<ending>\.[^\# <>]+?)?(\#(?<infileref>[^\[\]\.\|<>]+?))?>?\)")
+            Regex::new(r"\[(?<display>[^\[\]\.]*?)\]\(<?(?<filepath>(\.?\/)?[^\[\]\|\.\#<>()]+?)?(?<ending>\.[^\# <>]+?)?(\#(?<infileref>[^\[\]\.\|<>()]+?))?>?\)")
                 .expect("MD Link Not Constructing")
         }); // [display](relativePath)
 
