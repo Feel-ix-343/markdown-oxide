@@ -138,32 +138,36 @@ Set up the PKM for your text editor...
         Modify your lsp `on_attach` function.
 
         ```lua
-        local function check_codelens_support()
-        local clients = vim.lsp.get_active_clients({ bufnr = 0 })
-        for _, c in ipairs(clients) do
-          if c.server_capabilities.codeLensProvider then
-            return true
+        local function codelens_supported(bufnr)
+          for _, c in ipairs(vim.lsp.get_clients({ bufnr = bufnr })) do
+            if c.server_capabilities and c.server_capabilities.codeLensProvider then
+              return true
+            end
           end
-        end
-        return false
+          return false
         end
 
-        vim.api.nvim_create_autocmd({ 'TextChanged', 'InsertLeave', 'CursorHold', 'LspAttach', 'BufEnter' }, {
-        buffer = bufnr,
-        callback = function ()
-          if check_codelens_support() then
-            vim.lsp.codelens.refresh({bufnr = 0})
-          end
+        vim.api.nvim_create_autocmd(
+          { 'TextChanged', 'InsertLeave', 'CursorHold', 'BufEnter' },
+          {
+            buffer = bufnr,
+            callback = function()
+              if codelens_supported(bufnr) then
+                vim.lsp.codelens.refresh({ bufnr = bufnr })
+              end
+            end,
+          }
+        )
+
+        if codelens_supported(bufnr) then
+          vim.lsp.codelens.refresh({ bufnr = bufnr })
         end
-        })
-        -- trigger codelens refresh
-        vim.api.nvim_exec_autocmds('User', { pattern = 'LspAttached' })
         ```
 
     </details>
 
     - <details>
-        <summary>(optional) Enable opening daily notes with natural langauge</summary>
+        <summary>(optional) Enable opening daily notes with natural language</summary>
 
         Modify your lsp `on_attach` function to support opening daily notes with, for example, `:Daily two days ago` or `:Daily next monday`. 
 
