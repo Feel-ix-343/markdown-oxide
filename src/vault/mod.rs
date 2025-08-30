@@ -18,7 +18,7 @@ use rayon::prelude::*;
 use regex::{Captures, Match, Regex};
 use ropey::Rope;
 use serde::{Deserialize, Serialize};
-use tower_lsp::lsp_types::Position;
+use tower_lsp::lsp_types::{Location, Position, SymbolInformation, SymbolKind, Url};
 use walkdir::WalkDir;
 
 impl Vault {
@@ -125,6 +125,25 @@ impl<B: Hash> From<HashMap<PathBuf, B>> for MyHashMap<B> {
 impl Hash for Vault {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.md_files.hash(state)
+    }
+}
+
+fn find_range(referenceable: &Referenceable) -> Option<tower_lsp::lsp_types::Range> {
+    match referenceable {
+        Referenceable::File(..) => Some(tower_lsp::lsp_types::Range {
+            start: tower_lsp::lsp_types::Position {
+                line: 0,
+                character: 0,
+            },
+            end: tower_lsp::lsp_types::Position {
+                line: 0,
+                character: 1,
+            },
+        }),
+        _ => match referenceable.get_range() {
+            None => None,
+            Some(a_my_range) => Some(*a_my_range),
+        },
     }
 }
 
@@ -358,13 +377,32 @@ impl Vault {
         &self,
         reference: &Reference,
         reference_path: &Path,
-    ) -> Vec<Referenceable> {
+    ) -> Vec<Referenceable<'_>> {
         let referenceables = self.select_referenceable_nodes(None);
 
         referenceables
             .into_iter()
             .filter(|i| reference.references(self.root_dir(), reference_path, i))
             .collect()
+    }
+
+    #[allow(deprecated)] // field deprecated has been deprecated in favor of using tags and will be removed in the future
+    pub fn to_symbol_information(&self, referenceable: Referenceable) -> Option<SymbolInformation> {
+        Some(SymbolInformation {
+            name: referenceable.get_refname(self.root_dir())?.to_string(),
+            kind: match referenceable {
+                Referenceable::File(_, _) => SymbolKind::FILE,
+                Referenceable::Tag(_, _) => SymbolKind::CONSTANT,
+                _ => SymbolKind::KEY,
+            },
+            location: Location {
+                uri: Url::from_file_path(referenceable.get_path()).ok()?,
+                range: find_range(&referenceable)?,
+            },
+            container_name: None,
+            tags: None,
+            deprecated: None,
+        })
     }
 }
 
@@ -606,7 +644,7 @@ impl MDFile {
 }
 
 impl MDFile {
-    fn get_referenceables(&self) -> Vec<Referenceable> {
+    fn get_referenceables(&self) -> Vec<Referenceable<'_>> {
         let MDFile {
             references: _,
             headings,
