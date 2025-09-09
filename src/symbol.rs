@@ -30,8 +30,14 @@ pub fn workspace_symbol(
     let symbol_informations = referenceables
         .into_iter()
         .flat_map(|referenceable| {
+            let vault_name = referenceable
+                .get_refname(vault.root_dir())
+                .map(|refname| refname.to_string());
+
+            let uri = Url::from_file_path(referenceable.get_path()).ok();
+
             let range = match referenceable {
-                Referenceable::File(..) => tower_lsp::lsp_types::Range {
+                Referenceable::File(..) => Some(tower_lsp::lsp_types::Range {
                     start: tower_lsp::lsp_types::Position {
                         line: 0,
                         character: 0,
@@ -40,24 +46,38 @@ pub fn workspace_symbol(
                         line: 0,
                         character: 1,
                     },
-                },
-                _ => *referenceable.get_range()?,
+                }),
+                _ => referenceable.get_range().map(|x| *x),
             };
 
-            Some(SymbolInformation {
-                name: referenceable.get_refname(vault.root_dir())?.to_string(),
-                kind: match referenceable {
-                    Referenceable::File(_, _) => SymbolKind::FILE,
-                    Referenceable::Tag(_, _) => SymbolKind::CONSTANT,
-                    _ => SymbolKind::KEY,
+            let alias_names = match referenceable {
+                Referenceable::File(_, mdfile) => match &mdfile.metadata {
+                    Some(meta) => meta.aliases(),
+                    None => &[],
                 },
-                location: Location {
-                    uri: Url::from_file_path(referenceable.get_path()).ok()?,
-                    range,
-                },
-                container_name: None,
-                tags: None,
-                deprecated: None,
+                _ => &[],
+            };
+
+            let names = iter::once(vault_name)
+                .chain(alias_names.iter().map(|x| Some(x.to_string())))
+                .flatten();
+
+            names.filter_map(move |name| {
+                Some(SymbolInformation {
+                    name,
+                    kind: match referenceable {
+                        Referenceable::File(_, _) => SymbolKind::FILE,
+                        Referenceable::Tag(_, _) => SymbolKind::CONSTANT,
+                        _ => SymbolKind::KEY,
+                    },
+                    location: Location {
+                        uri: uri.clone()?,
+                        range: range?,
+                    },
+                    container_name: None,
+                    tags: None,
+                    deprecated: None,
+                })
             })
         })
         // Fuzzy matcher - compute match score
