@@ -404,6 +404,50 @@ impl Vault {
             deprecated: None,
         })
     }
+
+    #[allow(deprecated)] // field deprecated has been deprecated in favor of using tags and will be removed in the future
+    pub fn to_symbol_informations(&self, referenceable: Referenceable) -> Vec<SymbolInformation> {
+        let vault_name = referenceable
+            .get_refname(self.root_dir())
+            .map(|refname| refname.to_string());
+
+        let uri = Url::from_file_path(referenceable.get_path()).ok();
+        let range = find_range(&referenceable);
+
+        let kind = match referenceable {
+            Referenceable::File(_, _) => SymbolKind::FILE,
+            Referenceable::Tag(_, _) => SymbolKind::CONSTANT,
+            _ => SymbolKind::KEY,
+        };
+
+        let alias_names: &[String] = match &referenceable {
+            Referenceable::File(_, mdfile) => match &mdfile.metadata {
+                Some(meta) => meta.aliases(),
+                None => &[],
+            },
+            _ => &[],
+        };
+
+        let names = iter::once(vault_name)
+            .chain(alias_names.iter().map(|x| Some(x.to_string())))
+            .flatten();
+
+        names
+            .filter_map(|name| {
+                Some(SymbolInformation {
+                    name,
+                    kind,
+                    location: Location {
+                        uri: uri.clone()?,
+                        range: range?,
+                    },
+                    container_name: None,
+                    tags: None,
+                    deprecated: None,
+                })
+            })
+            .collect()
+    }
 }
 
 pub enum Preview {

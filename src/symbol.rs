@@ -47,7 +47,7 @@ pub fn workspace_symbol(
         vault
             .select_referenceable_nodes(None)
             .into_iter()
-            .flat_map(|referenceable| vault.to_symbol_information(referenceable))
+            .flat_map(|referenceable| vault.to_symbol_informations(referenceable))
             // Fuzzy matcher - compute match score
             .map(|symbol| compute_match_score(&mut matcher, &pattern, symbol))
             // Remove all items with no matches
