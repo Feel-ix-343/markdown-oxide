@@ -49,19 +49,7 @@ Set up the PKM for your text editor...
     
     </details>
     
-    - <details>
-         <summary>AUR (from source)</summary>
-    
-        ```bash
-        paru -S markdown-oxide-git
-        ```
-
-        ```bash
-        yay -S markdown-oxide-git
-        ```
-    
-    </details>
-
+    - Arch Linux: `pacman -S markdown-oxide`
     - [Mason.nvim](https://github.com/williamboman/mason.nvim) (from hosted binary)
     - Nix: `pkgs.markdown-oxide`
     - Alpine Linux: `apk add markdown-oxide`
@@ -217,19 +205,7 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
     
     </details>
     
-    - <details>
-         <summary>AUR (from source)</summary>
-    
-        ```bash
-        paru -S markdown-oxide-git
-        ```
-
-        ```bash
-        yay -S markdown-oxide-git
-        ```
-    
-    </details>
-    
+    - Arch Linux: `pacman -S markdown-oxide`
     - Nix: `pkgs.markdown-oxide`
     - Alpine Linux: `apk add markdown-oxide`
     - openSUSE: `zypper install markdown-oxide`
@@ -277,19 +253,7 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
     
     </details>
     
-    - <details>
-         <summary>AUR (from source)</summary>
-    
-        ```bash
-        paru -S markdown-oxide-git
-        ```
-
-        ```bash
-        yay -S markdown-oxide-git
-        ```
-    
-    </details>
-    
+    - Arch Linux: `pacman -S markdown-oxide`
     - Nix: `pkgs.markdown-oxide`
     - Alpine Linux: `apk add markdown-oxide`
     - openSUSE: `zypper install markdown-oxide`
@@ -336,19 +300,7 @@ For Helix, all you must do is install the language server's binary to your path.
     
 </details>
 
-- <details>
-     <summary>AUR (from source)</summary>
-
-    ```bash
-    paru -S markdown-oxide-git
-    ```
-
-    ```bash
-    yay -S markdown-oxide-git
-    ```
-
-</details>
-
+- Arch Linux: `pacman -S markdown-oxide`
 - Nix: `pkgs.markdown-oxide`
 - Alpine Linux: `apk add markdown-oxide`
 - openSUSE: `zypper install markdown-oxide`
