@@ -36,6 +36,7 @@ mod symbol;
 mod tokens;
 mod ui;
 mod vault;
+mod unique_notes;
 
 #[derive(Debug)]
 struct Backend {

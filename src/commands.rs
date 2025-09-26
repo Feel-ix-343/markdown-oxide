@@ -1,7 +1,9 @@
 use std::fs::File;
-use std::path::{Path, PathBuf};
+use std::io;
+use std::path::Path;
 
 use crate::config::Settings;
+use crate::unique_notes::{self, CreateFileProvider, NowProvider};
 use chrono::offset::Local;
 use chrono::NaiveDateTime;
 use fuzzydate::parse;
@@ -74,6 +76,20 @@ pub async fn jump(
     }
 }
 
+struct CreateUniqueNoteCtx {}
+
+impl NowProvider for CreateUniqueNoteCtx {
+    fn now(&self) -> NaiveDateTime {
+        Local::now().naive_local()
+    }
+}
+
+impl CreateFileProvider<File, io::Error> for CreateUniqueNoteCtx {
+    fn create_file(&self, path: &Path) -> io::Result<File> {
+        File::create(path)
+    }
+}
+
 pub async fn create_unique_note(
     client: &tower_lsp::Client,
     root_dir: &Path,
@@ -82,20 +98,11 @@ pub async fn create_unique_note(
     let unique_notes_format = &settings.unique_notes_format;
     let unique_notes_path = root_dir.join(&settings.unique_notes_folder);
 
-    let now = Local::now().naive_local();
-
-    let filename = now.format(unique_notes_format).to_string();
-    let extension = "md";
-
-    let file_path = find_unique_file_path(unique_notes_path, filename, extension, None);
-
-    // file creation can fail and return an Err, ignore this and try
-    // to open the file on the off chance the client knows what to do
-    // TODO: log failure to create file
-
-    let _ = file_path.parent().map(std::fs::create_dir_all).unwrap();
-
-    File::create_new(file_path.as_path()).unwrap();
+    let file_path = unique_notes::create_unique_note(
+        &unique_notes_path,
+        unique_notes_format,
+        &CreateUniqueNoteCtx {},
+    );
 
     client
         .show_document(ShowDocumentParams {
@@ -106,32 +113,6 @@ pub async fn create_unique_note(
         })
         .await
         .map(|success| Some(success.into()))
-}
-
-fn find_unique_file_path(
-    path: PathBuf,
-    filename: String,
-    extension: &str,
-    postfix: Option<i32>,
-) -> PathBuf {
-    let curr_filename = format!(
-        "{}{}",
-        filename,
-        postfix.map_or("".to_string(), |n| n.to_string())
-    );
-
-    let filepath = path.join(&curr_filename).with_extension(extension);
-
-    if filepath.exists() {
-        find_unique_file_path(
-            path,
-            filename,
-            extension,
-            postfix.map_or(Some(0), |n| Some(n + 1)),
-        )
-    } else {
-        filepath
-    }
 }
 
 // tests
