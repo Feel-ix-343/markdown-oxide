@@ -1,8 +1,10 @@
 # Markdown-Oxide
 
-![[What Is Markdown-Oxide#^whatIsMarkdownOxide]]
+Markdown-Oxide is a Personal Knowledge Management System (PKMS) that composes with your favorite text-editor through the Language Server Protocol (LSP).
 
-It also is inspired by and highly compatible with Obsidian. 
+While other PKMS implementations include their own text-editors, markdown-oxide is *unbundled*: it leaves text-editing to a dedicated text-editor and focuses solely on robust, performant knowledge management.
+
+It also is inspired by and highly compatible with Obsidian.
 
 > [!note] Editor Support
 > The best-supported text editor is Neovim, but also popular with users are VSCode, Helix, and Zed.
