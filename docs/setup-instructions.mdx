@@ -19,23 +19,21 @@ Navigate to the setup for your editor using the table-of-contents to the right.
 
 - Give Neovim access to the binary.
 
-    - <details>
-         <summary>Cargo Install (from source)</summary>
+    - <Accordion title="Cargo Install (from source)">
     
         ```bash
         cargo install --locked --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
         ```
     
-    </details>
+    </Accordion>
 
-    - <details>
-         <summary>Cargo binstall (from hosted binary)</summary>
+    - <Accordion title="Cargo binstall (from hosted binary)">
     
         ```bash
         cargo binstall --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
         ```
     
-    </details>
+    </Accordion>
     
     - Arch Linux: `pacman -S markdown-oxide`
     - [Mason.nvim](https://github.com/williamboman/mason.nvim) (from hosted binary)
@@ -44,27 +42,24 @@ Navigate to the setup for your editor using the table-of-contents to the right.
     - openSUSE: `zypper install markdown-oxide`
     - Conda: `conda install conda-forge::markdown-oxide`
     
-    - <details>
-         <summary>Winget (Windows)</summary>
+    - <Accordion title="Winget (Windows)">
     
         ```bash
         winget install FelixZeller.markdown-oxide
         ```
     
-    </details>
+    </Accordion>
     
-    - <details>
-         <summary>Homebrew (from package manager)</summary>
+    - <Accordion title="Homebrew (from package manager)">
     
         ```bash
         brew install markdown-oxide
         ```
     
-    </details>
+    </Accordion>
   
 - Modify your Neovim Configuration
-    - <details>
-        <summary>Modify LSP Config (making sure to adjust capabilities as follows)</summary>
+    - <Accordion title="Modify LSP Config (making sure to adjust capabilities as follows)">
 
         ```lua        
         -- An example nvim-lspconfig capabilities setting
@@ -88,10 +83,9 @@ Navigate to the setup for your editor using the table-of-contents to the right.
         })
         ```
 
-    </details> 
+    </Accordion> 
 
-    - <details>
-        <summary>Modify your nvim-cmp configuration</summary>
+    - <Accordion title="Modify your nvim-cmp configuration">
 
         Modify your nvim-cmp source settings for nvim-lsp (note: you must have nvim-lsp installed)
 
@@ -106,10 +100,9 @@ Navigate to the setup for your editor using the table-of-contents to the right.
         },
         ```
 
-    </details>
+    </Accordion>
 
-    - <details>
-        <summary>(optional) Enable Code Lens (eg for UI reference count)</summary>
+    - <Accordion title="(optional) Enable Code Lens (eg for UI reference count)">
 
         Modify your lsp `on_attach` function.
 
@@ -140,10 +133,9 @@ Navigate to the setup for your editor using the table-of-contents to the right.
         end
         ```
 
-    </details>
+    </Accordion>
 
-    - <details>
-        <summary>(optional) Enable opening daily notes with natural language</summary>
+    - <Accordion title="(optional) Enable opening daily notes with natural language">
 
         Modify your lsp `on_attach` function to support opening daily notes with, for example, `:Daily two days ago` or `:Daily next monday`. 
 
@@ -164,7 +156,7 @@ Navigate to the setup for your editor using the table-of-contents to the right.
         end
         ```
 
-    </details>    
+    </Accordion>    
 - Ensure relevant plugins are installed:
     * [Nvim CMP](https://github.com/hrsh7th/nvim-cmp): UI for using LSP completions
     * [Telescope](https://github.com/nvim-telescope/telescope.nvim): UI helpful for the LSP references implementation
@@ -179,23 +171,21 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
 - Recommended: the extension will download the server's binary and use that
 - The extension will use `markdown-oxide` from path. To install to your path, there are the following methods for VSCode:
 
-    - <details>
-         <summary>Cargo Install (from source)</summary>
+    - <Accordion title="Cargo Install (from source)">
     
         ```bash
         cargo install --locked --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
         ```
     
-    </details>
+    </Accordion>
 
-    - <details>
-         <summary>Cargo binstall[1] (from hosted binary)</summary>
+    - <Accordion title="Cargo binstall[1] (from hosted binary)">
     
         ```bash
         cargo binstall --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
         ```
     
-    </details>
+    </Accordion>
     
     - Arch Linux: `pacman -S markdown-oxide`
     - Nix: `pkgs.markdown-oxide`
@@ -203,23 +193,21 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
     - openSUSE: `zypper install markdown-oxide`
     - Conda: `conda install conda-forge::markdown-oxide`
     
-    - <details>
-         <summary>Winget (Windows)</summary>
+    - <Accordion title="Winget (Windows)">
     
         ```bash
         winget install FelixZeller.markdown-oxide
         ```
     
-    </details>
+    </Accordion>
     
-    - <details>
-         <summary>Homebrew (from package manager)</summary>
+    - <Accordion title="Homebrew (from package manager)">
     
         ```bash
         brew install markdown-oxide
         ```
     
-    </details>
+    </Accordion>
 
 ### Zed
 
@@ -227,23 +215,21 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
 - Recommended: the extension will download the server's binary and use that
 - The extension will use `markdown-oxide` from path. To install to your path, there are the following methods for Zed:
 
-    - <details>
-         <summary>Cargo Install (from source)</summary>
+    - <Accordion title="Cargo Install (from source)">
     
         ```bash
         cargo install --locked --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
         ```
     
-    </details>
+    </Accordion>
 
-    - <details>
-         <summary>Cargo binstall[1] (from hosted binary)</summary>
+    - <Accordion title="Cargo binstall[1] (from hosted binary)">
     
         ```bash
         cargo binstall --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
         ```
     
-    </details>
+    </Accordion>
     
     - Arch Linux: `pacman -S markdown-oxide`
     - Nix: `pkgs.markdown-oxide`
@@ -251,46 +237,42 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
     - openSUSE: `zypper install markdown-oxide`
     - Conda: `conda install conda-forge::markdown-oxide`
     
-    - <details>
-         <summary>Winget (Windows)</summary>
+    - <Accordion title="Winget (Windows)">
     
         ```bash
         winget install FelixZeller.markdown-oxide
         ```
     
-    </details>
+    </Accordion>
     
-    - <details>
-         <summary>Homebrew (from package manager)</summary>
+    - <Accordion title="Homebrew (from package manager)">
     
         ```bash
         brew install markdown-oxide
         ```
     
-    </details>
+    </Accordion>
 
     
 
 ### Helix
 
 For Helix, all you must do is install the language server's binary to your path. The following installation methods are available:
-- <details>
-     <summary>Cargo Install (from source)</summary>
+- <Accordion title="Cargo Install (from source)">
 
     ```bash
     cargo install --locked --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
     ```
 
-</details>
+</Accordion>
 
-- <details>
-    <summary>Cargo binstall[1] (from hosted binary)</summary>
+- <Accordion title="Cargo binstall[1] (from hosted binary)">
     
     ```bash
     cargo binstall --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
     ```
     
-</details>
+</Accordion>
 
 - Arch Linux: `pacman -S markdown-oxide`
 - Nix: `pkgs.markdown-oxide`
@@ -298,23 +280,21 @@ For Helix, all you must do is install the language server's binary to your path.
 - openSUSE: `zypper install markdown-oxide`
 - Conda: `conda install conda-forge::markdown-oxide`
 
-- <details>
-     <summary>Winget (Windows)</summary>
+- <Accordion title="Winget (Windows)">
 
     ```bash
     winget install FelixZeller.markdown-oxide
     ```
 
-</details>
+</Accordion>
 
-- <details>
-     <summary>Homebrew (from package manager)</summary>
+- <Accordion title="Homebrew (from package manager)">
 
     ```bash
     brew install markdown-oxide
     ```
 
-</details>
+</Accordion>
 
 ## Configuration
 
