@@ -1,5 +1,6 @@
 {
   "name": "Markdown-Oxide",
+  "theme": "mint",
   "logo": {
     "dark": "/logo/dark.svg",
     "light": "/logo/light.svg"
@@ -8,11 +9,7 @@
   "colors": {
     "primary": "#0D9373",
     "light": "#07C983",
-    "dark": "#0D9373",
-    "anchors": {
-      "from": "#0D9373",
-      "to": "#07C983"
-    }
+    "dark": "#0D9373"
   },
   "topbarLinks": [
     {
@@ -42,39 +39,41 @@
       "url": "https://github.com/Feel-ix-343/markdown-oxide"
     }
   ],
-  "navigation": [
-    {
-      "group": "Get Started",
-      "pages": [
-        "index",
-        "what-is-markdown-oxide",
-        "setup-instructions"
-      ]
-    },
-    {
-      "group": "Features",
-      "pages": [
-        "features-index",
-        "daily-notes"
-      ]
-    },
-    {
-      "group": "Configuration",
-      "pages": [
-        "configuration",
-        "date-formatting"
-      ]
-    },
-    {
-      "group": "Reference",
-      "pages": [
-        "reference/readme",
-        "reference/lsp",
-        "reference/pkms",
-        "reference/author"
-      ]
-    }
-  ],
+  "navigation": {
+    "groups": [
+      {
+        "group": "Get Started",
+        "pages": [
+          "index",
+          "what-is-markdown-oxide",
+          "setup-instructions"
+        ]
+      },
+      {
+        "group": "Features",
+        "pages": [
+          "features-index",
+          "daily-notes"
+        ]
+      },
+      {
+        "group": "Configuration",
+        "pages": [
+          "configuration",
+          "date-formatting"
+        ]
+      },
+      {
+        "group": "Reference",
+        "pages": [
+          "reference/readme",
+          "reference/lsp",
+          "reference/pkms",
+          "reference/author"
+        ]
+      }
+    ]
+  },
   "footerSocials": {
     "github": "https://github.com/Feel-ix-343/markdown-oxide"
   }
