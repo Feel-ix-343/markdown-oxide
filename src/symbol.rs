@@ -6,11 +6,29 @@ use nucleo_matcher::{
     Matcher,
 };
 use tower_lsp::lsp_types::{
-    DocumentSymbol, DocumentSymbolParams, DocumentSymbolResponse, Location, SymbolInformation,
-    SymbolKind, Url, WorkspaceSymbolParams,
+    DocumentSymbol, DocumentSymbolParams, DocumentSymbolResponse, SymbolInformation, SymbolKind,
+    WorkspaceSymbolParams,
 };
 
-use crate::vault::{MDHeading, Referenceable, Vault};
+use crate::vault::{MDHeading, Vault};
+
+fn compute_match_score(
+    matcher: &mut Matcher,
+    pattern: &pattern::Pattern,
+    symbol: SymbolInformation,
+) -> (u32, SymbolInformation) {
+    let mut buf = Vec::new();
+    (
+        match pattern.score(
+            nucleo_matcher::Utf32Str::new(symbol.name.as_str(), &mut buf),
+            matcher,
+        ) {
+            None => 0,
+            Some(score) => score,
+        },
+        symbol,
+    )
+}
 
 pub fn workspace_symbol(
     vault: &Vault,
@@ -23,60 +41,23 @@ pub fn workspace_symbol(
         pattern::CaseMatching::Smart,
         Normalization::Smart,
     );
-    let mut buf = Vec::new();
 
     // Collect symbols and order by fuzzy matching score
-    let referenceables = vault.select_referenceable_nodes(None);
-    let symbol_informations = referenceables
-        .into_iter()
-        .flat_map(|referenceable| {
-            let range = match referenceable {
-                Referenceable::File(..) => tower_lsp::lsp_types::Range {
-                    start: tower_lsp::lsp_types::Position {
-                        line: 0,
-                        character: 0,
-                    },
-                    end: tower_lsp::lsp_types::Position {
-                        line: 0,
-                        character: 1,
-                    },
-                },
-                _ => *referenceable.get_range()?,
-            };
-
-            Some(SymbolInformation {
-                name: referenceable.get_refname(vault.root_dir())?.to_string(),
-                kind: match referenceable {
-                    Referenceable::File(_, _) => SymbolKind::FILE,
-                    Referenceable::Tag(_, _) => SymbolKind::CONSTANT,
-                    _ => SymbolKind::KEY,
-                },
-                location: Location {
-                    uri: Url::from_file_path(referenceable.get_path()).ok()?,
-                    range,
-                },
-                container_name: None,
-                tags: None,
-                deprecated: None,
-            })
-        })
-        // Fuzzy matcher - compute match score
-        .map(|symbol| {
-            let score = pattern.score(
-                nucleo_matcher::Utf32Str::new(symbol.name.as_str(), &mut buf),
-                &mut matcher,
-            );
-            (score, symbol)
-        })
-        // Remove all items with no matches
-        .filter(|(score, _)| score.is_some() && score.unwrap() > 0)
-        // Sort by match score descending
-        .sorted_by(|(a, _), (b, _)| Option::cmp(b, a))
-        // Strip the score from the result
-        .map(|(_score, symbol)| symbol)
-        .collect_vec();
-
-    Some(symbol_informations)
+    Some(
+        vault
+            .select_referenceable_nodes(None)
+            .into_iter()
+            .flat_map(|referenceable| vault.to_symbol_information(referenceable))
+            // Fuzzy matcher - compute match score
+            .map(|symbol| compute_match_score(&mut matcher, &pattern, symbol))
+            // Remove all items with no matches
+            .filter(|(score, _)| *score > 0)
+            // Sort by match score descending
+            .sorted_by(|(a, _), (b, _)| Ord::cmp(b, a))
+            // Strip the score from the result
+            .map(|(_score, symbol)| symbol)
+            .collect_vec(),
+    )
 }
 
 pub fn document_symbol(
@@ -139,6 +120,7 @@ fn construct_tree(headings: &[MDHeading]) -> Option<Vec<Node>> {
     }
 }
 
+#[allow(deprecated)] // field deprecated has been deprecated in favor of using tags and will be removed in the future
 fn map_to_lsp_tree(tree: Vec<Node>) -> Vec<DocumentSymbol> {
     tree.into_iter()
         .map(|node| DocumentSymbol {
