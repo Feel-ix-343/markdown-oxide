@@ -86,19 +86,39 @@ From Obsidian, this works as follows ![[#^1862g]]
 
 This is used in the following places
 
-* Generating [relative date name completions](<Daily Notes.md#Completion Names>) with ![[Daily Notes#^predefinedNames|predefined relative names]] such that we get [[Features Index#^implDailyNoteComp|Daily Note Completions]]
+* Generating relative date name completions with predefined relative names (`today`, `tomorrow`, `yesterday`, `next {monday,tuesday,..., sunday}`, `last {monday,tuesday,...}`) such that we get [[Features Index#^implDailyNoteComp|Daily Note Completions]]
 * Creating new daily notes in [[Features Index#Opening Daily Notes]]
 * [Creating files from unresolved references](<Features Index.md#Code Actions>) when the files match the specified format
 
 ## Date Formatting
 
-![[Date Formatting]]
+The date formatting in the config follows the rust library Chrono's formatting. 
+
+The full specification can be found here: https://docs.rs/chrono/latest/chrono/format/strftime/index.html
+
+Some examples are:
+
+- Year
+    * `%Y`: Is the four digit year
+    * `%y`: Is the two digit year: 1979 -> 79
+- Month
+    * `%m`: Is the two digit month
+    * `%b`: Is the abbreviated month name; 3 letters
+    * `%B`: Full moth name or 3 letter abbreviation
+- Day
+    * `%d`: Is the two digit day of month
+    * `%e`: Is the one or two digit day of month
+    * `%a`: 3 letter abbreviated weekday name
+    * `%A`: Abbreviated or full weekday name
+
+Examples:
+* (the default) `YYYY-MM-DD` -> `%Y-%m-%d`
+* "1 Jan 2024" => `%d %b %Y`
 
 # Settings From Obsidian
 
 - ... ^someobsidiansettings
     * Daily Note:
         + `dailynote`: checks if you have the dailynote Obsidian plugin and translates this formatting to Markdown Oxide's date formatting   ^1862g
-        + Info on this date formatting can be found [here](<Date Formatting.md>)
     * `new_file_folder_path`: uses the specific folder for new files you set in Obsidian if you have it enabled. This is relevant to the [Create Unresolved File Code Action](<Features Index.md#^implCodeAction>)
     * `daily_notes_folder_path`: uses the specific folder for new daily notes you set in the Obsidian Daily Notes plugin, if you have this option enabled. This is relevant to the path for [opening daily notes](<Features Index.md#Opening Daily Notes>) and for [the code action that creates unresolved links](<Features Index.md#^implCodeAction>) if they have the `dailynote` format.
