@@ -45,31 +45,25 @@
         "group": "Get Started",
         "pages": [
           "index",
-          "what-is-markdown-oxide",
           "setup-instructions"
         ]
       },
       {
         "group": "Features",
         "pages": [
-          "features-index",
-          "daily-notes"
+          "features-index"
         ]
       },
       {
         "group": "Configuration",
         "pages": [
-          "configuration",
-          "date-formatting"
+          "configuration"
         ]
       },
       {
         "group": "Reference",
         "pages": [
-          "reference/readme",
-          "reference/lsp",
-          "reference/pkms",
-          "reference/author"
+          "reference/readme"
         ]
       }
     ]
