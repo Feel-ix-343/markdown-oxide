@@ -50,32 +50,92 @@ Markdown-Oxide is a [PKMS](/reference/pkms) that composes with your favorite tex
 
 Create and navigate connections between your notes effortlessly.
 
-- **Wikilink & Markdown Link Completions**: Auto-complete file and heading references as you type
-- **Go-to-Definition**: Jump to linked files and headings instantly
-- **Backlinks**: See all references to any file, heading, or block
-- **Rename Refactoring**: Rename files and headings while automatically updating all links
+<AccordionGroup>
+<Accordion title="Wikilink & Markdown Link Completions">
+Auto-complete file and heading references as you type
+
+![wikilinkcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/29c4830f-30e5-4094-9f5b-7b39009437da)
+
+![markdownlinkcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/16c8565a-6a28-4df1-a312-e4b158fb9f03)
+</Accordion>
+
+<Accordion title="Unresolved File and Heading Completions">
+For those who like to reference things before they are written, markdown-oxide has terrific support for unresolved references! It provides completions for unresolved references, provides lsp_references for them, and provides code actions to create files + append headings.
+
+![unresolvedcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/96ed1a8e-eea3-4d3f-9557-e51b076fb3fb)
+</Accordion>
+
+<Accordion title="Go-to-Definition & Backlinks">
+Jump to linked files and headings instantly. See all references to any file, heading, or block.
+
+![filereferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/9fbd6051-ef57-42eb-b61b-1cc3ddfb2293)
+</Accordion>
+
+<Accordion title="Rename Refactoring">
+Rename files and headings while automatically updating all links
+
+![renamefile](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/3ac404fb-cfcd-4943-81ba-8ab3645831b7)
+</Accordion>
+</AccordionGroup>
 
 ### Daily Notes
 
 Manage your daily journal with natural language commands.
 
-- **Natural Language Navigation**: Open notes with commands like `:Daily next monday` or `:Daily two days ago`
-- **Smart Completions**: Link to daily notes using relative dates like `[[tomorrow]]` or `[[next friday]]`
+<AccordionGroup>
+<Accordion title="Natural Language Navigation & Smart Completions">
+Open notes with commands like `:Daily next monday` or `:Daily two days ago`. Link to daily notes using relative dates like `[[tomorrow]]` or `[[next friday]]`.
+
+![dailynoteswiki](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/d2505535-ef5e-491a-bd88-ef12be2402ef)
+</Accordion>
+</AccordionGroup>
+
 - **Automatic Formatting**: Respects your date format preferences from Obsidian or custom config
 
 ### Tags & Organization
 
 Organize your knowledge with hierarchical tags.
 
-- **Tag Completions**: Auto-complete previously defined tags
-- **Tag References**: Find all notes using a specific tag or subtag
+<AccordionGroup>
+<Accordion title="Tag Completions">
+Auto-complete previously defined tags
+
+![tagcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/bf20d7ac-171a-4d95-b510-ba323073c0b8)
+</Accordion>
+
+<Accordion title="Tag References">
+Find all notes using a specific tag or subtag
+
+![tagreferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/d73ac764-2c86-45c9-9403-17b50e6962e4)
+</Accordion>
+</AccordionGroup>
+
 - **Workspace Symbols**: Search across all files, headings, and tags
 
 ### Advanced Features
 
+<AccordionGroup>
+<Accordion title="Callout Completions">
+Use Obsidian-style callouts for notes, warnings, and tips
+
+![calloutcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/11cd44f1-cf2e-4f27-92b4-1ed4914356ca)
+</Accordion>
+
+<Accordion title="Footnote Completions">
+Easily link to the footnotes defined in the active file
+
+![footnotecompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/92a6739d-8a7a-457e-84bd-fde6548aa25a)
+</Accordion>
+
+<Accordion title="Footnote References">
+Navigate the uses of a footnote in the active file
+
+![footnotereferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/25940052-ca6c-4b7c-b334-f0001260c490)
+</Accordion>
+</AccordionGroup>
+
 - **Block References**: Link to specific paragraphs or sections using `^block-id` syntax
 - **Unresolved Link Support**: Create links before the target exists, with code actions to create files
-- **Callout Completions**: Use Obsidian-style callouts for notes, warnings, and tips
 - **Semantic Tokens**: Visual differentiation between resolved and unresolved links
 - **Code Lens**: Inline reference counts for files and headings
 
