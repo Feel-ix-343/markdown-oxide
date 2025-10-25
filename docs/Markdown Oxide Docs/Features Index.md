@@ -265,8 +265,13 @@ When clicking on each drop-down, you will be presented with a demo of the featur
 
 - Opening Daily Notes   ^8g4c9
     * Open or create daily notes through a natural language relative name. `:Daily next tuesday`
-        + The full specification for the relative name is [here](<Daily Notes.md#Opening Daily Notes>)
-        + Some examples of this command in neovim following the [Neovim Setup](README#Neovim) below: ![[Daily Notes#^nvimrelativenamescmds]]
+        + Some examples of this command in neovim following the [Neovim Setup](README#Neovim) below:
+            - `:Daily two days ago`
+            - `:Daily 2 days ago`
+            - `:Daily next monday`
+            - `:Daily last friday`
+            - `:Daily today`
+            - `:Daily tomorrow`
     * Open or create daily notes through predefined relative names.  `:Today`
-        + The names are as follow: ![[Daily Notes#^predefinedNames]]
+        + The predefined relative names are: `today`, `tomorrow`, `yesterday`, `next {monday,tuesday,..., sunday}`, `last {monday,tuesday,...}`
         + Each of these names have their own workspace commands

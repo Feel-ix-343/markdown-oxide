@@ -113,6 +113,4 @@ If Markdown-Oxide is not quite what you are looking for at this time, good luck 
 > [!note] Github
 > If you want to view the code, open pull-requests, participate in discussions, report bugs, and/or request features, visit the github repo: https://github.com/Feel-ix-343/markdown-oxide
 
--[Felix](<Author.md>)
-
 [^1]: ![[rug/Documentation Notes#^docEmbeds]]
