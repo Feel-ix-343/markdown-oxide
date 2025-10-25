@@ -1,0 +1,64 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Markdown-Oxide",
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#0D9373"
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Support",
+        "href": "https://github.com/Feel-ix-343/markdown-oxide/issues"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "GitHub",
+      "href": "https://github.com/Feel-ix-343/markdown-oxide"
+    }
+  },
+  "navigation": [
+    {
+      "group": "Get Started",
+      "pages": [
+        "index",
+        "what-is-markdown-oxide",
+        "setup-instructions"
+      ]
+    },
+    {
+      "group": "Features",
+      "pages": [
+        "features-index",
+        "daily-notes"
+      ]
+    },
+    {
+      "group": "Configuration",
+      "pages": [
+        "configuration",
+        "date-formatting"
+      ]
+    },
+    {
+      "group": "Reference",
+      "pages": [
+        "reference/readme",
+        "reference/lsp",
+        "reference/pkms",
+        "reference/author"
+      ]
+    }
+  ],
+  "footer": {
+    "socials": {
+      "github": "https://github.com/Feel-ix-343/markdown-oxide"
+    }
+  }
+}
