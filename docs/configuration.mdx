@@ -1,0 +1,133 @@
+---
+title: "Configuration"
+description: "Configuration options for Markdown-Oxide"
+---
+
+`Markdown-Oxide` supports several configuration options. All can be specified in a `~/.config/moxide/settings.toml` or `.moxide.toml` file. Moxide also tries to import some settings from Obsidian directly.
+
+# Default Config File
+
+This contains all possible settings with brief descriptions. A bit of elaboration on the settings is included after. 
+
+```toml
+# Leave blank to try to import from Obsidian Daily Notes
+dailynote = "%Y-%m-%d" # this is akin to YYYY-MM-DD from Obsidian
+
+# Fuzzy match file headings in completions
+heading_completions = true
+
+# Set true if you title your notes by the first heading
+# Right now, if true this will cause completing a file link in the markdown style
+# to insert the name of the first heading in the display text area
+# [](file) -> [first heading of file.md](file)
+# If false, [](file) -> [](file) (for example)
+title_headings = true
+
+# Show diagnostics for unresolved links; note that even if this is turned off, 
+# special semantic tokens will be sent for the unresolved links, allowing you
+# to visually identify unresolved links
+unresolved_diagnostics = true
+
+semantic_tokens = true
+
+# Resolve tags in code blocks
+tags_in_codeblocks = false
+# Resolve references in code blocks
+references_in_codeblocks = false
+
+# The folder for new files to be created in; this is relevant for the code action that creates
+# from an unresolved link. If not specified, it will import from your obsidian config option titled
+# "Default Location for new notes" -- which is "" by default too. 
+new_file_folder_path = ""
+
+
+# The folder for new daily notes: this is applied for the create file for unresolved link code action
+# as well as the Today, Tomorrow, Yesterday, and Daily... lsp commands
+#
+# This is also imported from obsidian if not specified: specifically the option titled "New file location"
+daily_notes_folder = ""
+
+
+# Whether markdown links should include an extension or not
+# for example [File](file.md) or [File](file)
+include_md_extension_md_link = false
+
+# Whether wikilinks should include an extension or not (needed for Markor compatibility)
+# for example [[File]] or [[File.md]]
+include_md_extension_wikilink = false
+
+# Enable hover; this is relevant for VSCode and Zed where hover could be triggered on mouse hover
+# and could be annoying
+hover = true
+
+# Handle case in fuzzy matches: Ignore | Smart | Respect
+case_matching = "Smart"
+
+# Enable inlay hints
+inlay_hints = true
+# Enable transclusion, in the form of inlay hints, for embedded block links: ![[link]]
+# Inlay hints must be enabled
+block_transclusion = true
+# Full or Partial, for Partial, block_transclusion_length = { partial = 10 }
+# block_transclusion must be enabled for this to take effect
+block_transclusion_length = "Full"
+
+# Link file names only
+# Enables autocompleting by heading but inserting link to filename (instead of filename + heading)
+# Useful for unique notes / Zettelkasten users
+link_filenames_only = false
+```
+
+# Daily Note Format Config Option
+
+```toml
+dailynote = "{format}"
+```
+where format is `%Y-%m-%d` by default, unless imported from Obsidian.
+
+From Obsidian, this works as follows:
+
+Daily Note:
+- `dailynote`: checks if you have the dailynote Obsidian plugin and translates this formatting to Markdown Oxide's date formatting
+- Info on this date formatting can be found [here](/date-formatting)
+
+## Relevance
+
+This is used in the following places
+
+* Generating [relative date name completions](/daily-notes#completion-names) with predefined relative names (`today`, `tomorrow`, `yesterday`, `next {monday,tuesday,..., sunday}`, `last {monday,tuesday,...}`) such that we get Daily Note Completions
+* Creating new daily notes in [Opening Daily Notes](/features-index#opening-daily-notes)
+* [Creating files from unresolved references](/features-index#code-actions) when the files match the specified format
+
+## Date Formatting
+
+The date formatting in the config follows the rust library Chrono's formatting. 
+
+The full specification can be found here: https://docs.rs/chrono/latest/chrono/format/strftime/index.html
+
+Some examples are:
+
+- Year
+    * `%Y`: Is the four digit year
+    * `%y`: Is the two digit year: 1979 -> 79
+- Month
+    * `%m`: Is the two digit month
+    * `%b`: Is the abbreviated month name; 3 letters
+    * `%B`: Full moth name or 3 letter abbreviation
+- Day
+    * `%d`: Is the two digit day of month
+    * `%e`: Is the one or two digit day of month
+    * `%a`: 3 letter abbreviated weekday name
+    * `%A`: Abbreviated or full weekday name
+
+Examples:
+* (the default) `YYYY-MM-DD` -> `%Y-%m-%d`
+* "1 Jan 2024" => `%d %b %Y`
+
+# Settings From Obsidian
+
+* Daily Note:
+    + `dailynote`: checks if you have the dailynote Obsidian plugin and translates this formatting to Markdown Oxide's date formatting
+    + Info on this date formatting can be found [here](/date-formatting)
+* `new_file_folder_path`: uses the specific folder for new files you set in Obsidian if you have it enabled. This is relevant to the [Create Unresolved File Code Action](/features-index#code-actions)
+* `daily_notes_folder_path`: uses the specific folder for new daily notes you set in the Obsidian Daily Notes plugin, if you have this option enabled. This is relevant to the path for [opening daily notes](/features-index#opening-daily-notes) and for [the code action that creates unresolved links](/features-index#code-actions) if they have the `dailynote` format.

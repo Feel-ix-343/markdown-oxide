@@ -1,0 +1,234 @@
+---
+title: "Markdown-Oxide"
+description: "PKM (Personal-Knowledge-Management) Markdown Language Server for your favorite text-editor"
+---
+
+# Markdown-Oxide
+
+## What is Markdown-Oxide
+
+Markdown-Oxide is a [PKMS](/pkms) that composes with your favorite text-editor through the [LSP](/lsp).
+
+While other [PKMS](/pkms) implementations include their own text-editors, markdown-oxide is *unbundled*: it leaves text-editing to a dedicated text-editor and focuses solely on robust, performant knowledge management.
+
+It also is inspired by and highly compatible with Obsidian. 
+
+<Note>
+**Editor Support**
+
+The best-supported text editor is Neovim, but also popular with users are VSCode, Helix, and Zed.
+
+Markdown Oxide will work with any text editor implementing the Language Server Protocol, but support for features will depend on the extent to which the editor implements the LSP.
+</Note>
+
+Markdown-oxide is for you if...
+- You have a favorite text editor -- possibly one that you have spent days configuring and cannot live without -- and it supports the LSP.
+- Your set of Personal Knowledge Management needs can be met by Markdown-oxide.
+
+In this article, I give an overview of the features Markdown-oxide so that you can decide if it is for you. If you do decide you want to use it, there is a linked guide to help you set up and get comfortable with Markdown-oxide. 
+
+# PKM Features
+
+I will not cover all of Markdown-Oxide's features but instead, list how Markdown-oxide fulfills common PKM needs. If you are looking for all of the features we have, visit the [Features Index](/features-index).
+
+## Linking
+
+We support links as a means of organization and provide several features to later use your linked notes
+
+### Creating Links
+
+You can create links between sections of documents through editor completions -- or Intellisense as VSCode calls it.
+
+<details>
+  <summary>Wikilink Completions to Files and Headings</summary>
+
+![wikilinkcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/29c4830f-30e5-4094-9f5b-7b39009437da)
+  
+</details>
+
+<details>
+    <summary>Markdown Link Completions to Files and Headings</summary>
+
+![markdownlinkcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/16c8565a-6a28-4df1-a312-e4b158fb9f03)
+    
+</details>
+
+<details>
+    <summary>(helix + zed not support yet): Block Completions: Fuzzy search through your files and link to any *block* of text</summary>   
+
+to use this, type `[[`, and after you press space, completions for every block in the vault will appear; continue typing to fuzzy match the block that you want; finally, select the block; a link will be inserted to the text document and an index (ex ^1j239) will be appended to the block in its respective file. In Neovim, this text will not be written yet into the file (it will be edited in an unsaved buffer) so type `:wall`, and it should be resolved (as long as you have `dynamicRegistration = true` as described in the [Neovim setup](/readme#neovim)!
+
+![blockcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/a48c28a7-55b0-438c-becc-1dfde350fa94)
+    
+</details>
+
+<details>
+    <summary>Unresolved File and Heading Completions</summary>
+    
+For those who like to reference things before they are written, `markdown-oxide` has terrific support for unresolved references! It provides completions for unresolved references, provides lsp_references for them, and provides code actions to create files + append headings.  
+
+![unresolvedcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/96ed1a8e-eea3-4d3f-9557-e51b076fb3fb)
+    
+</details>
+
+### Using linked notes
+
+- Use your editor's go-to-definition command to follow a Wiki or Markdown-link link
+- Backlinks
+    
+    <details>
+        <summary>File References: Gets references to the file and all headings and blocks in the file</summary>
+
+    ![filereferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/9fbd6051-ef57-42eb-b61b-1cc3ddfb2293)
+        
+    </details>
+
+    <details>
+        <summary>Heading References</summary>
+        
+    ![headingreferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/50598628-ed27-4a9b-adba-861ca8f933ea)
+        
+    </details>
+
+    <details>
+        <summary>Indexed Block References</summary>
+
+    ![indexedblockreferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/5d92257e-56b8-4209-b990-d25bbaa75a69)
+        
+    </details>
+    
+    * Also included are several enhancements to your editor's UI to view information on backlinks more easily. For example, we provide a code lens with the count of references to headings and files; it can be seen in some of the previews.
+        + Note this does not work on Zed and Helix yet
+
+### Editing linked notes
+
+A challenge of linked notes is that they become difficult to edit. For example, changing a heading name will break links to the heading.
+
+For this reason, we implement your editor's *rename* command so that you can rename files and headings as well as all related links.
+
+<details>
+    <summary>(not zed) Rename File and all references</summary>
+
+![renamefile](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/3ac404fb-cfcd-4943-81ba-8ab3645831b7)
+
+</details>
+
+<details>
+    <summary>(not zed) Rename Heading and all references</summary>
+
+![renameheading](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/4227cd57-ca07-4d11-b6e8-afcaba554271)
+
+</details>
+
+## Daily Notes
+
+### Navigating daily notes
+
+By using Markdown-Oxide's LSP commands, you can navigate your daily notes very simply. 
+
+Some examples of the commands in Neovim are
+
+- `:Today`
+- `:Tomorrow`
+- `:Yesterday`
+- `:Daily two days ago`
+- `:Daily next monday`
+
+### Linking to Daily Notes
+
+Daily Note link completions using natural language relative to the current date
+
+- <details>
+    <summary>...for wikilinks</summary>
+
+    ![dailynoteswiki](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/d2505535-ef5e-491a-bd88-ef12be2402ef)
+
+</details>
+
+- <details>
+    <summary>...for markdown links</summary>
+
+    ![dailynotesmd](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/23cf2f7c-1956-40b6-bfa9-0349c640516c)
+
+</details>
+
+<Info>
+This allows you to give yourself reminders in the future. 
+
+Add a `[[next monday]]` link to a block and when you open your daily note on monday, you will see your block as a backlink
+</Info>
+
+## Tags
+
+### Adding Tags to files
+
+Use tag completions to add previously defined tags to files
+
+<details>
+    <summary>Tag Completions</summary>
+
+![tagcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/bf20d7ac-171a-4d95-b510-ba323073c0b8)
+    
+</details>
+
+### Using Tags
+
+When you want to query your tagged files, you have the following options...
+
+<details>
+    <summary>Tag References: Gets all references to the tag and subtags</summary>
+
+![tagreferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/d73ac764-2c86-45c9-9403-17b50e6962e4)
+    
+</details>
+
+- File symbols: A hierarchical outline of headings and subheadings in the current file
+- Workspace symbols: search everything linkable: files, headings, tags.
+- Find all references to a tag by typing the tag name as a search term for workspace symbols
+
+- Find all references to a tag by typing the tag name into workspace symbols
+
+## Extras
+
+### Callout Completions
+
+<details>
+    <summary>Callout Completions following Obsidian's callout syntax</summary>
+
+![calloutcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/11cd44f1-cf2e-4f27-92b4-1ed4914356ca)
+    
+</details>
+
+### Footnotes
+
+#### Completions
+
+<details>
+    <summary>Footnote Completions: easily link to the footnotes defined in the active file</summary>
+
+![footnotecompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/92a6739d-8a7a-457e-84bd-fde6548aa25a)
+    
+</details>
+
+#### References
+
+<details>
+    <summary>Footnote References: Navigate the uses of a footnote in the active file</summary>
+
+![footnotereferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/25940052-ca6c-4b7c-b334-f0001260c490)
+
+</details>
+
+# Getting Started
+
+If the features support your PKM needs and you have a desire to PKM in your favorite text editor, the setup guide is [here](/setup-instructions). I hope you enjoy it!
+
+If Markdown-Oxide is not quite what you are looking for at this time, good luck on your PKM journey and consider checking back in the future!
+
+<Note>
+**Github**
+
+If you want to view the code, open pull-requests, participate in discussions, report bugs, and/or request features, visit the github repo: https://github.com/Feel-ix-343/markdown-oxide
+</Note>
+
+-[Felix](/author)
