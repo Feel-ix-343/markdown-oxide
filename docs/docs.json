@@ -40,24 +40,38 @@
     }
   ],
   "navigation": {
-    "Get Started": [
-      "index",
-      "what-is-markdown-oxide",
-      "setup-instructions"
-    ],
-    "Features": [
-      "features-index",
-      "daily-notes"
-    ],
-    "Configuration": [
-      "configuration",
-      "date-formatting"
-    ],
-    "Reference": [
-      "reference/readme",
-      "reference/lsp",
-      "reference/pkms",
-      "reference/author"
+    "groups": [
+      {
+        "group": "Get Started",
+        "pages": [
+          "index",
+          "what-is-markdown-oxide",
+          "setup-instructions"
+        ]
+      },
+      {
+        "group": "Features",
+        "pages": [
+          "features-index",
+          "daily-notes"
+        ]
+      },
+      {
+        "group": "Configuration",
+        "pages": [
+          "configuration",
+          "date-formatting"
+        ]
+      },
+      {
+        "group": "Reference",
+        "pages": [
+          "reference/readme",
+          "reference/lsp",
+          "reference/pkms",
+          "reference/author"
+        ]
+      }
     ]
   },
   "footerSocials": {
