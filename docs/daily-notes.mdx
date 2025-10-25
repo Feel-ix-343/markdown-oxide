@@ -28,164 +28,162 @@ These can be used in completions by `[[{relativename}` or `[{display?}]({relativ
 
 ## Opening Daily Notes
 
-These follow https://docs.rs/fuzzydate/latest/fuzzydate/ where the relative name must follow the specification for `<datetime>` in...
+These follow https://docs.rs/fuzzydate/latest/fuzzydate/ where the relative name must follow the specification for `<datetime>` in the fuzzydate specification below:
 
-- <Accordion title="fuzzydate's specification">
+<Accordion title="fuzzydate's specification">
+  ```
+  <datetime> ::= <time>
+               | <date> <time>
+               | <date> , <time>
+               | <duration> after <datetime>
+               | <duration> from <datetime>
+               | <duration> before <datetime>
+               | <duration> ago
+               | now
 
-    ```
-    <datetime> ::= <time>
-                 | <date> <time>
-                 | <date> , <time>
-                 | <duration> after <datetime>
-                 | <duration> from <datetime>
-                 | <duration> before <datetime>
-                 | <duration> ago
-                 | now
+  <article> ::= a
+             | an
+             | the
 
-    <article> ::= a
-               | an
-               | the
+  <date> ::= today
+           | tomorrow
+           | yesterday
+           | <num> / <num> / <num>
+           | <num> - <num> - <num>
+           | <num> . <num> . <num>
+           | <month> <num> <num>
+           | <relative_specifier> <unit>
+           | <relative_specifier> <weekday>
+           | <weekday>
 
-    <date> ::= today
-             | tomorrow
-             | yesterday
-             | <num> / <num> / <num>
-             | <num> - <num> - <num>
-             | <num> . <num> . <num>
-             | <month> <num> <num>
-             | <relative_specifier> <unit>
-             | <relative_specifier> <weekday>
-             | <weekday>
+  <relative_specifier> ::= this
+                         | next
+                         | last
 
-    <relative_specifier> ::= this
-                           | next
-                           | last
+  <weekday> ::= monday
+              | tuesday
+              | wednesday
+              | thursday
+              | friday
+              | saturday
+              | sunday
+              | mon
+              | tue
+              | wed
+              | thu
+              | fri
+              | sat
+              | sun
 
-    <weekday> ::= monday
-                | tuesday
-                | wednesday
-                | thursday
-                | friday
-                | saturday
-                | sunday
-                | mon
-                | tue
-                | wed
-                | thu
-                | fri
-                | sat
-                | sun
+  <month> ::= january
+            | february
+            | march
+            | april
+            | may
+            | june
+            | july
+            | august
+            | september
+            | october
+            | november
+            | december
+            | jan
+            | feb
+            | mar
+            | apr
+            | jun
+            | jul
+            | aug
+            | sep
+            | oct
+            | nov
+            | dec
 
-    <month> ::= january
-              | february
-              | march
-              | april
-              | may
-              | june
-              | july
-              | august
-              | september
-              | october
-              | november
-              | december
-              | jan
-              | feb
-              | mar
-              | apr
-              | jun
-              | jul
-              | aug
-              | sep
-              | oct
-              | nov
-              | dec
+  <duration> ::= <num> <unit>
+               | <article> <unit>
+               | <duration> and <duration>
 
-    <duration> ::= <num> <unit>
-                 | <article> <unit>
-                 | <duration> and <duration>
+  <time> ::= <num>:<num>
+           | <num>:<num> am
+           | <num>:<num> pm
+           |
 
-    <time> ::= <num>:<num>
-             | <num>:<num> am
-             | <num>:<num> pm
-             |
+  <unit> ::= day
+           | days
+           | week
+           | weeks
+           | hour
+           | hours
+           | minute
+           | minutes
+           | min
+           | mins
+           | month
+           | months
+           | year
+           | years
 
-    <unit> ::= day
-             | days
-             | week
-             | weeks
-             | hour
-             | hours
-             | minute
-             | minutes
-             | min
-             | mins
-             | month
-             | months
-             | year
-             | years
+  <num> ::= <num_triple> <num_triple_unit> and <num>
+          | <num_triple> <num_triple_unit> <num>
+          | <num_triple> <num_triple_unit>
+          | <num_triple_unit> and <num>
+          | <num_triple_unit> <num>
+          | <num_triple_unit>
+          | <num_triple>
+          | NUM   ; number literal greater than or equal to 1000
 
-    <num> ::= <num_triple> <num_triple_unit> and <num>
-            | <num_triple> <num_triple_unit> <num>
-            | <num_triple> <num_triple_unit>
-            | <num_triple_unit> and <num>
-            | <num_triple_unit> <num>
-            | <num_triple_unit>
-            | <num_triple>
-            | NUM   ; number literal greater than or equal to 1000
+  <num_triple> ::= <ones> hundred and <num_double>
+                 | <ones> hundred <num_double>
+                 | <ones> hundred
+                 | hundred and <num_double>
+                 | hundred <num_double>
+                 | hundred
+                 | <num_double>
+                 | NUM    ; number literal less than 1000 and greater than 99
 
-    <num_triple> ::= <ones> hundred and <num_double>
-                   | <ones> hundred <num_double>
-                   | <ones> hundred
-                   | hundred and <num_double>
-                   | hundred <num_double>
-                   | hundred
-                   | <num_double>
-                   | NUM    ; number literal less than 1000 and greater than 99
+  <num_triple_unit> ::= thousand
+                      | million
+                      | billion
 
-    <num_triple_unit> ::= thousand
-                        | million
-                        | billion
+  <num_double> ::= <ones>
+                 | <tens> - <ones>
+                 | <tens> <ones>
+                 | <tens>
+                 | <teens>
+                 | NUM    ; number literal less than 100 and greater than 19
 
-    <num_double> ::= <ones>
-                   | <tens> - <ones>
-                   | <tens> <ones>
-                   | <tens>
-                   | <teens>
-                   | NUM    ; number literal less than 100 and greater than 19
+  <tens> ::= twenty
+           | thirty
+           | forty
+           | fifty
+           | sixty
+           | seventy
+           | eighty
+           | ninety
 
-    <tens> ::= twenty
-             | thirty
-             | forty
-             | fifty
-             | sixty
-             | seventy
-             | eighty
-             | ninety
+  <teens> ::= ten
+            | eleven
+            | twelve
+            | thirteen
+            | fourteen
+            | fifteen
+            | sixteen
+            | seventeen
+            | eighteen
+            | nineteen
+            | NUM     ; number literal less than 20 and greater than 9
 
-    <teens> ::= ten
-              | eleven
-              | twelve
-              | thirteen
-              | fourteen
-              | fifteen
-              | sixteen
-              | seventeen
-              | eighteen
-              | nineteen
-              | NUM     ; number literal less than 20 and greater than 9
-
-    <ones> ::= one
-             | two
-             | three
-             | four
-             | five
-             | six
-             | seven
-             | eight
-             | nine
-             | NUM      ; number literal less than 10
-    ```
-
+  <ones> ::= one
+           | two
+           | three
+           | four
+           | five
+           | six
+           | seven
+           | eight
+           | nine
+           | NUM      ; number literal less than 10
+  ```
 </Accordion>
 
 
