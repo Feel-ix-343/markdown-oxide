@@ -1,5 +1,6 @@
 {
   "name": "Markdown-Oxide",
+  "theme": "mint",
   "logo": {
     "dark": "/logo/dark.svg",
     "light": "/logo/light.svg"
