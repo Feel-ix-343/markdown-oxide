@@ -21,12 +21,6 @@
     "name": "GitHub",
     "url": "https://github.com/Feel-ix-343/markdown-oxide"
   },
-  "tabs": [
-    {
-      "name": "Reference",
-      "url": "reference"
-    }
-  ],
   "anchors": [
     {
       "name": "Documentation",
@@ -42,28 +36,10 @@
   "navigation": {
     "groups": [
       {
-        "group": "Get Started",
+        "group": "Documentation",
         "pages": [
           "index",
-          "setup-instructions"
-        ]
-      },
-      {
-        "group": "Features",
-        "pages": [
-          "features-index"
-        ]
-      },
-      {
-        "group": "Configuration",
-        "pages": [
-          "configuration"
-        ]
-      },
-      {
-        "group": "Reference",
-        "pages": [
-          "reference/readme"
+          "getting-started"
         ]
       }
     ]
