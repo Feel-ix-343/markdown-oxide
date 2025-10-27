@@ -14,6 +14,8 @@ pub struct Settings {
     /// Diffrent pages path than default
     pub new_file_folder_path: String,
     pub daily_notes_folder: String,
+    pub unique_notes_folder: String,
+    pub unique_notes_format: String,
     pub heading_completions: bool,
     pub title_headings: bool,
     pub unresolved_diagnostics: bool,
@@ -46,6 +48,7 @@ pub enum EmbeddedBlockTransclusionLength {
 impl Settings {
     pub fn new(root_dir: &Path, capabilities: &ClientCapabilities) -> anyhow::Result<Settings> {
         let obsidian_daily_note_config = obsidian_daily_note_config(root_dir).unwrap_or_default();
+        let obsidian_unique_note_config = obsidian_unique_note_config(root_dir).unwrap_or_default();
         let obsidian_new_file_folder_path = obsidian_new_file_folder_path(root_dir);
         let expanded = shellexpand::tilde("~/.config/moxide/settings");
         let settings = Config::builder()
@@ -71,7 +74,19 @@ impl Settings {
                 "dailynote",
                 obsidian_daily_note_config
                     .format
+                    .filter(|v| v.len() > 0)
                     .unwrap_or("%Y-%m-%d".to_string()),
+            )?
+            .set_default(
+                "unique_notes_folder",
+                obsidian_unique_note_config.folder.unwrap_or("".to_string()),
+            )?
+            .set_default(
+                "unique_notes_format",
+                obsidian_unique_note_config
+                    .format
+                    .filter(|v| v.len() > 0)
+                    .unwrap_or("%Y%m%d%H%M".to_string()),
             )?
             .set_default("heading_completions", true)?
             .set_default("unresolved_diagnostics", true)?
@@ -117,6 +132,23 @@ fn obsidian_daily_note_config(root_dir: &Path) -> Option<ObsidianDailyNoteConfig
     let config: ObsidianDailyNoteConfig = serde_json::from_str(&file).ok()?;
 
     Some(ObsidianDailyNoteConfig {
+        folder: config.folder,
+        format: config.format.map(|x| convert_momentjs_to_chrono_format(&x)),
+    })
+}
+
+#[derive(Deserialize, Debug, Default)]
+struct ObsidianUniqueNoteConfig {
+    folder: Option<String>,
+    format: Option<String>,
+}
+
+fn obsidian_unique_note_config(root_dir: &Path) -> Option<ObsidianUniqueNoteConfig> {
+    let unique_notes_config_file = root_dir.join(".obsidian").join("zk-prefixer.json");
+    let file = std::fs::read_to_string(unique_notes_config_file).ok()?;
+    let config: ObsidianUniqueNoteConfig = serde_json::from_str(&file).ok()?;
+
+    Some(ObsidianUniqueNoteConfig {
         folder: config.folder,
         format: config.format.map(|x| convert_momentjs_to_chrono_format(&x)),
     })
