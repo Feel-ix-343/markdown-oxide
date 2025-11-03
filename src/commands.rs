@@ -1,7 +1,9 @@
 use std::fs::File;
+use std::io;
 use std::path::Path;
 
 use crate::config::Settings;
+use crate::unique_notes::{self, CreateFileProvider, NowProvider};
 use chrono::offset::Local;
 use chrono::NaiveDateTime;
 use fuzzydate::parse;
@@ -72,6 +74,45 @@ pub async fn jump(
             jump_to.map(parse)
         )))
     }
+}
+
+struct CreateUniqueNoteCtx {}
+
+impl NowProvider for CreateUniqueNoteCtx {
+    fn now(&self) -> NaiveDateTime {
+        Local::now().naive_local()
+    }
+}
+
+impl CreateFileProvider<File, io::Error> for CreateUniqueNoteCtx {
+    fn create_file(&self, path: &Path) -> io::Result<File> {
+        File::create(path)
+    }
+}
+
+pub async fn create_unique_note(
+    client: &tower_lsp::Client,
+    root_dir: &Path,
+    settings: &Settings,
+) -> Result<Option<Value>> {
+    let unique_notes_format = &settings.unique_notes_format;
+    let unique_notes_path = root_dir.join(&settings.unique_notes_folder);
+
+    let file_path = unique_notes::create_unique_note(
+        &unique_notes_path,
+        unique_notes_format,
+        &CreateUniqueNoteCtx {},
+    );
+
+    client
+        .show_document(ShowDocumentParams {
+            uri: Url::from_file_path(file_path).unwrap(),
+            external: Some(false),
+            take_focus: Some(true),
+            selection: None,
+        })
+        .await
+        .map(|success| Some(success.into()))
 }
 
 // tests
