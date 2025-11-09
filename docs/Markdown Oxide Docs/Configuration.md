@@ -37,7 +37,7 @@ new_file_folder_path = ""
 
 
 # The folder for new daily notes: this is applied for the create file for unresolved link code action
-# as well as the Today, Tomorrow, Yesterday, and Daily... lsp commands
+# as well as the Today, Tomorrow, Yesterday, and Daily... lsp commands (including relative directives like prev, next, +N, -N)
 #
 # This is also imported from obsidian if not specified: specifically the option titled "New file location"
 daily_notes_folder = ""
