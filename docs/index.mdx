@@ -5,203 +5,117 @@ description: "PKM (Personal-Knowledge-Management) Markdown Language Server for y
 
 # Markdown-Oxide
 
-**A powerful PKM Language Server that brings Obsidian-like features to your favorite text editor.**
+Markdown-Oxide is a Personal Knowledge Management System (PKMS) that composes with your favorite text-editor through the Language Server Protocol (LSP).
 
-Markdown-Oxide is a Personal Knowledge Management System (PKMS) that composes with your favorite text-editor through the Language Server Protocol (LSP). While other PKMS implementations include their own text-editors, markdown-oxide is *unbundled*: it leaves text-editing to a dedicated text-editor and focuses solely on robust, performant knowledge management.
+While other PKMS implementations include their own text-editors, markdown-oxide is *unbundled*: it leaves text-editing to a dedicated text-editor and focuses solely on robust, performant knowledge management.
 
-<CardGroup cols={2}>
-  <Card title="Get Started" icon="rocket" href="/getting-started">
-    Set up Markdown-Oxide with Neovim, VSCode, Zed, or Helix in minutes
-  </Card>
-  <Card title="GitHub" icon="github" href="https://github.com/Feel-ix-343/markdown-oxide">
-    View the source code and contribute
-  </Card>
-</CardGroup>
+It also is inspired by and highly compatible with Obsidian.
 
-## Why Markdown-Oxide?
+> [!note] Editor Support
+> The best-supported text editor is Neovim, but also popular with users are VSCode, Helix, and Zed.
+> 
+> Markdown Oxide will work with any text editor implementing the Language Server Protocol, but support for features will depend on the extent to which the editor implements the LSP.
 
-<AccordionGroup>
-  <Accordion title="Use Your Favorite Editor" icon="keyboard">
-    You've spent days configuring your text editor. Why give it up? Markdown-Oxide works with any LSP-compatible editor, letting you keep your workflow while gaining powerful PKM features.
-  </Accordion>
-  
-  <Accordion title="Obsidian-Compatible" icon="link">
-    Highly compatible with Obsidian vaults. Import your settings from `.obsidian/` configuration files and use familiar syntax like wikilinks, tags, and daily notes.
-  </Accordion>
-  
-  <Accordion title="Fast & Performant" icon="bolt">
-    Built in Rust for speed and reliability. Handles large vaults with thousands of notes without breaking a sweat.
-  </Accordion>
-  
-  <Accordion title="Editor Support" icon="code">
-    Best supported on Neovim, with excellent support for VSCode, Helix, and Zed. Works with any editor implementing the Language Server Protocol.
-  </Accordion>
-</AccordionGroup>
+Markdown-oxide is for you if...
+- You have a favorite text editor -- possibly one that you have spent days configuring and cannot live without -- and it supports the LSP.
+- Your set of Personal Knowledge Management needs can be met by Markdown-oxide.
 
-## Key Features
+In this article, I give an overview of the features Markdown-oxide so that you can decide if it is for you. If you do decide you want to use it, there is a linked guide to help you set up and get comfortable with Markdown-oxide.
 
-### Intelligent Linking
+# PKM Features
 
-Create and navigate connections between your notes effortlessly.
+I will not cover all of Markdown-Oxide's features but instead, list how Markdown-oxide fulfills common PKM needs. If you are looking for all of the features we have, visit the [[Features Index]].
 
-<AccordionGroup>
-<Accordion title="Wikilink & Markdown Link Completions">
-Auto-complete file and heading references as you type
+## Linking
 
-![wikilinkcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/29c4830f-30e5-4094-9f5b-7b39009437da)
+We support links as a means of organization and provide several features to later use your linked notes
 
-![markdownlinkcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/16c8565a-6a28-4df1-a312-e4b158fb9f03)
-</Accordion>
+### Creating Links
 
-<Accordion title="Unresolved File and Heading Completions">
-For those who like to reference things before they are written, markdown-oxide has terrific support for unresolved references! It provides completions for unresolved references, provides lsp_references for them, and provides code actions to create files + append headings.
+You can create links between sections of documents through editor completions -- or Intellisense as VSCode calls it.
 
-![unresolvedcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/96ed1a8e-eea3-4d3f-9557-e51b076fb3fb)
-</Accordion>
+![[Features Index#^linking]]
 
-<Accordion title="Go-to-Definition & Backlinks">
-Jump to linked files and headings instantly. See all references to any file, heading, or block.
+![[Features Index#^unresolvedCompletions]]
 
-![filereferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/9fbd6051-ef57-42eb-b61b-1cc3ddfb2293)
-</Accordion>
+### Using linked notes
 
-<Accordion title="Rename Refactoring">
-Rename files and headings while automatically updating all links
+- Use your editor's go-to-definition command to follow a Wiki or Markdown-link link
+- Backlinks
+    ![[Features Index#^backlinks]]
+    * Also included are several enhancements to your editor's UI to view information on backlinks more easily. For example, we provide a code lens with the count of references to headings and files; it can be seen in some of the previews.
+        + Note this does not work on Zed and Helix yet
 
-![renamefile](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/3ac404fb-cfcd-4943-81ba-8ab3645831b7)
-</Accordion>
-</AccordionGroup>
+### Editing linked notes
 
-### Daily Notes
+A challenge of linked notes is that they become difficult to edit. For example, changing a heading name will break links to the heading.
 
-Manage your daily journal with natural language commands.
+For this reason, we implement your editor's *rename* command so that you can rename files and headings as well as all related links.
 
-<AccordionGroup>
-<Accordion title="Natural Language Navigation & Smart Completions">
-Open notes with commands like `:Daily next monday` or `:Daily two days ago`. Link to daily notes using relative dates like `[[tomorrow]]` or `[[next friday]]`.
+![[Features Index#^renameLinked]]
 
-![dailynoteswiki](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/d2505535-ef5e-491a-bd88-ef12be2402ef)
-</Accordion>
-</AccordionGroup>
+## Daily Notes
 
-- **Automatic Formatting**: Respects your date format preferences from Obsidian or custom config
+### Navigating daily notes
 
-### Tags & Organization
+By using Markdown-Oxide's LSP commands, you can navigate your daily notes very simply. 
 
-Organize your knowledge with hierarchical tags.
+Some examples of the commands in Neovim are
 
-<AccordionGroup>
-<Accordion title="Tag Completions">
-Auto-complete previously defined tags
+- `:Today`
+- `:Tomorrow`
+- `:Yesterday`
+- `:Daily two days ago`
+- `:Daily next monday`
 
-![tagcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/bf20d7ac-171a-4d95-b510-ba323073c0b8)
-</Accordion>
+### Linking to Daily Notes
 
-<Accordion title="Tag References">
-Find all notes using a specific tag or subtag
+![[Features Index#^implDailyNoteComp]]
 
-![tagreferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/d73ac764-2c86-45c9-9403-17b50e6962e4)
-</Accordion>
-</AccordionGroup>
+> [!info]
+> This allows you to give yourself reminders in the future. 
+>
+> Add a `[[next monday]]` link to a block and when you open your daily note on monday, you will see your block as a backlink
 
-- **Workspace Symbols**: Search across all files, headings, and tags
+## Tags
 
-### Advanced Features
+### Adding Tags to files
 
-<AccordionGroup>
-<Accordion title="Callout Completions">
-Use Obsidian-style callouts for notes, warnings, and tips
+Use tag completions to add previously defined tags to files
 
-![calloutcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/11cd44f1-cf2e-4f27-92b4-1ed4914356ca)
-</Accordion>
+![[Features Index#^tagCompletions]]
 
-<Accordion title="Footnote Completions">
-Easily link to the footnotes defined in the active file
+### Using Tags
 
-![footnotecompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/92a6739d-8a7a-457e-84bd-fde6548aa25a)
-</Accordion>
+When you want to query your tagged files, you have the following options...
 
-<Accordion title="Footnote References">
-Navigate the uses of a footnote in the active file
+![[Features Index#^tagReferences]]
 
-![footnotereferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/25940052-ca6c-4b7c-b334-f0001260c490)
-</Accordion>
-</AccordionGroup>
+![[Features Index#^workspaceTag]]
 
-- **Block References**: Link to specific paragraphs or sections using `^block-id` syntax
-- **Unresolved Link Support**: Create links before the target exists, with code actions to create files
-- **Semantic Tokens**: Visual differentiation between resolved and unresolved links
-- **Code Lens**: Inline reference counts for files and headings
+- Find all references to a tag by typing the tag name into workspace symbols
 
-## Quick Start
+## Extras
 
-Choose your editor to get started:
+### Callout Completions
 
-<Tabs>
-  <Tab title="Neovim">
-    Install via your preferred method:
-    ```bash
-    # Cargo
-    cargo install --locked --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
-    
-    # Arch Linux
-    pacman -S markdown-oxide
-    
-    # Homebrew
-    brew install markdown-oxide
-    ```
-    
-    Then configure nvim-lspconfig with dynamic registration enabled. [Full setup guide →](/getting-started#neovim)
-  </Tab>
-  
-  <Tab title="VSCode">
-    Install the [Markdown Oxide extension](https://marketplace.visualstudio.com/items?itemName=FelixZeller.markdown-oxide) from the VSCode marketplace.
-    
-    The extension will automatically download and manage the language server binary. [Full setup guide →](/getting-started#vscode)
-  </Tab>
-  
-  <Tab title="Zed">
-    Install the Markdown Oxide extension from Zed's extension marketplace.
-    
-    The extension will automatically download and manage the language server binary. [Full setup guide →](/getting-started#zed)
-  </Tab>
-  
-  <Tab title="Helix">
-    Install the binary to your PATH:
-    ```bash
-    # Cargo
-    cargo install --locked --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
-    
-    # Arch Linux
-    pacman -S markdown-oxide
-    ```
-    
-    Helix will automatically detect and use the language server. [Full setup guide →](/getting-started#helix)
-  </Tab>
-</Tabs>
+![[Features Index#^calloutCompletions]]
 
-## Is Markdown-Oxide Right for You?
+### Footnotes
 
-Markdown-oxide is perfect if you:
+#### Completions
 
-- Have a favorite text editor that supports LSP and want to keep using it
-- Want Obsidian-like PKM features without being locked into a specific app
-- Need a fast, performant solution for large markdown vaults
-- Value the Unix philosophy of composable, focused tools
+![[Features Index#^footnoteCompletions]]
 
-If these resonate with you, [get started now](/getting-started)!
+#### References
 
-## Community & Support
+![[Features Index#^footnoteReferences]]
 
-<CardGroup cols={2}>
-  <Card title="GitHub Issues" icon="bug" href="https://github.com/Feel-ix-343/markdown-oxide/issues">
-    Report bugs or request features
-  </Card>
-  <Card title="Discussions" icon="comments" href="https://github.com/Feel-ix-343/markdown-oxide/discussions">
-    Ask questions and share your setup
-  </Card>
-</CardGroup>
+# Getting Started
 
----
+If the features support your PKM needs and you have a desire to PKM in your favorite text editor, the setup guide is [here](<Setup Instructions.md>). I hope you enjoy it!
 
-*Built with ❤️ by Felix Zeller*
+If Markdown-Oxide is not quite what you are looking for at this time, good luck on your PKM journey and consider checking back in the future!
+
+> [!note] Github
+> If you want to view the code, open pull-requests, participate in discussions, report bugs, and/or request features, visit the github repo: https://github.com/Feel-ix-343/markdown-oxide
