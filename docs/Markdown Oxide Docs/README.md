@@ -157,7 +157,11 @@ Set up the PKM for your text editor...
     - <details>
         <summary>(optional) Enable opening daily notes with natural language</summary>
 
-        Modify your lsp `on_attach` function to support opening daily notes with, for example, `:Daily two days ago` or `:Daily next monday`. 
+        Modify your lsp `on_attach` function to support opening daily notes with natural language and relative directives.
+
+        Examples:
+        - Natural language: `:Daily two days ago`, `:Daily next monday`
+        - Relative directives: `:Daily prev`, `:Daily next`, `:Daily +7`, `:Daily -3`
 
         ```lua
         -- setup Markdown Oxide daily note commands
