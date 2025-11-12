@@ -7,7 +7,7 @@ use std::{
     hash::Hash,
     iter,
     ops::{Deref, DerefMut, Not, Range},
-    path::{Path, PathBuf},
+    path::{Path, PathBuf, MAIN_SEPARATOR},
     time::SystemTime,
 };
 
@@ -1385,7 +1385,7 @@ impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
         let path = &self.path.clone()?;
 
-        let last = path.split('/').next_back()?;
+        let last = path.split(MAIN_SEPARATOR).next_back()?;
 
         Some(last.to_string())
     }
