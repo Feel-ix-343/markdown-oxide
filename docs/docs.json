@@ -1,11 +1,6 @@
 {
-  "name": "Markdown-Oxide",
+  "name": "Feel-ix-343 / markdown-oxide",
   "theme": "mint",
-  "logo": {
-    "dark": "/logo/dark.svg",
-    "light": "/logo/light.svg"
-  },
-  "favicon": "/favicon.svg",
   "colors": {
     "primary": "#2563EB",
     "light": "#60A5FA",
