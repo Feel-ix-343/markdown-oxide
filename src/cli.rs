@@ -12,7 +12,12 @@ use crate::config::Settings;
 
 #[derive(Parser)]
 #[command(name = "markdown-oxide")]
-#[command(author, version, about = "A PKM LSP for markdown files", long_about = "A PKM LSP for markdown files.\n\nWhen run without a command, starts the LSP server for use with text editors.")]
+#[command(
+    author,
+    version,
+    about = "A PKM LSP for markdown files",
+    long_about = "A PKM LSP for markdown files.\n\nWhen run without a command, starts the LSP server for use with text editors."
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
