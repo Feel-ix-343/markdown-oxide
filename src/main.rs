@@ -20,6 +20,7 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 use vault::{Preview, Rangeable, Reference, Vault};
 
+mod cli;
 mod codeactions;
 mod codelens;
 mod commands;
@@ -817,23 +818,38 @@ async fn jump_to_specific(
     commands::jump(client, root_dir, settings, Some(day)).await
 }
 
-use std::env;
+use clap::Parser;
 
 #[tokio::main]
 async fn main() {
-    if env::args().any(|arg| arg == "--version" || arg == "-v") {
-        println!("markdown-oxide v{}", env!("CARGO_PKG_VERSION"));
-        return;
+    let cli = cli::Cli::parse();
+
+    match cli.command {
+        Some(cli::Commands::Daily { date }) => {
+            let root_dir = std::env::current_dir().expect("Failed to get current directory");
+            if let Err(e) = cli::run_daily(date, &root_dir) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(cli::Commands::Config) => {
+            let root_dir = std::env::current_dir().expect("Failed to get current directory");
+            if let Err(e) = cli::run_config(&root_dir) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        None => {
+            let stdin = tokio::io::stdin();
+            let stdout = tokio::io::stdout();
+
+            let (service, socket) = LspService::new(|client| Backend {
+                client,
+                vault: Arc::new(None.into()),
+                opened_files: Arc::new(HashSet::new().into()),
+                settings: Arc::new(None.into()),
+            });
+            Server::new(stdin, stdout, socket).serve(service).await;
+        }
     }
-
-    let stdin = tokio::io::stdin();
-    let stdout = tokio::io::stdout();
-
-    let (service, socket) = LspService::new(|client| Backend {
-        client,
-        vault: Arc::new(None.into()),
-        opened_files: Arc::new(HashSet::new().into()),
-        settings: Arc::new(None.into()),
-    });
-    Server::new(stdin, stdout, socket).serve(service).await;
 }
