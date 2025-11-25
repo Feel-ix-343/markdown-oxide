@@ -106,11 +106,15 @@ pub fn get_completions(
         )
     })
     .or_else(|| {
-        run_completer::<CalloutCompleter>(
-            completion_context,
-            params.text_document_position.position.line,
-            params.text_document_position.position.character,
-        )
+        if config.callout_completions {
+            run_completer::<CalloutCompleter>(
+                completion_context,
+                params.text_document_position.position.line,
+                params.text_document_position.position.character,
+            )
+        } else {
+            None
+        }
     })
 }
 
