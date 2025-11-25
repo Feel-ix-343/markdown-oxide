@@ -530,7 +530,18 @@ pub trait Rangeable {
                 || (self_range.end.line == other_range.end.line
                     && self_range.end.character >= other_range.end.character))
     }
+    /// Returns `true` if ranges have any overlap
+    fn intersects(&self, other: &impl Rangeable) -> bool {
+        let self_range = self.range();
+        let other_range = other.range();
 
+        (self_range.end.line > other_range.start.line
+            || (self_range.end.line == other_range.start.line
+                && self_range.end.character >= other_range.start.character))
+            && (other_range.end.line > self_range.start.line
+                || (other_range.end.line == self_range.start.line
+                    && other_range.end.character >= self_range.start.character))
+    }
     fn includes_position(&self, position: Position) -> bool {
         let range = self.range();
         (range.start.line < position.line
@@ -602,9 +613,24 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| {
+                    // Reject links that overlap with codeblocks, unless
+                    // the codeblock is contained within the link
+                    code_blocks
+                        .iter()
+                        .all(|codeblock| !codeblock.intersects(it) || it.includes(codeblock))
+                })
                 .collect_vec(),
-            _ => Reference::new(text, file_name).collect_vec(),
+            _ => Reference::new(text, file_name)
+                .filter(|it| {
+                    // Reject links that only *partially* overlap with codeblocks
+                    code_blocks.iter().all(|codeblock| {
+                        !codeblock.intersects(it)
+                            || codeblock.includes(it)
+                            || it.includes(codeblock)
+                    })
+                })
+                .collect_vec(),
         };
         let headings = MDHeading::new(text)
             .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
@@ -1607,12 +1633,13 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
 // tests
 #[cfg(test)]
 mod vault_tests {
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use itertools::Itertools;
     use tower_lsp::lsp_types::{Position, Range};
 
-    use crate::vault::{HeadingLevel, MyRange, ReferenceData};
+    use crate::config::Settings;
+    use crate::vault::{HeadingLevel, MyRange, Rangeable, ReferenceData};
     use crate::vault::{MDLinkReferenceDefinition, Refname};
 
     use super::Reference::*;
@@ -2817,5 +2844,459 @@ Continued
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn filter_out_references_that_partially_overlap_with_codeblocks() {
+        let text = "`[[` not a link `]]`";
+
+        let expected = vec![];
+
+        let mut settings = Settings::new(&Path::new(""), &Default::default()).unwrap();
+
+        settings.references_in_codeblocks = true;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+
+        assert_eq!(parsed, expected);
+
+        settings.references_in_codeblocks = false;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn allow_codeblocks_in_references() {
+        let text = "[[`codeblock`]]";
+
+        let expected = vec![Reference::WikiFileLink(ReferenceData {
+            reference_text: "`codeblock`".into(),
+            display_text: None,
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 0,
+                    character: 15,
+                },
+            }
+            .into(),
+        })];
+
+        let mut settings = Settings::new(&Path::new(""), &Default::default()).unwrap();
+
+        settings.references_in_codeblocks = false;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+
+        assert_eq!(parsed, expected);
+
+        settings.references_in_codeblocks = true;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn rangeable_intersects_no_overlap() {
+        use super::MyRange;
+
+        struct TestRange(MyRange);
+        impl super::Rangeable for TestRange {
+            fn range(&self) -> &MyRange {
+                &self.0
+            }
+        }
+
+        let range1 = TestRange(
+            Range {
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 0,
+                    character: 5,
+                },
+            }
+            .into(),
+        );
+        let range2 = TestRange(
+            Range {
+                start: Position {
+                    line: 0,
+                    character: 10,
+                },
+                end: Position {
+                    line: 0,
+                    character: 15,
+                },
+            }
+            .into(),
+        );
+
+        assert!(!range1.intersects(&range2));
+        assert!(!range2.intersects(&range1));
+    }
+
+    #[test]
+    fn rangeable_intersects_partial_overlap() {
+        use super::MyRange;
+
+        struct TestRange(MyRange);
+        impl super::Rangeable for TestRange {
+            fn range(&self) -> &MyRange {
+                &self.0
+            }
+        }
+
+        let range1 = TestRange(
+            Range {
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 0,
+                    character: 10,
+                },
+            }
+            .into(),
+        );
+        let range2 = TestRange(
+            Range {
+                start: Position {
+                    line: 0,
+                    character: 5,
+                },
+                end: Position {
+                    line: 0,
+                    character: 15,
+                },
+            }
+            .into(),
+        );
+
+        assert!(range1.intersects(&range2));
+        assert!(range2.intersects(&range1));
+    }
+
+    #[test]
+    fn rangeable_intersects_one_contains_other() {
+        use super::MyRange;
+
+        struct TestRange(MyRange);
+        impl super::Rangeable for TestRange {
+            fn range(&self) -> &MyRange {
+                &self.0
+            }
+        }
+
+        let outer = TestRange(
+            Range {
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 0,
+                    character: 20,
+                },
+            }
+            .into(),
+        );
+        let inner = TestRange(
+            Range {
+                start: Position {
+                    line: 0,
+                    character: 5,
+                },
+                end: Position {
+                    line: 0,
+                    character: 15,
+                },
+            }
+            .into(),
+        );
+
+        assert!(outer.intersects(&inner));
+        assert!(inner.intersects(&outer));
+        assert!(outer.includes(&inner));
+        assert!(!inner.includes(&outer));
+    }
+
+    #[test]
+    fn rangeable_intersects_adjacent_ranges() {
+        use super::MyRange;
+
+        struct TestRange(MyRange);
+        impl super::Rangeable for TestRange {
+            fn range(&self) -> &MyRange {
+                &self.0
+            }
+        }
+
+        let range1 = TestRange(
+            Range {
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 0,
+                    character: 5,
+                },
+            }
+            .into(),
+        );
+        let range2 = TestRange(
+            Range {
+                start: Position {
+                    line: 0,
+                    character: 5,
+                },
+                end: Position {
+                    line: 0,
+                    character: 10,
+                },
+            }
+            .into(),
+        );
+
+        assert!(range1.intersects(&range2));
+        assert!(range2.intersects(&range1));
+    }
+
+    #[test]
+    fn rangeable_intersects_multiline() {
+        use super::MyRange;
+
+        struct TestRange(MyRange);
+        impl super::Rangeable for TestRange {
+            fn range(&self) -> &MyRange {
+                &self.0
+            }
+        }
+
+        let range1 = TestRange(
+            Range {
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 1,
+                    character: 5,
+                },
+            }
+            .into(),
+        );
+        let range2 = TestRange(
+            Range {
+                start: Position {
+                    line: 1,
+                    character: 0,
+                },
+                end: Position {
+                    line: 2,
+                    character: 10,
+                },
+            }
+            .into(),
+        );
+
+        assert!(range1.intersects(&range2));
+        assert!(range2.intersects(&range1));
+    }
+
+    #[test]
+    fn rangeable_intersects_multiline_no_overlap() {
+        use super::MyRange;
+
+        struct TestRange(MyRange);
+        impl super::Rangeable for TestRange {
+            fn range(&self) -> &MyRange {
+                &self.0
+            }
+        }
+
+        let range1 = TestRange(
+            Range {
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 0,
+                    character: 10,
+                },
+            }
+            .into(),
+        );
+        let range2 = TestRange(
+            Range {
+                start: Position {
+                    line: 2,
+                    character: 0,
+                },
+                end: Position {
+                    line: 2,
+                    character: 10,
+                },
+            }
+            .into(),
+        );
+
+        assert!(!range1.intersects(&range2));
+        assert!(!range2.intersects(&range1));
+    }
+
+    #[test]
+    fn filter_out_link_starting_in_codeblock() {
+        let text = "`code [[link`]]";
+
+        let expected = vec![];
+
+        let mut settings = Settings::new(&Path::new(""), &Default::default()).unwrap();
+
+        settings.references_in_codeblocks = false;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+        assert_eq!(parsed, expected);
+
+        settings.references_in_codeblocks = true;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn filter_out_link_ending_in_codeblock() {
+        let text = "[[link `code]]`";
+
+        let expected = vec![];
+
+        let mut settings = Settings::new(&Path::new(""), &Default::default()).unwrap();
+
+        settings.references_in_codeblocks = false;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+        assert_eq!(parsed, expected);
+
+        settings.references_in_codeblocks = true;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn allow_link_fully_inside_codeblock_when_enabled() {
+        let text = "`[[link]]`";
+
+        let mut settings = Settings::new(&Path::new(""), &Default::default()).unwrap();
+
+        settings.references_in_codeblocks = false;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+        assert_eq!(parsed, vec![]);
+
+        settings.references_in_codeblocks = true;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+        assert_eq!(parsed.len(), 1);
+        assert!(matches!(parsed[0], Reference::WikiFileLink(_)));
+    }
+
+    #[test]
+    fn multiple_codeblocks_with_partial_overlap() {
+        let text = "`[[` text `]]`";
+
+        let expected = vec![];
+
+        let mut settings = Settings::new(&Path::new(""), &Default::default()).unwrap();
+
+        settings.references_in_codeblocks = false;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+        assert_eq!(parsed, expected);
+
+        settings.references_in_codeblocks = true;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn valid_link_next_to_codeblock() {
+        let text = "`code` [[link]]";
+
+        let mut settings = Settings::new(&Path::new(""), &Default::default()).unwrap();
+
+        settings.references_in_codeblocks = false;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+        assert_eq!(parsed.len(), 1);
+        assert!(matches!(parsed[0], Reference::WikiFileLink(_)));
+
+        settings.references_in_codeblocks = true;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+        assert_eq!(parsed.len(), 1);
+        assert!(matches!(parsed[0], Reference::WikiFileLink(_)));
+    }
+
+    #[test]
+    fn md_link_partial_overlap_with_codeblock() {
+        let text = "`[link`](path)";
+
+        let expected = vec![];
+
+        let mut settings = Settings::new(&Path::new(""), &Default::default()).unwrap();
+
+        settings.references_in_codeblocks = false;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+        assert_eq!(parsed, expected);
+
+        settings.references_in_codeblocks = true;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn md_link_with_codeblock_inside() {
+        let text = "[`code`](path)";
+
+        let mut settings = Settings::new(&Path::new(""), &Default::default()).unwrap();
+
+        settings.references_in_codeblocks = false;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+        assert_eq!(parsed.len(), 1);
+        assert!(matches!(parsed[0], Reference::MDFileLink(_)));
+
+        settings.references_in_codeblocks = true;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+        assert_eq!(parsed.len(), 1);
+        assert!(matches!(parsed[0], Reference::MDFileLink(_)));
+    }
+
+    #[test]
+    fn fenced_codeblock_with_wikilink_syntax() {
+        let text = "```\n[[not a link]]\n```";
+
+        let mut settings = Settings::new(&Path::new(""), &Default::default()).unwrap();
+
+        settings.references_in_codeblocks = false;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+        assert_eq!(parsed, vec![]);
+
+        settings.references_in_codeblocks = true;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+        assert_eq!(parsed.len(), 1);
+    }
+
+    #[test]
+    fn link_before_and_after_codeblock() {
+        let text = "[[link1]] `code` [[link2]]";
+
+        let mut settings = Settings::new(&Path::new(""), &Default::default()).unwrap();
+
+        settings.references_in_codeblocks = false;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+        assert_eq!(parsed.len(), 2);
+
+        settings.references_in_codeblocks = true;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md")).references;
+        assert_eq!(parsed.len(), 2);
     }
 }
