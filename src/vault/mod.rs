@@ -763,7 +763,7 @@ impl Reference {
 
     pub fn new<'a>(text: &'a str, file_name: &'a str) -> impl Iterator<Item = Reference> + 'a {
         static WIKI_LINK_RE: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r"\[\[(?<filepath>[^\[\]\|\.\#]+)?(\#(?<infileref>[^\[\]\.\|]+))?(?<ending>\.[^\# <>]+)?(\|(?<display>[^\[\]\.\|]+))?\]\]")
+            Regex::new(r"\[\[(?<filepath>[^\[\]\|\#]+?)(?<ending>\.(?:md|png|jpe?g|gif|svg|webp|bmp|tiff|pdf))?(\#(?<infileref>[^\[\]\.\|]+))?(\|(?<display>[^\[\]\.\|]+))?\]\]")
 
                 .unwrap()
         }); // A [[link]] that does not have any [ or ] in it
@@ -1782,6 +1782,140 @@ mod vault_tests {
                 display_text: Some("333".into()),
             }),
         ];
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn wiki_link_with_dots_in_filename() {
+        let text = "[[link.to.this]] [[workingFile]]";
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        let expected = vec![
+            WikiFileLink(ReferenceData {
+                reference_text: "link.to.this".into(),
+                range: tower_lsp::lsp_types::Range {
+                    start: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 0,
+                    },
+                    end: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 16,
+                    },
+                }
+                .into(),
+                display_text: None,
+            }),
+            WikiFileLink(ReferenceData {
+                reference_text: "workingFile".into(),
+                range: tower_lsp::lsp_types::Range {
+                    start: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 17,
+                    },
+                    end: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 32,
+                    },
+                }
+                .into(),
+                display_text: None,
+            }),
+        ];
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn wiki_link_with_dots_consecutive() {
+        let text = "[[link.to.this]][[workingFile]]";
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        let expected = vec![
+            WikiFileLink(ReferenceData {
+                reference_text: "link.to.this".into(),
+                range: tower_lsp::lsp_types::Range {
+                    start: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 0,
+                    },
+                    end: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 16,
+                    },
+                }
+                .into(),
+                display_text: None,
+            }),
+            WikiFileLink(ReferenceData {
+                reference_text: "workingFile".into(),
+                range: tower_lsp::lsp_types::Range {
+                    start: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 16,
+                    },
+                    end: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 31,
+                    },
+                }
+                .into(),
+                display_text: None,
+            }),
+        ];
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn wiki_link_with_dots_and_md_extension() {
+        let text = "[[link.to.this.md]]";
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        let expected = vec![WikiFileLink(ReferenceData {
+            reference_text: "link.to.this".into(),
+            range: tower_lsp::lsp_types::Range {
+                start: tower_lsp::lsp_types::Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: tower_lsp::lsp_types::Position {
+                    line: 0,
+                    character: 19,
+                },
+            }
+            .into(),
+            display_text: None,
+        })];
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn wiki_link_with_dots_and_heading() {
+        let text = "[[link.to.this#heading]]";
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        let expected = vec![WikiHeadingLink(
+            ReferenceData {
+                reference_text: "link.to.this#heading".into(),
+                range: tower_lsp::lsp_types::Range {
+                    start: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 0,
+                    },
+                    end: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 24,
+                    },
+                }
+                .into(),
+                display_text: None,
+            },
+            "link.to.this".into(),
+            "heading".into(),
+        )];
 
         assert_eq!(parsed, expected)
     }
