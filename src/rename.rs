@@ -1,9 +1,13 @@
 use std::iter;
 use std::path::Path;
+use std::str::FromStr as _;
 
+use itertools::Itertools;
+use pathdiff::diff_paths;
 use tower_lsp::lsp_types::{
     DocumentChangeOperation, DocumentChanges, OneOf, OptionalVersionedTextDocumentIdentifier,
-    RenameFile, RenameParams, ResourceOp, TextDocumentEdit, TextEdit, Url, WorkspaceEdit,
+    RenameFile, RenameFilesParams, RenameParams, ResourceOp, TextDocumentEdit, TextEdit, Url,
+    WorkspaceEdit,
 };
 
 use crate::vault::{Reference, Referenceable, Vault};
@@ -12,10 +16,49 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
     let position = params.text_document_position.position;
     let referenceable = vault.select_referenceable_at_position(path, position)?;
 
+    rename_referenceable(vault, &referenceable, params.new_name.clone(), true).map(|ops| {
+        WorkspaceEdit {
+            document_changes: Some(DocumentChanges::Operations(ops)),
+            ..Default::default()
+        }
+    })
+}
+
+pub fn rename_files(vault: &Vault, params: &RenameFilesParams) -> WorkspaceEdit {
+    WorkspaceEdit {
+        document_changes: Some(DocumentChanges::Operations(
+            params
+                .files
+                .iter()
+                .filter_map(|file| {
+                    let old_path = Url::from_str(&file.old_uri).ok()?.to_file_path().ok()?;
+
+                    let new_path = Url::from_str(&file.new_uri).ok()?.to_file_path().ok()?;
+
+                    let referenceable = vault.select_referenceable_path(&old_path)?;
+
+                    // should be relative to the current file path
+                    let new_name = diff_paths(&new_path, old_path.parent()?)?;
+                    let new_name = new_name.to_str()?.to_owned();
+                    rename_referenceable(vault, &referenceable, new_name, false)
+                })
+                .flatten()
+                .collect_vec(),
+        )),
+        ..Default::default()
+    }
+}
+
+fn rename_referenceable(
+    vault: &Vault,
+    referenceable: &Referenceable,
+    new_name: String,
+    move_file: bool,
+) -> Option<Vec<DocumentChangeOperation>> {
     let (referenceable_document_change, new_ref_name): (Option<DocumentChangeOperation>, String) =
         match referenceable {
             Referenceable::Heading(path, heading) => {
-                let new_text = format!("{} {}", "#".repeat(heading.level.0), params.new_name); // move this obsidian syntax specific stuff to the vault
+                let new_text = format!("{} {}", "#".repeat(heading.level.0), new_name); // move this obsidian syntax specific stuff to the vault
 
                 let change_op = DocumentChangeOperation::Edit(TextDocumentEdit {
                     text_document: tower_lsp::lsp_types::OptionalVersionedTextDocumentIdentifier {
@@ -32,13 +75,17 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                 let name = format!(
                     "{}#{}",
                     path.file_stem()?.to_string_lossy().clone(),
-                    params.new_name
+                    new_name
                 );
 
                 (Some(change_op), name.to_string())
             }
             Referenceable::File(path, _file) => {
-                let new_path = path.with_file_name(&params.new_name).with_extension("md");
+                let new_path =
+                    path_clean::clean(path.with_file_name(&new_name).with_extension("md"));
+
+                // the new name should be the path from the vault root
+                let name = diff_paths(&new_path, vault.root_dir()).unwrap();
 
                 let change_op = DocumentChangeOperation::Op(ResourceOp::Rename(RenameFile {
                     old_uri: Url::from_file_path(path).ok()?,
@@ -47,12 +94,13 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                     annotation_id: None,
                 }));
 
-                let name = params.new_name.clone();
-
-                (Some(change_op), name)
+                (
+                    move_file.then_some(change_op),
+                    name.to_str().unwrap().to_owned(),
+                )
             }
             Referenceable::Tag(_path, _tag) => {
-                let new_ref_name = params.new_name.clone();
+                let new_ref_name = new_name.clone();
 
                 let _new_tag = format!("#{}", new_ref_name);
 
@@ -61,7 +109,7 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
             _ => return None,
         };
 
-    let references = vault.select_references_for_referenceable(&referenceable)?;
+    let references = vault.select_references_for_referenceable(referenceable)?;
 
     let references_changes = references
         .into_iter()
@@ -250,12 +298,9 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
         })
         .map(DocumentChangeOperation::Edit);
 
-    Some(WorkspaceEdit {
-        document_changes: Some(DocumentChanges::Operations(
-            references_changes
-                .chain(iter::once(referenceable_document_change).flatten())
-                .collect(), // order matters here
-        )),
-        ..Default::default()
-    })
+    Some(
+        references_changes
+            .chain(iter::once(referenceable_document_change).flatten())
+            .collect(),
+    )
 }

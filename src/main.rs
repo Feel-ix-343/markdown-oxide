@@ -368,6 +368,7 @@ impl LanguageServer for Backend {
                     file_operations: Some(WorkspaceFileOperationsServerCapabilities {
                         did_create: Some(file_op_reg.clone()),
                         did_rename: Some(file_op_reg.clone()),
+                        will_rename: Some(file_op_reg.clone()),
                         did_delete: Some(file_op_reg.clone()),
                         ..Default::default()
                     }),
@@ -666,6 +667,11 @@ impl LanguageServer for Backend {
             Ok(rename::rename(vault, &params, &path))
         })
         .await
+    }
+
+    async fn will_rename_files(&self, params: RenameFilesParams) -> Result<Option<WorkspaceEdit>> {
+        self.bind_vault(|vault| Ok(Some(rename::rename_files(vault, &params))))
+            .await
     }
 
     async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {

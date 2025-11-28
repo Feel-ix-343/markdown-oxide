@@ -30,6 +30,7 @@ tower-lsp = { git = "https://github.com/Feel-ix-343/tower-lsp" }
 walkdir = "2.4.0"
 do-notation = "0.1.3"
 urlencoding = "2.1.3"
+path-clean = "1.0.1"
 
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/v{ version }/{ name }-v{ version }-{ target }{ archive-suffix }"

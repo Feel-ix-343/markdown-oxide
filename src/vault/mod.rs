@@ -178,6 +178,13 @@ impl Vault {
         }
     }
 
+    pub fn select_referenceable_path<'a>(&'a self, path: &'a Path) -> Option<Referenceable<'a>> {
+        self.md_files
+            .iter()
+            .find(|(iterpath, _)| *iterpath == path)
+            .map(|(pathbuf, mdfile)| Referenceable::File(pathbuf, mdfile))
+    }
+
     pub fn select_referenceable_at_position<'a>(
         &'a self,
         path: &'a Path,
@@ -199,11 +206,7 @@ impl Vault {
             .map(|tupl| tupl.0);
 
         match referenceable {
-            None => self
-                .md_files
-                .iter()
-                .find(|(iterpath, _)| *iterpath == path)
-                .map(|(pathbuf, mdfile)| Referenceable::File(pathbuf, mdfile)),
+            None => self.select_referenceable_path(path),
             _ => referenceable,
         }
     }
