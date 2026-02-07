@@ -28,10 +28,10 @@ pub struct Settings {
     pub block_transclusion: bool,
     pub block_transclusion_length: EmbeddedBlockTransclusionLength,
     pub link_filenames_only: bool,
-    /// Folders to exclude from vault indexing (e.g. ["Archive", "Templates"])
     pub excluded_folders: Vec<String>,
     pub heading_slug: bool,
     pub callout_completions: bool,
+    pub complete_paths_as_relative_to_vault: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -103,6 +103,7 @@ impl Settings {
             .set_default("excluded_folders", Vec::<String>::new())?
             .set_default("heading_slug", false)?
             .set_default("callout_completions", true)?
+            .set_default("complete_paths_as_relative_to_vault", false)?
             .build()
             .map_err(|err| anyhow!("Build err: {err}"))?;
 
