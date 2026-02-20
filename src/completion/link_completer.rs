@@ -19,7 +19,7 @@ use crate::{
     completion::util::check_in_code_block,
     config::{LinkFormat, Settings},
     ui::preview_referenceable,
-    vault::{MDFile, MDHeading, Reference, Referenceable, Vault},
+    vault::{get_obsidian_ref_path, MDFile, MDHeading, Reference, Referenceable, Vault},
 };
 
 use super::{
@@ -598,6 +598,14 @@ impl LinkCompletion<'_> {
         referenceable: Referenceable<'a>,
         completer: &impl LinkCompleter<'a>,
     ) -> Option<Vec<LinkCompletion<'a>>> {
+        let match_path = |path: &PathBuf| -> Option<String> {
+            if matches!(completer.settings().link_format, LinkFormat::Absolute) {
+                get_obsidian_ref_path(completer.vault().root_dir(), path)
+            } else {
+                Some(path.file_stem()?.to_str()?.to_string())
+            }
+        };
+
         if let Some(daily) = MDDailyNote::from_referenceable(referenceable.clone(), completer) {
             Some(vec![DailyNote(daily)])
         } else {
@@ -606,7 +614,7 @@ impl LinkCompletion<'_> {
                     Some(
                         once(File {
                             mdfile,
-                            match_string: mdfile.file_name()?.to_string(),
+                            match_string: match_path(&mdfile.path)?,
                             referenceable: referenceable.clone(),
                         })
                         .chain(mdfile.metadata.iter().flat_map(|it| it.aliases()).flat_map(
@@ -626,7 +634,7 @@ impl LinkCompletion<'_> {
                         heading: mdheading,
                         match_string: format!(
                             "{}#{}",
-                            path.file_stem()?.to_str()?,
+                            match_path(path)?,
                             mdheading.heading_text
                         ),
                         referenceable,
@@ -635,7 +643,7 @@ impl LinkCompletion<'_> {
                 ),
                 Referenceable::IndexedBlock(path, indexed) => Some(
                     once(Block {
-                        match_string: format!("{}#^{}", path.file_stem()?.to_str()?, indexed.index),
+                        match_string: format!("{}#^{}", match_path(path)?, indexed.index),
                         referenceable,
                     })
                     .collect(),
