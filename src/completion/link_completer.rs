@@ -328,9 +328,15 @@ impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
 
     fn completion_filter_text(&self, params: Self::FilterParams) -> String {
         // If the user typed .md in the path, include it in the filter text so the
-        // editor's client-side filtering matches the typed prefix
+        // editor's client-side filtering matches the typed prefix.
+        // Guard against double .md (e.g. when called from UnindexedBlockCompleter
+        // with entered_refname() which already includes .md from self.path.0).
         let adjusted_params = if self.path.0.ends_with(".md") {
-            if let Some(hash_pos) = params.find('#') {
+            let file_part = params.split_once('#').map(|(f, _)| f).unwrap_or(params);
+            if file_part.ends_with(".md") {
+                // params already contains .md, use as-is
+                params.to_string()
+            } else if let Some(hash_pos) = params.find('#') {
                 format!("{}.md{}", &params[..hash_pos], &params[hash_pos..])
             } else {
                 format!("{}.md", params)
