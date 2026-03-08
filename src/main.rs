@@ -295,11 +295,21 @@ impl Backend {
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(&self, i: InitializeParams) -> Result<InitializeResult> {
-        let root_dir = match i.root_uri {
-            Some(uri) => uri
-                .to_file_path()
-                .or(Err(Error::new(ErrorCode::InvalidParams)))?,
-            None => std::env::current_dir().or(Err(Error::new(ErrorCode::InvalidParams)))?,
+        // Try root_uri first, then workspace_folders, then fall back to current_dir
+        let root_dir = if let Some(ref uri) = i.root_uri {
+            uri.to_file_path()
+                .or(Err(Error::new(ErrorCode::InvalidParams)))?
+        } else if let Some(ref folders) = i.workspace_folders {
+            if let Some(folder) = folders.iter().next() {
+                folder
+                    .uri
+                    .to_file_path()
+                    .or(Err(Error::new(ErrorCode::InvalidParams)))?
+            } else {
+                std::env::current_dir().or(Err(Error::new(ErrorCode::InvalidParams)))?
+            }
+        } else {
+            std::env::current_dir().or(Err(Error::new(ErrorCode::InvalidParams)))?
         };
 
         let read_settings = match Settings::new(&root_dir, &i.capabilities) {
