@@ -1,0 +1,27 @@
+name: Sync Docs to Obsidian Publish
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/Markdown Oxide Docs/**"
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  publish:
+    name: Update Obsidian Publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Sync changed files to Obsidian Publish
+        env:
+          OBSIDIAN_PUBLISH_TOKEN: ${{ secrets.OBSIDIAN_PUBLISH_TOKEN }}
+          VAULT_ROOT: "docs/Markdown Oxide Docs"
+        run: node .github/scripts/publish.mjs
