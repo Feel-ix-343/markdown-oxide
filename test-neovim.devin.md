@@ -2,7 +2,7 @@
 
 ## Outcome
 
-Verify that markdown-oxide LSP features work correctly in Neovim, including wiki link completions, block linking (with block ID insertion via `:wall`), go-to-definition, hover with backlinks, and tag completions against the `TestFiles/` directory.
+Verify that markdown-oxide LSP features work correctly in Neovim, including wiki link completions, block linking (with block ID insertion via `:wall`), go-to-definition, hover with backlinks, and tag completions against the `TestFiles/` directory. Testing is done in two recorded phases: first reproduce/demonstrate the current behavior, then validate the fix or expected behavior.
 
 ## Procedure
 
@@ -89,7 +89,26 @@ Wait for Neovim to open and the LSP to attach. Verify with: `pgrep -a markdown-o
 
 ### 5. Test LSP features
 
-Start a screen recording and test each feature:
+Testing is split into two recorded phases:
+
+#### Phase 1: Reproduce current behavior
+
+Start a screen recording (`recording_start`). Demonstrate the current state of each feature **before any fix**. This establishes a baseline and captures any issues:
+
+- Annotate the recording: "Phase 1: Reproducing current behavior in Neovim"
+- Exercise each feature below and note what works and what doesn't
+- Stop the recording (`recording_stop`) when done
+
+#### Phase 2: Validate the fix
+
+After applying the fix (rebuild markdown-oxide, copy to PATH, quit and relaunch Neovim to restart the LSP):
+
+- Start a new screen recording (`recording_start`)
+- Annotate the recording: "Phase 2: Validating fix in Neovim"
+- Re-test each feature and confirm it works correctly
+- Stop the recording (`recording_stop`) when done
+
+Test each feature:
 
 #### Wiki Link Completions
 - In Normal mode, press `G` to go to end of file, then `o` to open a new line
@@ -129,7 +148,21 @@ Start a screen recording and test each feature:
 - Place cursor on a heading like `# Heading 1`
 - Press `gr` to find all references/backlinks
 
-### 6. Clean up
+### 6. Post recordings to PR
+
+After both recording phases are complete, post the recordings as comments on the PR:
+
+1. Use `git_comment_on_pr` to post the Phase 1 recording with a comment like:
+   > **Phase 1: Reproducing current behavior in Neovim**
+   > ![Phase 1 recording](/path/to/phase1-recording.mp4)
+
+2. Use `git_comment_on_pr` to post the Phase 2 recording with a comment like:
+   > **Phase 2: Validating fix in Neovim**
+   > ![Phase 2 recording](/path/to/phase2-recording.mp4)
+
+This provides reviewers with visual evidence of the issue and its resolution.
+
+### 7. Clean up
 
 Undo any test edits: `Escape`, then `u` repeatedly until "Already at oldest change".
 Quit without saving: `:qa!`
@@ -142,6 +175,8 @@ Quit without saving: `:qa!`
 - Hover must show file preview and backlinks
 - Tag completions must show hierarchical tags
 - The LSP server process (`markdown-oxide`) must be running (verify with `pgrep`)
+- Two screen recordings must be produced: one showing current behavior (reproduce), one showing the fix (validate)
+- Both recordings must be posted as comments on the PR
 
 ## Advice
 

@@ -2,7 +2,7 @@
 
 ## Outcome
 
-Verify that markdown-oxide LSP features work correctly in Helix, including wiki link completions, tag completions, and fuzzy matching against the `TestFiles/` directory.
+Verify that markdown-oxide LSP features work correctly in Helix, including wiki link completions, tag completions, and fuzzy matching against the `TestFiles/` directory. Testing is done in two recorded phases: first reproduce/demonstrate the current behavior, then validate the fix or expected behavior.
 
 ## Procedure
 
@@ -47,7 +47,26 @@ Wait for Helix to open. Verify the LSP is running: `pgrep -a markdown-oxide`
 
 ### 5. Test LSP features
 
-Start a screen recording and test each feature:
+Testing is split into two recorded phases:
+
+#### Phase 1: Reproduce current behavior
+
+Start a screen recording (`recording_start`). Demonstrate the current state of each feature **before any fix**. This establishes a baseline and captures any issues:
+
+- Annotate the recording: "Phase 1: Reproducing current behavior in Helix"
+- Exercise each feature below and note what works and what doesn't
+- Stop the recording (`recording_stop`) when done
+
+#### Phase 2: Validate the fix
+
+After applying the fix (rebuild markdown-oxide, copy to PATH, quit and relaunch Helix to restart the LSP):
+
+- Start a new screen recording (`recording_start`)
+- Annotate the recording: "Phase 2: Validating fix in Helix"
+- Re-test each feature and confirm it works correctly
+- Stop the recording (`recording_stop`) when done
+
+Test each feature:
 
 #### Wiki Link Completions
 - In Normal mode, press `g` then `e` to go to end of file
@@ -71,7 +90,21 @@ Start a screen recording and test each feature:
 - Position cursor on a wiki link
 - Press `Space` then `k` to show hover info
 
-### 6. Clean up
+### 6. Post recordings to PR
+
+After both recording phases are complete, post the recordings as comments on the PR:
+
+1. Use `git_comment_on_pr` to post the Phase 1 recording with a comment like:
+   > **Phase 1: Reproducing current behavior in Helix**
+   > ![Phase 1 recording](/path/to/phase1-recording.mp4)
+
+2. Use `git_comment_on_pr` to post the Phase 2 recording with a comment like:
+   > **Phase 2: Validating fix in Helix**
+   > ![Phase 2 recording](/path/to/phase2-recording.mp4)
+
+This provides reviewers with visual evidence of the issue and its resolution.
+
+### 7. Clean up
 
 Undo any test edits: `Escape`, then `u` repeatedly.
 Quit without saving: `:q!`
@@ -81,6 +114,8 @@ Quit without saving: `:q!`
 - Wiki link completions must show files, headings, and block references with fuzzy matching
 - Tag completions must show hierarchical tags (including nested tags like `tag/subtag`)
 - The LSP server process (`markdown-oxide`) must be running (verify with `pgrep`)
+- Two screen recordings must be produced: one showing current behavior (reproduce), one showing the fix (validate)
+- Both recordings must be posted as comments on the PR
 
 ## Advice
 
