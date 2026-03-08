@@ -1346,6 +1346,9 @@ impl MDTag {
         static FRONTMATTER_RE: Lazy<Regex> =
             Lazy::new(|| Regex::new(r"^---\n(?<metadata>(\n|.)*?)\n---").unwrap());
 
+        // Regex to find the `tags:` or `tag:` key and skip past it
+        static TAGS_KEY_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?m)^tags?:").unwrap());
+
         let frontmatter_tags = metadata.tags();
         if frontmatter_tags.is_empty() {
             return Vec::new();
@@ -1364,12 +1367,19 @@ impl MDTag {
         let frontmatter_str = frontmatter_match.as_str();
         let frontmatter_start = frontmatter_match.start();
 
+        // Find where the `tags:` or `tag:` key ends, so we only search for
+        // tag values after the key itself (avoiding matching the key name).
+        let tags_key_end = match TAGS_KEY_RE.find(frontmatter_str) {
+            Some(m) => m.end(),
+            None => return Vec::new(),
+        };
+
         let mut tags = Vec::new();
-        // Track search offset within the frontmatter to handle duplicate tag values
-        let mut search_offset = 0;
+        // Start searching after the `tags:` key
+        let mut search_offset = tags_key_end;
 
         for tag_str in frontmatter_tags {
-            // Find the tag value within the frontmatter text, starting from search_offset
+            // Find the tag value within the frontmatter text, starting after the key
             if let Some(pos) = frontmatter_str[search_offset..].find(tag_str.as_str()) {
                 let abs_start = frontmatter_start + search_offset + pos;
                 let abs_end = abs_start + tag_str.len();
@@ -2924,6 +2934,22 @@ Some content here";
 
         // Body should have #bar (and possibly #tags from frontmatter line matched by regex)
         assert!(body_tags.iter().any(|t| t.tag_ref == "bar"));
+    }
+
+    #[test]
+    fn test_frontmatter_tag_named_tag() {
+        // Regression test: a tag literally named "tag" should not match the YAML key "tags:"
+        let text = "---\ntags:\n  - tag\n  - foo\n---\n\nSome content";
+
+        let metadata = crate::vault::metadata::MDMetadata::new(text).unwrap();
+        let tags = MDTag::from_frontmatter(text, &metadata);
+
+        assert_eq!(tags.len(), 2);
+        assert_eq!(tags[0].tag_ref, "tag");
+        assert_eq!(tags[1].tag_ref, "foo");
+        // "tag" should be on line 2 (the `- tag` line), NOT line 1 (the `tags:` key line)
+        assert_eq!(tags[0].range.start.line, 2);
+        assert_eq!(tags[1].range.start.line, 3);
     }
 
     #[test]
