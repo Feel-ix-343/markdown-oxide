@@ -952,7 +952,8 @@ impl Reference {
                 | MDHeadingLink(.., file_ref_text, link_infile_ref)
                 | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => {
                     matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir))
-                        && link_infile_ref.to_lowercase() == infile_ref.to_lowercase()
+                        && heading_to_slug(&link_infile_ref.to_lowercase())
+                            == heading_to_slug(&infile_ref.to_lowercase())
                 }
                 Tag(_) => false,
                 WikiFileLink(_) => false,
@@ -1378,6 +1379,13 @@ pub fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
     diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(String::from))
 }
 
+/// Converts heading text to its slug form for use in links.
+/// Spaces are replaced with dashes, matching the behavior of GitHub, Obsidian,
+/// and tools like markdown-toc.
+pub fn heading_to_slug(heading: &str) -> String {
+    heading.replace(' ', "-")
+}
+
 #[derive(Debug, PartialEq, Eq, Default)]
 pub struct Refname {
     pub full_refname: String,
@@ -1434,15 +1442,13 @@ impl Referenceable<'_> {
 
             Referenceable::Heading(path, heading) => get_obsidian_ref_path(root_dir, path)
                 .map(|refpath| {
-                    (
-                        refpath.clone(),
-                        format!("{}#{}", refpath, heading.heading_text),
-                    )
+                    let slug = heading_to_slug(&heading.heading_text);
+                    (refpath.clone(), format!("{}#{}", refpath, slug))
                 })
                 .map(|(path, full_refname)| Refname {
                     full_refname,
                     path: path.into(),
-                    infile_ref: <std::string::String as Clone>::clone(&heading.heading_text).into(),
+                    infile_ref: heading_to_slug(&heading.heading_text).into(),
                 }),
 
             Referenceable::IndexedBlock(path, index) => get_obsidian_ref_path(root_dir, path)
@@ -2257,9 +2263,9 @@ more text
         assert_eq!(
             refname,
             Some(Refname {
-                full_refname: "test#Test Heading".to_string(),
+                full_refname: "test#Test-Heading".to_string(),
                 path: Some("test".to_string()),
-                infile_ref: Some("Test Heading".to_string())
+                infile_ref: Some("Test-Heading".to_string())
             })
         )
     }

@@ -19,7 +19,7 @@ use crate::{
     completion::util::check_in_code_block,
     config::Settings,
     ui::preview_referenceable,
-    vault::{MDFile, MDHeading, Reference, Referenceable, Vault},
+    vault::{heading_to_slug, MDFile, MDHeading, Reference, Referenceable, Vault},
 };
 
 use super::{
@@ -624,7 +624,7 @@ impl LinkCompletion<'_> {
                         match_string: format!(
                             "{}#{}",
                             path.file_stem()?.to_str()?,
-                            mdheading.heading_text
+                            heading_to_slug(&mdheading.heading_text)
                         ),
                         referenceable,
                     })
