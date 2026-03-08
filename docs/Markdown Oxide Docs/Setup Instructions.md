@@ -18,6 +18,8 @@ Navigate to the setup for your editor using the table-of-contents to the right.
 
 ### ![[README#Helix]]
 
+### ![[README#Kakoune]]
+
 ## Configuration
 
 ![[Configuration#^configurationinfo]]

@@ -41,7 +41,7 @@ impl<'a> Completer<'a> for TagCompleter<'a> {
         }
 
         static PARTIAL_TAG_REGEX: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"\#(?<text>[a-zA-Z0-9\/]*)").unwrap());
+            Lazy::new(|| Regex::new(r"\#(?<text>[a-zA-Z0-9/_-]*)").unwrap());
 
         let line_chars = context.vault.select_line(context.path, line as isize)?;
         let line_string = String::from_iter(line_chars);

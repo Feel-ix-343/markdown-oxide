@@ -703,12 +703,12 @@ impl LinkCompletion<'_> {
                     infile_ref: _,
                     ..
                 } => Some(CompletionItemLabelDetails {
-                    detail: Some("Unresolved".into()),
-                    description: None,
+                    description: Some("Unresolved".into()),
+                    detail: None,
                 }),
                 Alias { filename, .. } => Some(CompletionItemLabelDetails {
-                    detail: Some(format!("Alias: {}.md", filename)),
-                    description: None,
+                    description: Some(format!("Alias: {}", filename)),
+                    detail: None,
                 }),
                 File { .. } => None,
                 Heading { .. } => None,

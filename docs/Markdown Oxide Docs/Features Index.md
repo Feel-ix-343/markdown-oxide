@@ -272,6 +272,14 @@ When clicking on each drop-down, you will be presented with a demo of the featur
             - `:Daily last friday`
             - `:Daily today`
             - `:Daily tomorrow`
+    * Open or create daily notes using relative directives for quick navigation:
+        + `:Daily prev` - previous day
+        + `:Daily next` - next day
+        + `:Daily +1` - tomorrow (1 day forward)
+        + `:Daily -1` - yesterday (1 day backward)
+        + `:Daily +7` - one week forward
+        + `:Daily -7` - one week backward
+        + `:Daily +30` - 30 days forward
     * Open or create daily notes through predefined relative names.  `:Today`
         + The predefined relative names are: `today`, `tomorrow`, `yesterday`, `next {monday,tuesday,..., sunday}`, `last {monday,tuesday,...}`
         + Each of these names have their own workspace commands
