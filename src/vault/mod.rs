@@ -1041,6 +1041,16 @@ impl ParseableReferenceConstructor for MDReferenceConstructor {
     }
 }
 
+/// Returns true if the path ends with a known non-markdown file extension
+/// (images, media, documents, archives, etc.) that should not be treated
+/// as a markdown note reference.
+fn has_non_markdown_extension(path: &str) -> bool {
+    static NON_MD_EXT_RE: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(r"(?i)\.(png|jpe?g|gif|svg|bmp|webp|ico|tiff?|pdf|mp[34]|webm|mov|avi|mkv|flac|wav|ogg|mp3|aac|zip|tar|gz|bz2|xz|rar|7z|exe|dll|so|wasm|csv|xlsx?|docx?|pptx?|html?|css|js|ts|jsx|tsx|py|rb|rs|go|java|c|cpp|h|hpp|cs|php|sh|bash|zsh|bat|ps1|json|xml|ya?ml|toml|ini|cfg|conf|log|sql|db|sqlite)$").unwrap()
+    });
+    NON_MD_EXT_RE.is_match(path)
+}
+
 fn generic_link_constructor<T: ParseableReferenceConstructor>(
     text: &str,
     file_name: &str,
@@ -1056,6 +1066,12 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
             || path.as_str().starts_with("https://")
             || path.as_str().starts_with("data:")
     }) {
+        return None;
+    }
+
+    // Filter out file paths that end with known non-markdown extensions
+    // (e.g., .png, .pdf, .jpg). These are attachment/media references, not note links.
+    if file_path.is_some_and(|path| has_non_markdown_extension(path.as_str())) {
         return None;
     }
 
@@ -2144,41 +2160,23 @@ mod vault_tests {
         let text = "This is a png [[link.png]] [[link|display.png]]";
         let parsed = Reference::new(text, "test.md").collect_vec();
 
-        // With dots allowed in filenames, [[link.png]] is now parsed as a file link
-        // (it simply won't resolve if there's no link.png.md file in the vault).
+        // [[link.png]] is filtered out because .png is a known non-markdown extension.
         // [[link|display.png]] is a valid link to note "link" with display text "display.png".
-        let expected = vec![
-            WikiFileLink(ReferenceData {
-                reference_text: "link.png".into(),
-                range: tower_lsp::lsp_types::Range {
-                    start: tower_lsp::lsp_types::Position {
-                        line: 0,
-                        character: 14,
-                    },
-                    end: tower_lsp::lsp_types::Position {
-                        line: 0,
-                        character: 26,
-                    },
-                }
-                .into(),
-                ..ReferenceData::default()
-            }),
-            WikiFileLink(ReferenceData {
-                reference_text: "link".into(),
-                range: tower_lsp::lsp_types::Range {
-                    start: tower_lsp::lsp_types::Position {
-                        line: 0,
-                        character: 27,
-                    },
-                    end: tower_lsp::lsp_types::Position {
-                        line: 0,
-                        character: 47,
-                    },
-                }
-                .into(),
-                display_text: Some("display.png".into()),
-            }),
-        ];
+        let expected = vec![WikiFileLink(ReferenceData {
+            reference_text: "link".into(),
+            range: tower_lsp::lsp_types::Range {
+                start: tower_lsp::lsp_types::Position {
+                    line: 0,
+                    character: 27,
+                },
+                end: tower_lsp::lsp_types::Position {
+                    line: 0,
+                    character: 47,
+                },
+            }
+            .into(),
+            display_text: Some("display.png".into()),
+        })];
 
         assert_eq!(parsed, expected)
     }
