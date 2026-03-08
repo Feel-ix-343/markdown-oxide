@@ -987,10 +987,12 @@ struct RegexTuple<'a> {
     file_path: Option<Match<'a>>,
     infile_ref: Option<Match<'a>>,
     display_text: Option<Match<'a>>,
+    has_md_ending: bool,
 }
 
 impl RegexTuple<'_> {
     fn new(capture: Captures) -> Option<RegexTuple> {
+        let has_md_ending = capture.name("ending").is_some();
         match (
             capture.get(0),
             capture.name("filepath"),
@@ -1002,6 +1004,7 @@ impl RegexTuple<'_> {
                 file_path,
                 infile_ref,
                 display_text,
+                has_md_ending,
             }),
             _ => None,
         }
@@ -1059,6 +1062,7 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
         file_path,
         infile_ref,
         display_text,
+        has_md_ending,
     }: RegexTuple,
 ) -> Option<Reference> {
     if file_path.is_some_and(|path| {
@@ -1071,7 +1075,8 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
 
     // Filter out file paths that end with known non-markdown extensions
     // (e.g., .png, .pdf, .jpg). These are attachment/media references, not note links.
-    if file_path.is_some_and(|path| has_non_markdown_extension(path.as_str())) {
+    // Skip this check if .md was explicitly present (e.g., [[image.png.md]] is a valid note).
+    if !has_md_ending && file_path.is_some_and(|path| has_non_markdown_extension(path.as_str())) {
         return None;
     }
 
