@@ -259,18 +259,32 @@ impl Vault {
                     .par_iter()
                     .flat_map(|resolved| {
                         resolved.get_refname(self.root_dir()).and_then(|refname| {
-                            vec![
+                            let file_key = refname.link_file_key()?;
+                            let infile_ref_str = refname
+                                .infile_ref
+                                .as_ref()
+                                .map(|refe| format!("#{}", refe))
+                                .unwrap_or("".to_string());
+
+                            let mut names = vec![
                                 refname.to_string(),
-                                format!(
-                                    "{}{}",
-                                    refname.link_file_key()?,
-                                    refname
-                                        .infile_ref
-                                        .map(|refe| format!("#{}", refe))
-                                        .unwrap_or("".to_string())
-                                ),
-                            ]
-                            .into()
+                                format!("{}{}", file_key, infile_ref_str),
+                            ];
+
+                            // For heading referenceables (infile_ref without ^ prefix),
+                            // also add slug-normalized versions so that MD-style heading
+                            // links with dashes (e.g. #my-heading) are recognized as resolved.
+                            if let Some(ref infile_ref) = refname.infile_ref {
+                                if !infile_ref.starts_with('^') {
+                                    let slug = heading_to_slug(infile_ref);
+                                    if let Some(ref path) = refname.path {
+                                        names.push(format!("{}#{}", path, slug));
+                                    }
+                                    names.push(format!("{}#{}", file_key, slug));
+                                }
+                            }
+
+                            Some(names)
                         })
                     })
                     .flatten()
@@ -938,8 +952,25 @@ impl Reference {
                     heading_text: infile_ref,
                     ..
                 },
-            )
-            | &Referenceable::UnresolvedHeading(.., infile_ref)
+            ) => match self {
+                WikiHeadingLink(.., file_ref_text, link_infile_ref)
+                | WikiIndexedBlockLink(.., file_ref_text, link_infile_ref)
+                | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => {
+                    matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir))
+                        && link_infile_ref.to_lowercase() == infile_ref.to_lowercase()
+                }
+                MDHeadingLink(.., file_ref_text, link_infile_ref) => {
+                    matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir))
+                        && !link_infile_ref.contains(' ')
+                        && link_infile_ref.to_lowercase() == heading_to_slug(infile_ref)
+                }
+                Tag(_) => false,
+                WikiFileLink(_) => false,
+                MDFileLink(_) => false,
+                Footnote(_) => false,
+                LinkRef(_) => false,
+            },
+            &Referenceable::UnresolvedHeading(.., infile_ref)
             | &Referenceable::IndexedBlock(
                 ..,
                 MDIndexedBlock {
@@ -1581,6 +1612,12 @@ impl Referenceable<'_> {
                 | Referenceable::UnresovledIndexedBlock(..)
         )
     }
+}
+
+/// Converts heading text to a URL-compatible slug by lowercasing and replacing
+/// spaces with hyphens, following the GitHub/Obsidian convention for heading anchors.
+fn heading_to_slug(heading: &str) -> String {
+    heading.to_lowercase().replace(' ', "-")
 }
 
 fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
@@ -2821,5 +2858,133 @@ Continued
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn heading_to_slug_basic() {
+        assert_eq!(super::heading_to_slug("My Cool Heading"), "my-cool-heading");
+        assert_eq!(super::heading_to_slug("heading"), "heading");
+        assert_eq!(super::heading_to_slug("Already-Dashed"), "already-dashed");
+        assert_eq!(
+            super::heading_to_slug("Multiple   Spaces"),
+            "multiple---spaces"
+        );
+    }
+
+    #[test]
+    fn md_heading_link_with_dashes_matches_heading() {
+        // MD link [text](#my-heading) should resolve to heading "My Heading"
+        let root_dir = Path::new("/home/vault");
+        let path = Path::new("/home/vault/test.md");
+        let path_buf = path.to_path_buf();
+
+        let heading = MDHeading {
+            heading_text: "My Heading".into(),
+            range: tower_lsp::lsp_types::Range::default().into(),
+            ..Default::default()
+        };
+        let referenceable = Referenceable::Heading(&path_buf, &heading);
+
+        // MDHeadingLink with dashes should match
+        let md_link_dashes = MDHeadingLink(
+            ReferenceData {
+                reference_text: "test#my-heading".into(),
+                range: tower_lsp::lsp_types::Range::default().into(),
+                ..ReferenceData::default()
+            },
+            "test".into(),
+            "my-heading".into(),
+        );
+        assert!(
+            md_link_dashes.references(root_dir, path, &referenceable),
+            "MD heading link with dashes should match heading with spaces"
+        );
+    }
+
+    #[test]
+    fn md_heading_link_with_spaces_does_not_match_heading() {
+        // MD link [text](#My Heading) should NOT resolve to heading "My Heading"
+        let root_dir = Path::new("/home/vault");
+        let path = Path::new("/home/vault/test.md");
+        let path_buf = path.to_path_buf();
+
+        let heading = MDHeading {
+            heading_text: "My Heading".into(),
+            range: tower_lsp::lsp_types::Range::default().into(),
+            ..Default::default()
+        };
+        let referenceable = Referenceable::Heading(&path_buf, &heading);
+
+        let md_link_spaces = MDHeadingLink(
+            ReferenceData {
+                reference_text: "test#My Heading".into(),
+                range: tower_lsp::lsp_types::Range::default().into(),
+                ..ReferenceData::default()
+            },
+            "test".into(),
+            "My Heading".into(),
+        );
+        assert!(
+            !md_link_spaces.references(root_dir, path, &referenceable),
+            "MD heading link with spaces should NOT match heading"
+        );
+    }
+
+    #[test]
+    fn wiki_heading_link_with_spaces_still_matches() {
+        // Wiki link [[#My Heading]] should still resolve to heading "My Heading"
+        let root_dir = Path::new("/home/vault");
+        let path = Path::new("/home/vault/test.md");
+        let path_buf = path.to_path_buf();
+
+        let heading = MDHeading {
+            heading_text: "My Heading".into(),
+            range: tower_lsp::lsp_types::Range::default().into(),
+            ..Default::default()
+        };
+        let referenceable = Referenceable::Heading(&path_buf, &heading);
+
+        let wiki_link = WikiHeadingLink(
+            ReferenceData {
+                reference_text: "test#My Heading".into(),
+                range: tower_lsp::lsp_types::Range::default().into(),
+                ..ReferenceData::default()
+            },
+            "test".into(),
+            "My Heading".into(),
+        );
+        assert!(
+            wiki_link.references(root_dir, path, &referenceable),
+            "Wiki heading link with spaces should still match heading"
+        );
+    }
+
+    #[test]
+    fn md_heading_link_case_insensitive_with_dashes() {
+        // MD link [text](#my-heading) should match heading "MY HEADING" (case insensitive)
+        let root_dir = Path::new("/home/vault");
+        let path = Path::new("/home/vault/test.md");
+        let path_buf = path.to_path_buf();
+
+        let heading = MDHeading {
+            heading_text: "MY HEADING".into(),
+            range: tower_lsp::lsp_types::Range::default().into(),
+            ..Default::default()
+        };
+        let referenceable = Referenceable::Heading(&path_buf, &heading);
+
+        let md_link = MDHeadingLink(
+            ReferenceData {
+                reference_text: "test#my-heading".into(),
+                range: tower_lsp::lsp_types::Range::default().into(),
+                ..ReferenceData::default()
+            },
+            "test".into(),
+            "my-heading".into(),
+        );
+        assert!(
+            md_link.references(root_dir, path, &referenceable),
+            "MD heading link with dashes should match heading case-insensitively"
+        );
     }
 }
