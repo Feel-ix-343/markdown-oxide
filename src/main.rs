@@ -697,9 +697,49 @@ impl LanguageServer for Backend {
                     .await?;
                 commands::jump(&self.client, &root_dir, &settings, jump_to).await
             }
+            ExecuteCommandParams { command, .. } if *command == *"moxide.findReferences" => {
+                // CodeLens command: handled client-side in VSCode, but other editors
+                // (e.g. kakoune-lsp) may send it back via workspace/executeCommand.
+                // The locations are already pre-computed in the arguments, so we just
+                // return Ok(None) and let the client handle display.
+                Ok(None)
+            }
             ExecuteCommandParams { command, .. } => {
-                jump_to_specific(&command, &self.client, &root_dir, &settings).await
-            } // _ => Ok(None),
+                // Only route to the daily note jump handler if the command looks like
+                // a date string. Unknown commands should not be misrouted.
+                let known_date_commands = [
+                    "tomorrow",
+                    "today",
+                    "yesterday",
+                    "last friday",
+                    "last saturday",
+                    "last sunday",
+                    "last monday",
+                    "last tuesday",
+                    "last wednesday",
+                    "last thursday",
+                    "next friday",
+                    "next saturday",
+                    "next sunday",
+                    "next monday",
+                    "next tuesday",
+                    "next wednesday",
+                    "next thursday",
+                ];
+
+                if known_date_commands.contains(&command.as_str()) {
+                    jump_to_specific(&command, &self.client, &root_dir, &settings).await
+                } else {
+                    self.client
+                        .log_message(MessageType::WARNING, format!("Unknown command: {command}"))
+                        .await;
+                    Err(Error {
+                        code: ErrorCode::InvalidParams,
+                        message: format!("Unknown command: {command}").into(),
+                        data: None,
+                    })
+                }
+            }
         }
     }
 
