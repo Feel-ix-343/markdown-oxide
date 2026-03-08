@@ -1,5 +1,7 @@
 # Test Markdown-Oxide in Neovim
 
+> **See also:** [`.agents/skills/testing-neovim/SKILL.md`](.agents/skills/testing-neovim/SKILL.md) for additional testing knowledge, gotchas, and available test files.
+
 ## Outcome
 
 Verify that markdown-oxide LSP features work correctly in Neovim, including wiki link completions, block linking (with block ID insertion via `:wall`), go-to-definition, hover with backlinks, and tag completions against the `TestFiles/` directory. Testing is done in two recorded phases: first reproduce/demonstrate the current behavior, then validate the fix or expected behavior.
