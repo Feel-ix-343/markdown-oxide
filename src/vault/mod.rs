@@ -283,8 +283,13 @@ impl Vault {
                         .par_bridge()
                         .into_par_iter()
                         .filter(|(_, reference)| {
-                            !resolved_referenceables_refnames
-                                .contains(&reference.data().reference_text)
+                            let ref_text = &reference.data().reference_text;
+                            // Normalize heading references (spaces to dashes) so that
+                            // e.g. "file#Some Heading" matches the slugified refname
+                            // "file#Some-Heading" in the resolved set.
+                            let normalized = heading_to_slug(ref_text);
+                            !resolved_referenceables_refnames.contains(ref_text)
+                                && !resolved_referenceables_refnames.contains(&normalized)
                         })
                         .flat_map(|(_, reference)| match reference {
                             Reference::WikiFileLink(data) | Reference::MDFileLink(data) => {
