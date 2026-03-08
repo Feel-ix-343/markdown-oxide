@@ -29,6 +29,13 @@ where
             formatter.write_str("a string or list of strings")
         }
 
+        fn visit_unit<E>(self) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(Vec::new())
+        }
+
         fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
         where
             E: de::Error,
@@ -159,5 +166,20 @@ tags:
     fn test_no_tags_field() {
         let metadata = MDMetadata::new("---\naliases: [a1]\n---").unwrap();
         assert!(metadata.tags().is_empty());
+    }
+
+    #[test]
+    fn test_tags_null_value() {
+        // `tags:` with no value is YAML null; should not break metadata parsing
+        let metadata = MDMetadata::new("---\ntags:\naliases: [a1]\n---").unwrap();
+        assert!(metadata.tags().is_empty());
+        assert_eq!(metadata.aliases(), &["a1"]);
+    }
+
+    #[test]
+    fn test_tags_explicit_null() {
+        let metadata = MDMetadata::new("---\ntags: ~\naliases: [a1]\n---").unwrap();
+        assert!(metadata.tags().is_empty());
+        assert_eq!(metadata.aliases(), &["a1"]);
     }
 }
