@@ -632,13 +632,29 @@ impl LanguageServer for Backend {
                 commands::jump(&self.client, &root_dir, &settings, jump_to).await
             }
             ExecuteCommandParams { command, .. } => {
-                self.client
-                    .log_message(
-                        MessageType::WARNING,
-                        format!("Unknown execute_command: {command}"),
-                    )
-                    .await;
-                Ok(None)
+                // Try to handle the command as a date-string jump (e.g. "tomorrow",
+                // "next monday", etc.) which are registered in executeCommandProvider.
+                // If parsing succeeds, jump to that daily note; otherwise log a
+                // warning and return Ok(None) for truly unknown commands (e.g.
+                // "moxide.findReferences" from CodeLens).
+                let settings = self
+                    .bind_settings(|settings| Ok(settings.to_owned()))
+                    .await?;
+                let root_dir = self
+                    .bind_vault(|vault| Ok(vault.root_dir().to_owned()))
+                    .await?;
+                match commands::try_jump(&self.client, &root_dir, &settings, &command).await {
+                    Ok(result) => Ok(result),
+                    Err(_) => {
+                        self.client
+                            .log_message(
+                                MessageType::WARNING,
+                                format!("Unknown execute_command: {command}"),
+                            )
+                            .await;
+                        Ok(None)
+                    }
+                }
             }
         }
     }

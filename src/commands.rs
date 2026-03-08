@@ -114,6 +114,58 @@ pub async fn jump(
     }
 }
 
+/// Like [`jump`], but treats the command name itself as a date string.
+/// Returns `Ok` if the date parses successfully and the note is opened;
+/// returns `Err` if the string is not a recognised date, so the caller
+/// can fall through to an "unknown command" path.
+pub async fn try_jump(
+    client: &tower_lsp::Client,
+    root_dir: &Path,
+    settings: &Settings,
+    date_str: &str,
+) -> Result<Option<Value>> {
+    let daily_note_format = &settings.dailynote;
+    let daily_note_path = root_dir.join(&settings.daily_notes_folder);
+
+    let note_file = if let Some(offset) = parse_relative_directive(date_str) {
+        let base_date = Local::now().date_naive();
+
+        let target_date = if offset >= 0 {
+            base_date.checked_add_days(Days::new(offset as u64))
+        } else {
+            base_date.checked_sub_days(Days::new((-offset) as u64))
+        };
+
+        target_date.and_then(|date| date_to_file(date, daily_note_format, &daily_note_path))
+    } else {
+        parse(date_str)
+            .ok()
+            .and_then(|dt| datetime_to_file(dt, daily_note_format, &daily_note_path))
+    };
+
+    if let Some(uri) = note_file {
+        let _ = uri.to_file_path().map(|path| {
+            path.parent().map(std::fs::create_dir_all);
+
+            let _ = File::create_new(path.as_path());
+        });
+
+        client
+            .show_document(ShowDocumentParams {
+                uri,
+                external: Some(false),
+                take_focus: Some(true),
+                selection: None,
+            })
+            .await
+            .map(|success| Some(success.into()))
+    } else {
+        Err(Error::invalid_params(format!(
+            "Not a recognised date command: {date_str:?}"
+        )))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::NaiveDate;
