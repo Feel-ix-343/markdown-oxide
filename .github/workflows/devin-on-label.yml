@@ -23,10 +23,24 @@ jobs:
           Issue body:
           ${ISSUE_BODY}"
 
+          # Try v1 API first (personal API keys), fall back to v3 (service user tokens)
           RESPONSE=$(curl -s -X POST "https://api.devin.ai/v1/sessions" \
             -H "Authorization: Bearer ${{ secrets.DEVIN_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d "$(jq -n --arg prompt "$PROMPT" '{prompt: $prompt}')")
+
+          # If v1 returns Unauthorized and DEVIN_ORG_ID is set, try v3 API
+          if echo "$RESPONSE" | jq -e '.detail == "Unauthorized"' > /dev/null 2>&1; then
+            if [ -n "${{ secrets.DEVIN_ORG_ID }}" ]; then
+              echo "v1 API returned Unauthorized, trying v3 API with org ID..."
+              RESPONSE=$(curl -s -X POST "https://api.devin.ai/v3/organizations/${{ secrets.DEVIN_ORG_ID }}/sessions" \
+                -H "Authorization: Bearer ${{ secrets.DEVIN_API_KEY }}" \
+                -H "Content-Type: application/json" \
+                -d "$(jq -n --arg prompt "$PROMPT" '{prompt: $prompt}')")
+            else
+              echo "v1 API returned Unauthorized. If using a service user token, add DEVIN_ORG_ID as a repo secret."
+            fi
+          fi
 
           SESSION_URL=$(echo "$RESPONSE" | jq -r '.url // empty')
           SESSION_ID=$(echo "$RESPONSE" | jq -r '.session_id // empty')
