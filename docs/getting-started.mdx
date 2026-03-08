@@ -1,0 +1,417 @@
+---
+title: "Getting Started & Configuration"
+description: "Set up and configure Markdown-Oxide with your favorite text editor"
+---
+
+# Getting Started & Configuration
+
+Get started using Markdown-Oxide with your favorite text editor and customize it to fit your workflow.
+
+## Installation and Editor Setup
+
+Choose your editor below to get started:
+
+### Neovim
+
+Give Neovim access to the binary using one of the following installation methods:
+
+<AccordionGroup>
+  <Accordion title="Cargo Install (from source)">
+    ```bash
+    cargo install --locked --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
+    ```
+  </Accordion>
+
+  <Accordion title="Cargo binstall (from hosted binary)">
+    ```bash
+    cargo binstall --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
+    ```
+  </Accordion>
+
+  <Accordion title="Winget (Windows)">
+    ```bash
+    winget install FelixZeller.markdown-oxide
+    ```
+  </Accordion>
+
+  <Accordion title="Homebrew (from package manager)">
+    ```bash
+    brew install markdown-oxide
+    ```
+  </Accordion>
+</AccordionGroup>
+
+**Other installation methods:**
+- Arch Linux: `pacman -S markdown-oxide`
+- [Mason.nvim](https://github.com/williamboman/mason.nvim) (from hosted binary)
+- Nix: `pkgs.markdown-oxide`
+- Alpine Linux: `apk add markdown-oxide`
+- openSUSE: `zypper install markdown-oxide`
+- Conda: `conda install conda-forge::markdown-oxide`
+
+
+**Modify your Neovim Configuration:**
+
+<AccordionGroup>
+  <Accordion title="Modify LSP Config (making sure to adjust capabilities as follows)">
+    ```lua        
+    -- An example nvim-lspconfig capabilities setting
+    local capabilities = require("cmp_nvim_lsp").default_capabilities(vim.lsp.protocol.make_client_capabilities())
+    
+    require("lspconfig").markdown_oxide.setup({
+        -- Ensure that dynamicRegistration is enabled! This allows the LS to take into account actions like the
+        -- Create Unresolved File code action, resolving completions for unindexed code blocks, ...
+        capabilities = vim.tbl_deep_extend(
+            'force',
+            capabilities,
+            {
+                workspace = {
+                    didChangeWatchedFiles = {
+                        dynamicRegistration = true,
+                    },
+                },
+            }
+        ),
+        on_attach = on_attach -- configure your on attach config
+    })
+    ```
+  </Accordion> 
+
+  <Accordion title="Modify your nvim-cmp configuration">
+    Modify your nvim-cmp source settings for nvim-lsp (note: you must have nvim-lsp installed)
+
+    ```lua        
+    {
+    name = 'nvim_lsp',
+      option = {
+        markdown_oxide = {
+          keyword_pattern = [[\(\k\| \|\/\|#\)\+]]
+        }
+      }
+    },
+    ```
+  </Accordion>
+
+  <Accordion title="(optional) Enable Code Lens (eg for UI reference count)">
+    Modify your lsp `on_attach` function.
+
+    ```lua
+    local function codelens_supported(bufnr)
+      for _, c in ipairs(vim.lsp.get_clients({ bufnr = bufnr })) do
+        if c.server_capabilities and c.server_capabilities.codeLensProvider then
+          return true
+        end
+      end
+      return false
+    end
+
+    vim.api.nvim_create_autocmd(
+      { 'TextChanged', 'InsertLeave', 'CursorHold', 'BufEnter' },
+      {
+        buffer = bufnr,
+        callback = function()
+          if codelens_supported(bufnr) then
+            vim.lsp.codelens.refresh({ bufnr = bufnr })
+          end
+        end,
+      }
+    )
+
+    if codelens_supported(bufnr) then
+      vim.lsp.codelens.refresh({ bufnr = bufnr })
+    end
+    ```
+  </Accordion>
+
+  <Accordion title="(optional) Enable opening daily notes with natural language">
+    Modify your lsp `on_attach` function to support opening daily notes with natural language and relative directives. 
+
+    Examples:
+    - Natural language: `:Daily two days ago`, `:Daily next monday`
+    - Relative directives: `:Daily prev`, `:Daily next`, `:Daily +7`, `:Daily -3`
+
+    ```lua
+    -- setup Markdown Oxide daily note commands
+    if client.name == "markdown_oxide" then
+
+      vim.api.nvim_create_user_command(
+        "Daily",
+        function(args)
+          local input = args.args
+
+          vim.lsp.buf.execute_command({command="jump", arguments={input}})
+
+        end,
+        {desc = 'Open daily note', nargs = "*"}
+      )
+    end
+    ```
+  </Accordion>
+</AccordionGroup>    
+- Ensure relevant plugins are installed:
+    * [Nvim CMP](https://github.com/hrsh7th/nvim-cmp): UI for using LSP completions
+    * [Telescope](https://github.com/nvim-telescope/telescope.nvim): UI helpful for the LSP references implementation
+        - Allows you to view and fuzzy match backlinks to files, headings, and blocks.
+    * [Lspsaga](https://github.com/nvimdev/lspsaga.nvim): UI generally helpful for LSP commands
+        + Allows you to edit linked markdown files in a popup window, for example. 
+
+
+### VSCode
+
+Install the [vscode extension](https://marketplace.visualstudio.com/items?itemName=FelixZeller.markdown-oxide) (called `Markdown Oxide`). As for how the extension uses the language server, there are two options:
+- **Recommended:** the extension will download the server's binary and use that
+- The extension will use `markdown-oxide` from path
+
+If you want to install to your path, use one of the following methods:
+
+<AccordionGroup>
+  <Accordion title="Cargo Install (from source)">
+    ```bash
+    cargo install --locked --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
+    ```
+  </Accordion>
+
+  <Accordion title="Cargo binstall (from hosted binary)">
+    ```bash
+    cargo binstall --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
+    ```
+  </Accordion>
+
+  <Accordion title="Winget (Windows)">
+    ```bash
+    winget install FelixZeller.markdown-oxide
+    ```
+  </Accordion>
+
+  <Accordion title="Homebrew (from package manager)">
+    ```bash
+    brew install markdown-oxide
+    ```
+  </Accordion>
+</AccordionGroup>
+
+**Other installation methods:**
+- Arch Linux: `pacman -S markdown-oxide`
+- Nix: `pkgs.markdown-oxide`
+- Alpine Linux: `apk add markdown-oxide`
+- openSUSE: `zypper install markdown-oxide`
+- Conda: `conda install conda-forge::markdown-oxide`
+
+### Zed
+
+Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly to VSCode, there are two methods for this extension to access the language server:
+- **Recommended:** the extension will download the server's binary and use that
+- The extension will use `markdown-oxide` from path
+
+If you want to install to your path, use one of the following methods:
+
+<AccordionGroup>
+  <Accordion title="Cargo Install (from source)">
+    ```bash
+    cargo install --locked --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
+    ```
+  </Accordion>
+
+  <Accordion title="Cargo binstall (from hosted binary)">
+    ```bash
+    cargo binstall --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
+    ```
+  </Accordion>
+
+  <Accordion title="Winget (Windows)">
+    ```bash
+    winget install FelixZeller.markdown-oxide
+    ```
+  </Accordion>
+
+  <Accordion title="Homebrew (from package manager)">
+    ```bash
+    brew install markdown-oxide
+    ```
+  </Accordion>
+</AccordionGroup>
+
+**Other installation methods:**
+- Arch Linux: `pacman -S markdown-oxide`
+- Nix: `pkgs.markdown-oxide`
+- Alpine Linux: `apk add markdown-oxide`
+- openSUSE: `zypper install markdown-oxide`
+- Conda: `conda install conda-forge::markdown-oxide`
+
+    
+
+### Helix
+
+For Helix, all you must do is install the language server's binary to your path using one of the following methods:
+
+<AccordionGroup>
+  <Accordion title="Cargo Install (from source)">
+    ```bash
+    cargo install --locked --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
+    ```
+  </Accordion>
+
+  <Accordion title="Cargo binstall (from hosted binary)">
+    ```bash
+    cargo binstall --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
+    ```
+  </Accordion>
+
+  <Accordion title="Winget (Windows)">
+    ```bash
+    winget install FelixZeller.markdown-oxide
+    ```
+  </Accordion>
+
+  <Accordion title="Homebrew (from package manager)">
+    ```bash
+    brew install markdown-oxide
+    ```
+  </Accordion>
+</AccordionGroup>
+
+**Other installation methods:**
+- Arch Linux: `pacman -S markdown-oxide`
+- Nix: `pkgs.markdown-oxide`
+- Alpine Linux: `apk add markdown-oxide`
+- openSUSE: `zypper install markdown-oxide`
+- Conda: `conda install conda-forge::markdown-oxide`
+
+## Configuration
+
+`Markdown-Oxide` supports several configuration options. All can be specified in a `~/.config/moxide/settings.toml` or `.moxide.toml` file. Moxide also tries to import some settings from Obsidian directly.
+
+### Default Config File
+
+This contains all possible settings with brief descriptions. A bit of elaboration on the settings is included after. 
+
+```toml
+# Leave blank to try to import from Obsidian Daily Notes
+dailynote = "%Y-%m-%d" # this is akin to YYYY-MM-DD from Obsidian
+
+# Fuzzy match file headings in completions
+heading_completions = true
+
+# Set true if you title your notes by the first heading
+# Right now, if true this will cause completing a file link in the markdown style
+# to insert the name of the first heading in the display text area
+# [](file) -> [first heading of file.md](file)
+# If false, [](file) -> [](file) (for example)
+title_headings = true
+
+# Show diagnostics for unresolved links; note that even if this is turned off, 
+# special semantic tokens will be sent for the unresolved links, allowing you
+# to visually identify unresolved links
+unresolved_diagnostics = true
+
+semantic_tokens = true
+
+# Resolve tags in code blocks
+tags_in_codeblocks = false
+# Resolve references in code blocks
+references_in_codeblocks = false
+
+# The folder for new files to be created in; this is relevant for the code action that creates
+# from an unresolved link. If not specified, it will import from your obsidian config option titled
+# "Default Location for new notes" -- which is "" by default too. 
+new_file_folder_path = ""
+
+
+# The folder for new daily notes: this is applied for the create file for unresolved link code action
+# as well as the Today, Tomorrow, Yesterday, and Daily... lsp commands
+#
+# This is also imported from obsidian if not specified: specifically the option titled "New file location"
+daily_notes_folder = ""
+
+
+# Whether markdown links should include an extension or not
+# for example [File](file.md) or [File](file)
+include_md_extension_md_link = false
+
+# Whether wikilinks should include an extension or not (needed for Markor compatibility)
+# for example [[File]] or [[File.md]]
+include_md_extension_wikilink = false
+
+# Enable hover; this is relevant for VSCode and Zed where hover could be triggered on mouse hover
+# and could be annoying
+hover = true
+
+# Handle case in fuzzy matches: Ignore | Smart | Respect
+case_matching = "Smart"
+
+# Enable inlay hints
+inlay_hints = true
+# Enable transclusion, in the form of inlay hints, for embedded block links: ![[link]]
+# Inlay hints must be enabled
+block_transclusion = true
+# Full or Partial, for Partial, block_transclusion_length = { partial = 10 }
+# block_transclusion must be enabled for this to take effect
+block_transclusion_length = "Full"
+
+# Link file names only
+# Enables autocompleting by heading but inserting link to filename (instead of filename + heading)
+# Useful for unique notes / Zettelkasten users
+link_filenames_only = false
+```
+
+### Daily Note Format Config Option
+
+```toml
+dailynote = "{format}"
+```
+where format is `%Y-%m-%d` by default, unless imported from Obsidian.
+
+From Obsidian, this works as follows:
+
+Daily Note:
+- `dailynote`: checks if you have the dailynote Obsidian plugin and translates this formatting to Markdown Oxide's date formatting
+
+#### Relevance
+
+This is used in the following places:
+
+* Generating relative date name completions with predefined relative names (`today`, `tomorrow`, `yesterday`, `next {monday,tuesday,..., sunday}`, `last {monday,tuesday,...}`) for Daily Note Completions
+* Creating new daily notes when opening them
+* Creating files from unresolved references when the files match the specified format
+
+#### Date Formatting
+
+The date formatting in the config follows the rust library Chrono's formatting. 
+
+The full specification can be found here: https://docs.rs/chrono/latest/chrono/format/strftime/index.html
+
+Some examples are:
+
+- Year
+    * `%Y`: Is the four digit year
+    * `%y`: Is the two digit year: 1979 -> 79
+- Month
+    * `%m`: Is the two digit month
+    * `%b`: Is the abbreviated month name; 3 letters
+    * `%B`: Full moth name or 3 letter abbreviation
+- Day
+    * `%d`: Is the two digit day of month
+    * `%e`: Is the one or two digit day of month
+    * `%a`: 3 letter abbreviated weekday name
+    * `%A`: Abbreviated or full weekday name
+
+Examples:
+* (the default) `YYYY-MM-DD` -> `%Y-%m-%d`
+* "1 Jan 2024" => `%d %b %Y`
+
+### Settings From Obsidian
+
+* Daily Note:
+    + `dailynote`: checks if you have the dailynote Obsidian plugin and translates this formatting to Markdown Oxide's date formatting
+* `new_file_folder_path`: uses the specific folder for new files you set in Obsidian if you have it enabled. This is relevant to the Create Unresolved File Code Action
+* `daily_notes_folder_path`: uses the specific folder for new daily notes you set in the Obsidian Daily Notes plugin, if you have this option enabled. This is relevant to the path for opening daily notes and for the code action that creates unresolved links if they have the `dailynote` format.
+
+## Using Markdown-Oxide
+
+Now that you are set up, it is time to start using your new PKM! 
+
+Most editors have an LSP interface that makes using Markdown-oxide's features intuitive. Over time, you will figure out a workflow that fits your needs. 
+
+The main page provides an overview of all the key features with visual examples to help you understand what's possible.
+
+I hope you enjoy! Feel free to open issues for bugs and features on the GitHub repo: https://github.com/Feel-ix-343/markdown-oxide

@@ -1,0 +1,50 @@
+{
+  "name": "Markdown-Oxide",
+  "theme": "mint",
+  "logo": {
+    "dark": "/logo/dark.svg",
+    "light": "/logo/light.svg"
+  },
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#2563EB",
+    "light": "#60A5FA",
+    "dark": "#1E40AF"
+  },
+  "topbarLinks": [
+    {
+      "name": "Support",
+      "url": "https://github.com/Feel-ix-343/markdown-oxide/issues"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "GitHub",
+    "url": "https://github.com/Feel-ix-343/markdown-oxide"
+  },
+  "anchors": [
+    {
+      "name": "Documentation",
+      "icon": "book-open-cover",
+      "url": "https://oxide.md"
+    },
+    {
+      "name": "GitHub",
+      "icon": "github",
+      "url": "https://github.com/Feel-ix-343/markdown-oxide"
+    }
+  ],
+  "navigation": {
+    "groups": [
+      {
+        "group": "Documentation",
+        "pages": [
+          "index",
+          "getting-started"
+        ]
+      }
+    ]
+  },
+  "footerSocials": {
+    "github": "https://github.com/Feel-ix-343/markdown-oxide"
+  }
+}
