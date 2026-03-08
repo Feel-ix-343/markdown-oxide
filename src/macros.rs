@@ -8,6 +8,9 @@ macro_rules! params_path {
             return Result::Err(Error::new(ErrorCode::ServerError(0)));
         };
 
+        // Canonicalize to match vault paths (resolves symlinks and normalizes)
+        let path = std::fs::canonicalize(&path).unwrap_or(path);
+
         Result::Ok(path)
     }};
 }
@@ -22,6 +25,9 @@ macro_rules! params_position_path {
         let Ok(path) = path_result else {
             return Result::Err(Error::new(ErrorCode::ServerError(0)));
         };
+
+        // Canonicalize to match vault paths (resolves symlinks and normalizes)
+        let path = std::fs::canonicalize(&path).unwrap_or(path);
 
         Result::Ok(path)
     }};

@@ -77,7 +77,60 @@ Set up the PKM for your text editor...
   
 - Modify your Neovim Configuration ^nvimconfigsetup
     - <details>
-        <summary>Modify LSP Config (making sure to adjust capabilities as follows)</summary>
+        <summary>Neovim >= 0.11: Native LSP Config (recommended)</summary>
+
+        With Neovim >= 0.11, you can use the built-in `vim.lsp.config` and `vim.lsp.enable` instead of nvim-lspconfig's `setup()`. If you have [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig) installed, it provides the base config (cmd, filetypes, root_markers) automatically.
+
+        ```lua
+        local capabilities = vim.lsp.protocol.make_client_capabilities()
+
+        -- If using nvim-cmp, enhance capabilities:
+        -- local capabilities = require("cmp_nvim_lsp").default_capabilities(vim.lsp.protocol.make_client_capabilities())
+
+        vim.lsp.config.markdown_oxide = {
+            -- Ensure that dynamicRegistration is enabled! This allows the LS to take into account actions like the
+            -- Create Unresolved File code action, resolving completions for unindexed code blocks, ...
+            capabilities = vim.tbl_deep_extend(
+                'force',
+                capabilities,
+                {
+                    workspace = {
+                        didChangeWatchedFiles = {
+                            dynamicRegistration = true,
+                        },
+                    },
+                }
+            ),
+        }
+        vim.lsp.enable("markdown_oxide")
+        ```
+
+        If you are **not** using nvim-lspconfig, you must also provide the base config:
+
+        ```lua
+        vim.lsp.config.markdown_oxide = {
+            cmd = { 'markdown-oxide' },
+            filetypes = { 'markdown' },
+            root_markers = { '.git', '.obsidian', '.moxide.toml' },
+            capabilities = vim.tbl_deep_extend(
+                'force',
+                vim.lsp.protocol.make_client_capabilities(),
+                {
+                    workspace = {
+                        didChangeWatchedFiles = {
+                            dynamicRegistration = true,
+                        },
+                    },
+                }
+            ),
+        }
+        vim.lsp.enable("markdown_oxide")
+        ```
+
+    </details>
+
+    - <details>
+        <summary>Legacy: nvim-lspconfig setup (Neovim < 0.11)</summary>
 
         ```lua        
         -- An example nvim-lspconfig capabilities setting

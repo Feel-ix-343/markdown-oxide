@@ -43,9 +43,12 @@ impl Vault {
             .par_iter()
             .flat_map(|p| {
                 let text = std::fs::read_to_string(p.path())?;
-                let md_file = MDFile::new(context, &text, PathBuf::from(p.path()));
+                // Canonicalize paths for consistent lookups across different editors/clients
+                let canonical_path =
+                    std::fs::canonicalize(p.path()).unwrap_or_else(|_| p.path().into());
+                let md_file = MDFile::new(context, &text, canonical_path.clone());
 
-                Ok::<(PathBuf, MDFile), std::io::Error>((p.path().into(), md_file))
+                Ok::<(PathBuf, MDFile), std::io::Error>((canonical_path, md_file))
             })
             .collect();
 
@@ -54,8 +57,11 @@ impl Vault {
             .flat_map(|p| {
                 let text = std::fs::read_to_string(p.path())?;
                 let rope = Rope::from_str(&text);
+                // Canonicalize paths for consistent lookups across different editors/clients
+                let canonical_path =
+                    std::fs::canonicalize(p.path()).unwrap_or_else(|_| p.path().into());
 
-                Ok::<(PathBuf, Rope), std::io::Error>((p.path().into(), rope))
+                Ok::<(PathBuf, Rope), std::io::Error>((canonical_path, rope))
             })
             .collect();
 
