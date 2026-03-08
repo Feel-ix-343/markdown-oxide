@@ -326,6 +326,10 @@ fn run_completer<'a, T: Completer<'a>>(
         })
         .collect::<Vec<CompletionItem>>();
 
+    if completions.is_empty() {
+        return None;
+    }
+
     Some(CompletionResponse::List(CompletionList {
         is_incomplete: true,
         items: completions,
