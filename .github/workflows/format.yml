@@ -22,4 +22,10 @@ jobs:
         override: true
         rustflags: ""
     - name: Rustfmt Check
-      run: cargo fmt --all -- --check
+      run: |
+        if cargo fmt --all -- --check; then
+          echo "All files are formatted correctly."
+        else
+          echo "Formatting issues found. Run 'cargo fmt --all' to fix."
+          exit 1
+        fi
