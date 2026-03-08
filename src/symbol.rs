@@ -6,11 +6,11 @@ use nucleo_matcher::{
     Matcher,
 };
 use tower_lsp::lsp_types::{
-    DocumentSymbol, DocumentSymbolParams, DocumentSymbolResponse, SymbolInformation, SymbolKind,
-    WorkspaceSymbolParams,
+    DocumentSymbol, DocumentSymbolParams, DocumentSymbolResponse, Location, SymbolInformation,
+    SymbolKind, Url, WorkspaceSymbolParams,
 };
 
-use crate::vault::{MDHeading, Vault};
+use crate::vault::{MDHeading, Referenceable, Vault};
 
 fn compute_match_score(
     matcher: &mut Matcher,
@@ -37,7 +37,59 @@ pub fn workspace_symbol(
     let symbols = vault
         .select_referenceable_nodes(None)
         .into_iter()
-        .flat_map(|referenceable| vault.to_symbol_information(referenceable))
+        .flat_map(|referenceable| {
+            let vault_name = referenceable
+                .get_refname(vault.root_dir())
+                .map(|refname| refname.to_string());
+
+            let uri = Url::from_file_path(referenceable.get_path()).ok();
+
+            let range = match referenceable {
+                Referenceable::File(..) => Some(tower_lsp::lsp_types::Range {
+                    start: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 0,
+                    },
+                    end: tower_lsp::lsp_types::Position {
+                        line: 0,
+                        character: 1,
+                    },
+                }),
+                _ => referenceable.get_range().map(|x| *x),
+            };
+
+            let alias_names = match referenceable {
+                Referenceable::File(_, mdfile) => match &mdfile.metadata {
+                    Some(meta) => meta.aliases(),
+                    None => &[],
+                },
+                _ => &[],
+            };
+
+            let names = iter::once(vault_name)
+                .chain(alias_names.iter().map(|x| Some(x.to_string())))
+                .flatten();
+
+            names
+                .filter_map(move |name| {
+                    Some(SymbolInformation {
+                        name,
+                        kind: match referenceable {
+                            Referenceable::File(_, _) => SymbolKind::FILE,
+                            Referenceable::Tag(_, _) => SymbolKind::CONSTANT,
+                            _ => SymbolKind::KEY,
+                        },
+                        location: Location {
+                            uri: uri.clone()?,
+                            range: range?,
+                        },
+                        container_name: None,
+                        tags: None,
+                        deprecated: None,
+                    })
+                })
+                .collect::<Vec<_>>()
+        })
         .collect_vec();
 
     // Some clients (e.g. one-shot workspace symbol pickers) send an empty query first and
@@ -54,7 +106,7 @@ pub fn workspace_symbol(
         Normalization::Smart,
     );
 
-    // Collect symbols and order by fuzzy matching score
+    // Collect symbols (including aliases) and order by fuzzy matching score
     Some(
         symbols
             .into_iter()
