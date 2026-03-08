@@ -28,6 +28,7 @@ pub struct Settings {
     pub block_transclusion: bool,
     pub block_transclusion_length: EmbeddedBlockTransclusionLength,
     pub link_filenames_only: bool,
+    pub link_format: LinkFormat,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -35,6 +36,14 @@ pub enum Case {
     Ignore,
     Smart,
     Respect,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum LinkFormat {
+    Shortest,
+    Relative,
+    Absolute,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -86,6 +95,10 @@ impl Settings {
             .set_default("inlay_hints", true)?
             .set_default("block_transclusion", true)?
             .set_default("block_transclusion_length", "Full")?
+            .set_default(
+                "link_format",
+                obsidian_link_format(root_dir).unwrap_or("shortest".to_string()),
+            )?
             .set_override_option(
                 "semantic_tokens",
                 capabilities.text_document.as_ref().and_then(|it| {
@@ -144,6 +157,26 @@ fn obsidian_new_file_folder_path(root_dir: &Path) -> Option<String> {
     });
 
     new_file_folder_path
+}
+
+fn obsidian_link_format(root_dir: &Path) -> Option<String> {
+    let obsidian_settings_file = root_dir.join(".obsidian").join("app.json");
+    let file = std::fs::read(obsidian_settings_file).ok();
+    let config: Option<HashMap<String, Value>> = file.and_then(|file| {
+        let parsed = serde_json::from_slice(&file);
+        parsed.ok()
+    });
+
+    config.as_ref().and_then(|config| {
+        config
+            .get("newLinkFormat")
+            .and_then(|value| value.as_str())
+            .map(|format| match format {
+                "absolute" => "absolute",
+                _ => "shortest",
+            })
+            .map(String::from)
+    })
 }
 
 use std::collections::HashMap;

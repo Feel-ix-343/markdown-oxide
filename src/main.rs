@@ -671,9 +671,11 @@ impl LanguageServer for Backend {
     }
 
     async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
+        let settings = self.bind_settings(|settings| Ok(settings.clone())).await?;
+
         self.bind_vault(|vault| {
             let path = params_position_path!(params)?;
-            Ok(rename::rename(vault, &params, &path))
+            Ok(rename::rename(vault, &params, &path, &settings))
         })
         .await
     }

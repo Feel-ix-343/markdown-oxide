@@ -6,9 +6,10 @@ use tower_lsp::lsp_types::{
     RenameFile, RenameParams, ResourceOp, TextDocumentEdit, TextEdit, Url, WorkspaceEdit,
 };
 
-use crate::vault::{Reference, Referenceable, Vault};
+use crate::config::{LinkFormat, Settings};
+use crate::vault::{get_obsidian_ref_path, Reference, Referenceable, Vault};
 
-pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<WorkspaceEdit> {
+pub fn rename(vault: &Vault, params: &RenameParams, path: &Path, settings: &Settings) -> Option<WorkspaceEdit> {
     let position = params.text_document_position.position;
     let referenceable = vault.select_referenceable_at_position(path, position)?;
 
@@ -28,14 +29,15 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                     })],
                 });
 
-                // {path name}#{new name}
-                let name = format!(
-                    "{}#{}",
-                    path.file_stem()?.to_string_lossy().clone(),
-                    params.new_name
-                );
+                let file_path = match settings.link_format {
+                    LinkFormat::Absolute => {
+                        get_obsidian_ref_path(vault.root_dir(), path)?
+                    }
+                    _ => path.file_stem()?.to_string_lossy().to_string(),
+                };
+                let name = format!("{}#{}", file_path, params.new_name);
 
-                (Some(change_op), name.to_string())
+                (Some(change_op), name)
             }
             Referenceable::File(path, _file) => {
                 let new_path = path.with_file_name(&params.new_name).with_extension("md");
@@ -47,7 +49,14 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                     annotation_id: None,
                 }));
 
-                let name = params.new_name.clone();
+                let name = match settings.link_format {
+                    LinkFormat::Absolute => {
+                        let parent_path = path.parent()?;
+                        let new_file_path = parent_path.join(&params.new_name).with_extension("");
+                        get_obsidian_ref_path(vault.root_dir(), &new_file_path)?
+                    }
+                    _ => params.new_name.clone(),
+                };
 
                 (Some(change_op), name)
             }
