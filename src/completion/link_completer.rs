@@ -447,7 +447,7 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
         let line_chars = vault.select_line(path, line as isize)?;
 
         let index = line_chars
-            .get(0..=(character.min(line_chars.len() - 1)))? // select only the characters up to the cursor
+            .get(0..=(character.min(line_chars.len().checked_sub(1)?)))? // select only the characters up to the cursor
             .iter()
             .enumerate() // attach indexes
             .tuple_windows() // window into pairs of characters

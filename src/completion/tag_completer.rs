@@ -53,7 +53,8 @@ impl<'a> Completer<'a> for TagCompleter<'a> {
                 let (full, tag_text) = (captures.get(0)?, captures.name("text")?);
 
                 // check if the cursor is in the tag
-                let preceding_character = character - 1; // User is inserting into the position after the character they are looking at; "#tag|"  cursor is a position 4; I want pos 3; the end of the tag
+                // User is inserting into the position after the character they are looking at; "#tag|"  cursor is a position 4; I want pos 3; the end of the tag
+                let preceding_character = character.checked_sub(1)?;
                 if preceding_character >= full.range().start
                     && preceding_character < full.range().end
                 {

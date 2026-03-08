@@ -326,8 +326,135 @@ fn run_completer<'a, T: Completer<'a>>(
         })
         .collect::<Vec<CompletionItem>>();
 
+    // Return None instead of an empty completion list. An empty list with
+    // is_incomplete: true can cause editors (e.g. Zed) to keep a completion
+    // session alive, which may interfere with normal editing behaviour such
+    // as auto-indentation in list contexts (see #334). Returning None lets
+    // the editor fall back to its default behaviour and also allows the
+    // completer chain in get_completions to try the next completer.
+    if completions.is_empty() {
+        return None;
+    }
+
     Some(CompletionResponse::List(CompletionList {
         is_incomplete: true,
         items: completions,
     }))
+}
+
+#[cfg(test)]
+mod completion_tests {
+    use std::path::PathBuf;
+
+    use tower_lsp::lsp_types::{
+        CompletionContext, CompletionParams, CompletionTriggerKind, PartialResultParams, Position,
+        TextDocumentIdentifier, TextDocumentPositionParams, Url, WorkDoneProgressParams,
+    };
+
+    use crate::config::Settings;
+    use crate::vault::Vault;
+
+    use super::get_completions;
+
+    fn test_vault_root() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("TestFiles")
+    }
+
+    fn test_settings() -> Settings {
+        let root = test_vault_root();
+        let caps = Default::default();
+        Settings::new(&root, &caps).expect("Settings should load from TestFiles")
+    }
+
+    fn make_completion_params(uri: Url, line: u32, character: u32) -> CompletionParams {
+        CompletionParams {
+            text_document_position: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri },
+                position: Position { line, character },
+            },
+            work_done_progress_params: WorkDoneProgressParams {
+                work_done_token: None,
+            },
+            partial_result_params: PartialResultParams {
+                partial_result_token: None,
+            },
+            context: Some(CompletionContext {
+                trigger_kind: CompletionTriggerKind::INVOKED,
+                trigger_character: None,
+            }),
+        }
+    }
+
+    /// Regression test for #334: typing in a numbered list with a nested list
+    /// should not produce completions that could interfere with editor
+    /// auto-indentation.
+    #[test]
+    fn no_completions_for_numbered_list_content() {
+        let root = test_vault_root();
+        let settings = test_settings();
+        let vault = Vault::construct_vault(&settings, &root).expect("Vault should construct");
+
+        // Simulate a file with the MRE content from #334
+        let test_path = root.join("_list_test.md");
+        let test_text = "1. a\n  * a\n  * b\n2";
+
+        let mut vault = vault;
+        Vault::update_vault(&settings, &mut vault, (&test_path, test_text));
+
+        let uri = Url::from_file_path(&test_path).unwrap();
+        let opened_files: Vec<PathBuf> = vec![test_path.clone()];
+
+        // Cursor at end of line 3 (after typing "2")
+        let params = make_completion_params(uri.clone(), 3, 1);
+        let result = get_completions(&vault, &opened_files, &params, &test_path, &settings);
+        assert!(
+            result.is_none(),
+            "No completions should be returned when typing in a numbered list item"
+        );
+
+        // Also test cursor at the beginning of an empty line (line 3 before typing)
+        let test_text_empty_line = "1. a\n  * a\n  * b\n";
+        Vault::update_vault(&settings, &mut vault, (&test_path, test_text_empty_line));
+        let params = make_completion_params(uri.clone(), 3, 0);
+        let result = get_completions(&vault, &opened_files, &params, &test_path, &settings);
+        assert!(
+            result.is_none(),
+            "No completions should be returned on an empty line in a list"
+        );
+
+        // Test with unordered top-level list (should also return no completions)
+        let test_text_unordered = "* a\n  * a\n  * b\n2";
+        Vault::update_vault(&settings, &mut vault, (&test_path, test_text_unordered));
+        let params = make_completion_params(uri, 3, 1);
+        let result = get_completions(&vault, &opened_files, &params, &test_path, &settings);
+        assert!(
+            result.is_none(),
+            "No completions should be returned when typing in an unordered list"
+        );
+    }
+
+    /// Verify that empty completion lists are not returned (they become None).
+    #[test]
+    fn empty_completions_return_none() {
+        let root = test_vault_root();
+        let settings = test_settings();
+        let vault = Vault::construct_vault(&settings, &root).expect("Vault should construct");
+
+        let test_path = root.join("_empty_test.md");
+        let test_text = "Just some plain text with no links or tags.";
+
+        let mut vault = vault;
+        Vault::update_vault(&settings, &mut vault, (&test_path, test_text));
+
+        let uri = Url::from_file_path(&test_path).unwrap();
+        let opened_files: Vec<PathBuf> = vec![test_path.clone()];
+
+        // Typing in plain text should not produce completions
+        let params = make_completion_params(uri, 0, 10);
+        let result = get_completions(&vault, &opened_files, &params, &test_path, &settings);
+        assert!(
+            result.is_none(),
+            "No completions should be returned for plain text"
+        );
+    }
 }
