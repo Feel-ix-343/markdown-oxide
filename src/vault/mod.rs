@@ -23,6 +23,7 @@ use walkdir::WalkDir;
 
 impl Vault {
     pub fn construct_vault(context: &Settings, root_dir: &Path) -> Result<Vault, std::io::Error> {
+        let excluded_folders = &context.excluded_folders;
         let md_file_paths = WalkDir::new(root_dir)
             .into_iter()
             .filter_entry(|e| {
@@ -30,6 +31,17 @@ impl Vault {
                 if e.path() == root_dir {
                     return true;
                 }
+
+                let dominated_by_excluded = e.file_type().is_dir()
+                    && e.file_name()
+                        .to_str()
+                        .map(|s| excluded_folders.iter().any(|excluded| s == excluded))
+                        .unwrap_or(false);
+
+                if dominated_by_excluded {
+                    return false;
+                }
+
                 !e.file_name()
                     .to_str()
                     .map(|s| s.starts_with('.') || s == "logseq") // TODO: This is a temporary fix; a hidden config is better

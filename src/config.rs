@@ -28,6 +28,8 @@ pub struct Settings {
     pub block_transclusion: bool,
     pub block_transclusion_length: EmbeddedBlockTransclusionLength,
     pub link_filenames_only: bool,
+    /// Folders to exclude from vault indexing (e.g. ["Archive", "Templates"])
+    pub excluded_folders: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -96,6 +98,7 @@ impl Settings {
                 }),
             )?
             .set_default("link_filenames_only", false)?
+            .set_default("excluded_folders", Vec::<String>::new())?
             .build()
             .map_err(|err| anyhow!("Build err: {err}"))?;
 
