@@ -187,12 +187,21 @@ Instead of memorizing this, however, I'd recommend just trying relative names ou
 Here are some examples for neovim daily note commands (as specified in the setup [here](README#^nvimconfigsetup)
 
 - examples ^nvimrelativenamescmds
-    * `:Daily two days ago`
-    * `:Daily 2 days ago`
-    * `:Daily next monday`
-    * `:Daily last friday`
-    * `:Daily today`
-    * `:Daily tomorrow`
+    * Natural language:
+        + `:Daily two days ago`
+        + `:Daily 2 days ago`
+        + `:Daily next monday`
+        + `:Daily last friday`
+        + `:Daily today`
+        + `:Daily tomorrow`
+    * Relative directives:
+        + `:Daily prev` - previous day
+        + `:Daily next` - next day
+        + `:Daily +1` - tomorrow (1 day forward)
+        + `:Daily -1` - yesterday (1 day backward)
+        + `:Daily +7` - one week forward
+        + `:Daily -7` - one week backward
+        + `:Daily +30` - 30 days forward
 
 ### Other
 

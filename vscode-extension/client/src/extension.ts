@@ -169,7 +169,9 @@ export async function activate(context: ExtensionContext) {
 	// If the extension is launched in debug mode then the debug server options are used
 	// Otherwise the run options are used
 	const serverOptions: ServerOptions = {
-		command: path
+		// Use path to local binary for testing
+        // command: `/Users/xyz/workspace/markdown-oxide/target/release/markdown-oxide`,
+        command: path,
 		// run: { run: "/home/felix/coding/LargerIdeas/ObsidianLS/obsidian-ls/target/release/obsidian-ls", transport: TransportKind.ipc },
 		// debug: {
 		// 	module: serverModule,

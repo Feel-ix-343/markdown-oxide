@@ -11,24 +11,10 @@
             "id": "d695463100ad962a",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "Configuration.md",
-                "mode": "preview",
-                "source": false,
-                "backlinks": true,
-                "backlinkOpts": {
-                  "collapseAll": false,
-                  "extraContext": false,
-                  "sortOrder": "alphabetical",
-                  "showSearch": false,
-                  "searchQuery": "",
-                  "backlinkCollapsed": false,
-                  "unlinkedCollapsed": true
-                }
-              },
-              "icon": "lucide-file",
-              "title": "Configuration"
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Graph view"
             }
           }
         ]
@@ -181,6 +167,7 @@
   },
   "active": "d695463100ad962a",
   "lastOpenFiles": [
+    "Configuration.md",
     "Features Index.md",
     "Date Formatting.md",
     "Daily Notes.md",
@@ -189,7 +176,6 @@
     "What Is Markdown-Oxide.md",
     "PKMS.md",
     "LSP.md",
-    "Configuration.md",
     "Setup Instructions.md",
     "rug/README.md",
     "rug/Index.md",

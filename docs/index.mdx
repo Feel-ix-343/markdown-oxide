@@ -1,0 +1,207 @@
+---
+title: "Markdown-Oxide"
+description: "PKM (Personal-Knowledge-Management) Markdown Language Server for your favorite text-editor"
+---
+
+# Markdown-Oxide
+
+**A powerful PKM Language Server that brings Obsidian-like features to your favorite text editor.**
+
+Markdown-Oxide is a Personal Knowledge Management System (PKMS) that composes with your favorite text-editor through the Language Server Protocol (LSP). While other PKMS implementations include their own text-editors, markdown-oxide is *unbundled*: it leaves text-editing to a dedicated text-editor and focuses solely on robust, performant knowledge management.
+
+<CardGroup cols={2}>
+  <Card title="Get Started" icon="rocket" href="/getting-started">
+    Set up Markdown-Oxide with Neovim, VSCode, Zed, or Helix in minutes
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/Feel-ix-343/markdown-oxide">
+    View the source code and contribute
+  </Card>
+</CardGroup>
+
+## Why Markdown-Oxide?
+
+<AccordionGroup>
+  <Accordion title="Use Your Favorite Editor" icon="keyboard">
+    You've spent days configuring your text editor. Why give it up? Markdown-Oxide works with any LSP-compatible editor, letting you keep your workflow while gaining powerful PKM features.
+  </Accordion>
+  
+  <Accordion title="Obsidian-Compatible" icon="link">
+    Highly compatible with Obsidian vaults. Import your settings from `.obsidian/` configuration files and use familiar syntax like wikilinks, tags, and daily notes.
+  </Accordion>
+  
+  <Accordion title="Fast & Performant" icon="bolt">
+    Built in Rust for speed and reliability. Handles large vaults with thousands of notes without breaking a sweat.
+  </Accordion>
+  
+  <Accordion title="Editor Support" icon="code">
+    Best supported on Neovim, with excellent support for VSCode, Helix, and Zed. Works with any editor implementing the Language Server Protocol.
+  </Accordion>
+</AccordionGroup>
+
+## Key Features
+
+### Intelligent Linking
+
+Create and navigate connections between your notes effortlessly.
+
+<AccordionGroup>
+<Accordion title="Wikilink & Markdown Link Completions">
+Auto-complete file and heading references as you type
+
+![wikilinkcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/29c4830f-30e5-4094-9f5b-7b39009437da)
+
+![markdownlinkcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/16c8565a-6a28-4df1-a312-e4b158fb9f03)
+</Accordion>
+
+<Accordion title="Unresolved File and Heading Completions">
+For those who like to reference things before they are written, markdown-oxide has terrific support for unresolved references! It provides completions for unresolved references, provides lsp_references for them, and provides code actions to create files + append headings.
+
+![unresolvedcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/96ed1a8e-eea3-4d3f-9557-e51b076fb3fb)
+</Accordion>
+
+<Accordion title="Go-to-Definition & Backlinks">
+Jump to linked files and headings instantly. See all references to any file, heading, or block.
+
+![filereferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/9fbd6051-ef57-42eb-b61b-1cc3ddfb2293)
+</Accordion>
+
+<Accordion title="Rename Refactoring">
+Rename files and headings while automatically updating all links
+
+![renamefile](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/3ac404fb-cfcd-4943-81ba-8ab3645831b7)
+</Accordion>
+</AccordionGroup>
+
+### Daily Notes
+
+Manage your daily journal with natural language commands.
+
+<AccordionGroup>
+<Accordion title="Natural Language Navigation & Smart Completions">
+Open notes with commands like `:Daily next monday` or `:Daily two days ago`. Use relative directives like `:Daily prev`, `:Daily next`, `:Daily +7`, or `:Daily -3` to navigate forward and backward. Link to daily notes using relative dates like `[[tomorrow]]` or `[[next friday]]`.
+
+![dailynoteswiki](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/d2505535-ef5e-491a-bd88-ef12be2402ef)
+</Accordion>
+</AccordionGroup>
+
+- **Automatic Formatting**: Respects your date format preferences from Obsidian or custom config
+
+### Tags & Organization
+
+Organize your knowledge with hierarchical tags.
+
+<AccordionGroup>
+<Accordion title="Tag Completions">
+Auto-complete previously defined tags
+
+![tagcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/bf20d7ac-171a-4d95-b510-ba323073c0b8)
+</Accordion>
+
+<Accordion title="Tag References">
+Find all notes using a specific tag or subtag
+
+![tagreferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/d73ac764-2c86-45c9-9403-17b50e6962e4)
+</Accordion>
+</AccordionGroup>
+
+- **Workspace Symbols**: Search across all files, headings, and tags
+
+### Advanced Features
+
+<AccordionGroup>
+<Accordion title="Callout Completions">
+Use Obsidian-style callouts for notes, warnings, and tips
+
+![calloutcompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/11cd44f1-cf2e-4f27-92b4-1ed4914356ca)
+</Accordion>
+
+<Accordion title="Footnote Completions">
+Easily link to the footnotes defined in the active file
+
+![footnotecompletions](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/92a6739d-8a7a-457e-84bd-fde6548aa25a)
+</Accordion>
+
+<Accordion title="Footnote References">
+Navigate the uses of a footnote in the active file
+
+![footnotereferences](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/25940052-ca6c-4b7c-b334-f0001260c490)
+</Accordion>
+</AccordionGroup>
+
+- **Block References**: Link to specific paragraphs or sections using `^block-id` syntax
+- **Unresolved Link Support**: Create links before the target exists, with code actions to create files
+- **Semantic Tokens**: Visual differentiation between resolved and unresolved links
+- **Code Lens**: Inline reference counts for files and headings
+
+## Quick Start
+
+Choose your editor to get started:
+
+<Tabs>
+  <Tab title="Neovim">
+    Install via your preferred method:
+    ```bash
+    # Cargo
+    cargo install --locked --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
+    
+    # Arch Linux
+    pacman -S markdown-oxide
+    
+    # Homebrew
+    brew install markdown-oxide
+    ```
+    
+    Then configure nvim-lspconfig with dynamic registration enabled. [Full setup guide →](/getting-started#neovim)
+  </Tab>
+  
+  <Tab title="VSCode">
+    Install the [Markdown Oxide extension](https://marketplace.visualstudio.com/items?itemName=FelixZeller.markdown-oxide) from the VSCode marketplace.
+    
+    The extension will automatically download and manage the language server binary. [Full setup guide →](/getting-started#vscode)
+  </Tab>
+  
+  <Tab title="Zed">
+    Install the Markdown Oxide extension from Zed's extension marketplace.
+    
+    The extension will automatically download and manage the language server binary. [Full setup guide →](/getting-started#zed)
+  </Tab>
+  
+  <Tab title="Helix">
+    Install the binary to your PATH:
+    ```bash
+    # Cargo
+    cargo install --locked --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
+    
+    # Arch Linux
+    pacman -S markdown-oxide
+    ```
+    
+    Helix will automatically detect and use the language server. [Full setup guide →](/getting-started#helix)
+  </Tab>
+</Tabs>
+
+## Is Markdown-Oxide Right for You?
+
+Markdown-oxide is perfect if you:
+
+- Have a favorite text editor that supports LSP and want to keep using it
+- Want Obsidian-like PKM features without being locked into a specific app
+- Need a fast, performant solution for large markdown vaults
+- Value the Unix philosophy of composable, focused tools
+
+If these resonate with you, [get started now](/getting-started)!
+
+## Community & Support
+
+<CardGroup cols={2}>
+  <Card title="GitHub Issues" icon="bug" href="https://github.com/Feel-ix-343/markdown-oxide/issues">
+    Report bugs or request features
+  </Card>
+  <Card title="Discussions" icon="comments" href="https://github.com/Feel-ix-343/markdown-oxide/discussions">
+    Ask questions and share your setup
+  </Card>
+</CardGroup>
+
+---
+
+*Built with ❤️ by Felix Zeller*

@@ -7,7 +7,7 @@ use std::{
     hash::Hash,
     iter,
     ops::{Deref, DerefMut, Not, Range},
-    path::{Path, PathBuf},
+    path::{Path, PathBuf, MAIN_SEPARATOR},
     time::SystemTime,
 };
 
@@ -18,7 +18,7 @@ use rayon::prelude::*;
 use regex::{Captures, Match, Regex};
 use ropey::Rope;
 use serde::{Deserialize, Serialize};
-use tower_lsp::lsp_types::Position;
+use tower_lsp::lsp_types::{Location, Position, SymbolInformation, SymbolKind, Url};
 use walkdir::WalkDir;
 
 impl Vault {
@@ -26,6 +26,10 @@ impl Vault {
         let md_file_paths = WalkDir::new(root_dir)
             .into_iter()
             .filter_entry(|e| {
+                // Allow the root directory itself even if it starts with '.'
+                if e.path() == root_dir {
+                    return true;
+                }
                 !e.file_name()
                     .to_str()
                     .map(|s| s.starts_with('.') || s == "logseq") // TODO: This is a temporary fix; a hidden config is better
@@ -125,6 +129,25 @@ impl<B: Hash> From<HashMap<PathBuf, B>> for MyHashMap<B> {
 impl Hash for Vault {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.md_files.hash(state)
+    }
+}
+
+fn find_range(referenceable: &Referenceable) -> Option<tower_lsp::lsp_types::Range> {
+    match referenceable {
+        Referenceable::File(..) => Some(tower_lsp::lsp_types::Range {
+            start: tower_lsp::lsp_types::Position {
+                line: 0,
+                character: 0,
+            },
+            end: tower_lsp::lsp_types::Position {
+                line: 0,
+                character: 1,
+            },
+        }),
+        _ => match referenceable.get_range() {
+            None => None,
+            Some(a_my_range) => Some(*a_my_range),
+        },
     }
 }
 
@@ -358,13 +381,32 @@ impl Vault {
         &self,
         reference: &Reference,
         reference_path: &Path,
-    ) -> Vec<Referenceable> {
+    ) -> Vec<Referenceable<'_>> {
         let referenceables = self.select_referenceable_nodes(None);
 
         referenceables
             .into_iter()
             .filter(|i| reference.references(self.root_dir(), reference_path, i))
             .collect()
+    }
+
+    #[allow(deprecated)] // field deprecated has been deprecated in favor of using tags and will be removed in the future
+    pub fn to_symbol_information(&self, referenceable: Referenceable) -> Option<SymbolInformation> {
+        Some(SymbolInformation {
+            name: referenceable.get_refname(self.root_dir())?.to_string(),
+            kind: match referenceable {
+                Referenceable::File(_, _) => SymbolKind::FILE,
+                Referenceable::Tag(_, _) => SymbolKind::CONSTANT,
+                _ => SymbolKind::KEY,
+            },
+            location: Location {
+                uri: Url::from_file_path(referenceable.get_path()).ok()?,
+                range: find_range(&referenceable)?,
+            },
+            container_name: None,
+            tags: None,
+            deprecated: None,
+        })
     }
 }
 
@@ -606,7 +648,7 @@ impl MDFile {
 }
 
 impl MDFile {
-    fn get_referenceables(&self) -> Vec<Referenceable> {
+    fn get_referenceables(&self) -> Vec<Referenceable<'_>> {
         let MDFile {
             references: _,
             headings,
@@ -1017,12 +1059,14 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
         return None;
     }
 
-    match (
-        range,
-        file_path.map(|it| it.as_str()).unwrap_or(file_name),
-        infile_ref,
-        display_text,
-    ) {
+    let decoded_filepath = file_path
+        .map(|file_path| {
+            let file_path = file_path.as_str();
+            urlencoding::decode(file_path).map_or_else(|_| file_path.to_string(), |d| d.to_string())
+        })
+        .unwrap_or_else(|| file_name.to_string());
+
+    match (range, decoded_filepath.as_str(), infile_ref, display_text) {
         // Pure file reference as there is no infileref such as #... for headings or #^... for indexed blocks
         (full, filepath, None, display) => Some(T::new_file_link(ReferenceData {
             reference_text: filepath.into(),
@@ -1345,7 +1389,7 @@ impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
         let path = &self.path.clone()?;
 
-        let last = path.split('/').next_back()?;
+        let last = path.split(MAIN_SEPARATOR).next_back()?;
 
         Some(last.to_string())
     }
@@ -2726,6 +2770,54 @@ Continued
             }
             .into(),
             ..ReferenceData::default()
+        })];
+
+        assert_eq!(parsed, expected);
+    }
+    #[test]
+    fn parse_url_encoded_link() {
+        let text = " [f](file%20with%20spaces)";
+
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        let expected = vec![Reference::MDFileLink(ReferenceData {
+            reference_text: "file with spaces".into(),
+            display_text: Some("f".into()),
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 1,
+                },
+                end: Position {
+                    line: 0,
+                    character: 26,
+                },
+            }
+            .into(),
+        })];
+
+        assert_eq!(parsed, expected);
+    }
+    #[test]
+    fn parse_weird_url_encoded_file_link() {
+        let text = "[f](%D1%84%D0%B0%D0%B9%D0%BB%20with%20%C3%A9mojis%20%F0%9F%9A%80%20%26%20symbols%20%21%23%40%24%25%26%2A%28%29%2B%3D%7B%7D%7C%5C%22%5C%5C%3A%3B%3F)".into();
+
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        let expected = vec![Reference::MDFileLink(ReferenceData {
+            reference_text: r##"файл with émojis 🚀 & symbols !#@$%&*()+={}|\"\\:;?"##.into(),
+            display_text: Some("f".into()),
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 0,
+                    character: 147,
+                },
+            }
+            .into(),
         })];
 
         assert_eq!(parsed, expected);

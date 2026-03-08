@@ -11,8 +11,8 @@ Here are some recommended links from our documentation website, <https://oxide.m
 ## Recommended Links
 
 * [What is markdown-oxide?](https://oxide.md/): An overview of our PKM features to help you determine if markdown-oxide is for you
-* [Markdown-oxide getting-started guide](https://oxide.md/Getting+Started): A guide to setting up your text editor, configuring the PKM, and using the features.
-* [Features Reference](https://oxide.md/Features): An organized list of all features
+* [Markdown-oxide getting-started guide](https://oxide.md/index#Getting+Started): A guide to setting up your text editor, configuring the PKM, and using the features.
+* [Features Reference](https://oxide.md/Features+Index): An organized list of all features
 * [Configuration Reference](https://oxide.md/Configuration): Configuration information to reference
     + [Default Config File](https://oxide.md/Configuration#Default+Config+File)
 
@@ -26,6 +26,7 @@ Set up the PKM for your text editor...
 - [VSCode](#VSCode)
 - [Zed](#Zed)
 - [Helix](#Helix)
+- [Kakoune](#Kakoune)
 
 ## Neovim
 
@@ -49,19 +50,7 @@ Set up the PKM for your text editor...
     
     </details>
     
-    - <details>
-         <summary>AUR (from source)</summary>
-    
-        ```bash
-        paru -S markdown-oxide-git
-        ```
-
-        ```bash
-        yay -S markdown-oxide-git
-        ```
-    
-    </details>
-
+    - Arch Linux: `pacman -S markdown-oxide`
     - [Mason.nvim](https://github.com/williamboman/mason.nvim) (from hosted binary)
     - Nix: `pkgs.markdown-oxide`
     - Alpine Linux: `apk add markdown-oxide`
@@ -138,34 +127,42 @@ Set up the PKM for your text editor...
         Modify your lsp `on_attach` function.
 
         ```lua
-        local function check_codelens_support()
-        local clients = vim.lsp.get_active_clients({ bufnr = 0 })
-        for _, c in ipairs(clients) do
-          if c.server_capabilities.codeLensProvider then
-            return true
+        local function codelens_supported(bufnr)
+          for _, c in ipairs(vim.lsp.get_clients({ bufnr = bufnr })) do
+            if c.server_capabilities and c.server_capabilities.codeLensProvider then
+              return true
+            end
           end
-        end
-        return false
+          return false
         end
 
-        vim.api.nvim_create_autocmd({ 'TextChanged', 'InsertLeave', 'CursorHold', 'LspAttach', 'BufEnter' }, {
-        buffer = bufnr,
-        callback = function ()
-          if check_codelens_support() then
-            vim.lsp.codelens.refresh({bufnr = 0})
-          end
+        vim.api.nvim_create_autocmd(
+          { 'TextChanged', 'InsertLeave', 'CursorHold', 'BufEnter' },
+          {
+            buffer = bufnr,
+            callback = function()
+              if codelens_supported(bufnr) then
+                vim.lsp.codelens.refresh({ bufnr = bufnr })
+              end
+            end,
+          }
+        )
+
+        if codelens_supported(bufnr) then
+          vim.lsp.codelens.refresh({ bufnr = bufnr })
         end
-        })
-        -- trigger codelens refresh
-        vim.api.nvim_exec_autocmds('User', { pattern = 'LspAttached' })
         ```
 
     </details>
 
     - <details>
-        <summary>(optional) Enable opening daily notes with natural langauge</summary>
+        <summary>(optional) Enable opening daily notes with natural language</summary>
 
-        Modify your lsp `on_attach` function to support opening daily notes with, for example, `:Daily two days ago` or `:Daily next monday`. 
+        Modify your lsp `on_attach` function to support opening daily notes with natural language and relative directives.
+
+        Examples:
+        - Natural language: `:Daily two days ago`, `:Daily next monday`
+        - Relative directives: `:Daily prev`, `:Daily next`, `:Daily +7`, `:Daily -3`
 
         ```lua
         -- setup Markdown Oxide daily note commands
@@ -217,19 +214,7 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
     
     </details>
     
-    - <details>
-         <summary>AUR (from source)</summary>
-    
-        ```bash
-        paru -S markdown-oxide-git
-        ```
-
-        ```bash
-        yay -S markdown-oxide-git
-        ```
-    
-    </details>
-    
+    - Arch Linux: `pacman -S markdown-oxide`
     - Nix: `pkgs.markdown-oxide`
     - Alpine Linux: `apk add markdown-oxide`
     - openSUSE: `zypper install markdown-oxide`
@@ -277,19 +262,7 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
     
     </details>
     
-    - <details>
-         <summary>AUR (from source)</summary>
-    
-        ```bash
-        paru -S markdown-oxide-git
-        ```
-
-        ```bash
-        yay -S markdown-oxide-git
-        ```
-    
-    </details>
-    
+    - Arch Linux: `pacman -S markdown-oxide`
     - Nix: `pkgs.markdown-oxide`
     - Alpine Linux: `apk add markdown-oxide`
     - openSUSE: `zypper install markdown-oxide`
@@ -336,19 +309,7 @@ For Helix, all you must do is install the language server's binary to your path.
     
 </details>
 
-- <details>
-     <summary>AUR (from source)</summary>
-
-    ```bash
-    paru -S markdown-oxide-git
-    ```
-
-    ```bash
-    yay -S markdown-oxide-git
-    ```
-
-</details>
-
+- Arch Linux: `pacman -S markdown-oxide`
 - Nix: `pkgs.markdown-oxide`
 - Alpine Linux: `apk add markdown-oxide`
 - openSUSE: `zypper install markdown-oxide`
@@ -371,3 +332,67 @@ For Helix, all you must do is install the language server's binary to your path.
     ```
 
 </details>
+
+## Kakoune
+
+Kakoune communicates with LSP servers through [kakoune-lsp](https://github.com/kakoune-lsp/kakoune-lsp) (binary name: `kak-lsp`). Install kakoune-lsp first if you haven't already.
+
+- Install the language server's binary to your path. The following installation methods are available:
+
+- <details>
+     <summary>Cargo Install (from source)</summary>
+
+    ```bash
+    cargo install --locked --git https://github.com/Feel-ix-343/markdown-oxide.git markdown-oxide
+    ```
+
+</details>
+
+- <details>
+    <summary>Cargo binstall (from hosted binary)</summary>
+
+    ```bash
+    cargo binstall --git 'https://github.com/feel-ix-343/markdown-oxide' markdown-oxide
+    ```
+
+</details>
+
+- Arch Linux: `pacman -S markdown-oxide`
+- Nix: `pkgs.markdown-oxide`
+- Alpine Linux: `apk add markdown-oxide`
+- openSUSE: `zypper install markdown-oxide`
+- Conda: `conda install conda-forge::markdown-oxide`
+
+- <details>
+     <summary>Winget (Windows)</summary>
+
+    ```bash
+    winget install FelixZeller.markdown-oxide
+    ```
+
+</details>
+
+- <details>
+     <summary>Homebrew (from package manager)</summary>
+
+    ```bash
+    brew install markdown-oxide
+    ```
+
+</details>
+
+- Configure kakoune-lsp to use markdown-oxide. Add the following to your `kakrc` (requires kakoune-lsp v17+):
+
+    ```kak
+    eval %sh{kak-lsp}
+    lsp-enable
+
+    hook -group lsp-filetype-markdown global BufSetOption filetype=markdown %{
+        set-option buffer lsp_servers %{
+            [markdown-oxide]
+            root_globs = [".obsidian", ".moxide.toml"]
+        }
+    }
+    ```
+
+    If you are using the older `kak-lsp.toml` configuration method, refer to the [kakoune-lsp wiki](https://github.com/kakoune-lsp/kakoune-lsp/wiki/How-to-install-servers) for setup instructions.
