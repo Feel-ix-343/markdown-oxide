@@ -32,7 +32,7 @@ impl MDMetadata {
         let comment_match = COMMENT_RE
             .captures_iter(metadata_str)
             .filter_map(|c| c.name("comment"))
-            .map(|i| i.as_str().into())
+            .map(|i| i.as_str().trim().to_string())
             .collect::<Vec<_>>();
 
         match md_metadata {
