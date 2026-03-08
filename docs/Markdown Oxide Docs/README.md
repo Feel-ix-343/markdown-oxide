@@ -50,12 +50,17 @@ Set up the PKM for your text editor...
     
     </details>
     
-    - Arch Linux: `pacman -S markdown-oxide`
-    - [Mason.nvim](https://github.com/williamboman/mason.nvim) (from hosted binary)
-    - Nix: `pkgs.markdown-oxide`
-    - Alpine Linux: `apk add markdown-oxide`
-    - openSUSE: `zypper install markdown-oxide`
-    - Conda: `conda install conda-forge::markdown-oxide`
+    - <details>
+         <summary>Package Managers</summary>
+
+        - Arch Linux: `pacman -S markdown-oxide`
+        - [Mason.nvim](https://github.com/williamboman/mason.nvim) (from hosted binary)
+        - Nix: `pkgs.markdown-oxide`
+        - Alpine Linux: `apk add markdown-oxide`
+        - openSUSE: `zypper install markdown-oxide`
+        - Conda: `conda install conda-forge::markdown-oxide`
+
+    </details>
     
     - <details>
          <summary>Winget (Windows)</summary>
@@ -265,11 +270,16 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
     
     </details>
     
-    - Arch Linux: `pacman -S markdown-oxide`
-    - Nix: `pkgs.markdown-oxide`
-    - Alpine Linux: `apk add markdown-oxide`
-    - openSUSE: `zypper install markdown-oxide`
-    - Conda: `conda install conda-forge::markdown-oxide`
+    - <details>
+         <summary>Package Managers</summary>
+
+        - Arch Linux: `pacman -S markdown-oxide`
+        - Nix: `pkgs.markdown-oxide`
+        - Alpine Linux: `apk add markdown-oxide`
+        - openSUSE: `zypper install markdown-oxide`
+        - Conda: `conda install conda-forge::markdown-oxide`
+
+    </details>
     
     - <details>
          <summary>Winget (Windows)</summary>
@@ -313,11 +323,16 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
     
     </details>
     
-    - Arch Linux: `pacman -S markdown-oxide`
-    - Nix: `pkgs.markdown-oxide`
-    - Alpine Linux: `apk add markdown-oxide`
-    - openSUSE: `zypper install markdown-oxide`
-    - Conda: `conda install conda-forge::markdown-oxide`
+    - <details>
+         <summary>Package Managers</summary>
+
+        - Arch Linux: `pacman -S markdown-oxide`
+        - Nix: `pkgs.markdown-oxide`
+        - Alpine Linux: `apk add markdown-oxide`
+        - openSUSE: `zypper install markdown-oxide`
+        - Conda: `conda install conda-forge::markdown-oxide`
+
+    </details>
     
     - <details>
          <summary>Winget (Windows)</summary>
@@ -360,11 +375,16 @@ For Helix, all you must do is install the language server's binary to your path.
     
 </details>
 
-- Arch Linux: `pacman -S markdown-oxide`
-- Nix: `pkgs.markdown-oxide`
-- Alpine Linux: `apk add markdown-oxide`
-- openSUSE: `zypper install markdown-oxide`
-- Conda: `conda install conda-forge::markdown-oxide`
+- <details>
+     <summary>Package Managers</summary>
+
+    - Arch Linux: `pacman -S markdown-oxide`
+    - Nix: `pkgs.markdown-oxide`
+    - Alpine Linux: `apk add markdown-oxide`
+    - openSUSE: `zypper install markdown-oxide`
+    - Conda: `conda install conda-forge::markdown-oxide`
+
+</details>
 
 - <details>
      <summary>Winget (Windows)</summary>
@@ -408,11 +428,16 @@ Kakoune communicates with LSP servers through [kakoune-lsp](https://github.com/k
 
 </details>
 
-- Arch Linux: `pacman -S markdown-oxide`
-- Nix: `pkgs.markdown-oxide`
-- Alpine Linux: `apk add markdown-oxide`
-- openSUSE: `zypper install markdown-oxide`
-- Conda: `conda install conda-forge::markdown-oxide`
+- <details>
+     <summary>Package Managers</summary>
+
+    - Arch Linux: `pacman -S markdown-oxide`
+    - Nix: `pkgs.markdown-oxide`
+    - Alpine Linux: `apk add markdown-oxide`
+    - openSUSE: `zypper install markdown-oxide`
+    - Conda: `conda install conda-forge::markdown-oxide`
+
+</details>
 
 - <details>
      <summary>Winget (Windows)</summary>
