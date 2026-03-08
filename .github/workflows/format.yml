@@ -22,4 +22,4 @@ jobs:
         override: true
         rustflags: ""
     - name: Rustfmt Check
-      uses: actions-rust-lang/rustfmt@v1
+      run: cargo fmt --all -- --check
