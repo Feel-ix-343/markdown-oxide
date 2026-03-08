@@ -1,0 +1,53 @@
+name: Trigger Devin on Issue Label
+
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  trigger-devin:
+    if: github.event.label.name == 'devin'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Devin session
+        id: create-session
+        run: |
+          ISSUE_TITLE="${{ github.event.issue.title }}"
+          ISSUE_URL="${{ github.event.issue.html_url }}"
+          ISSUE_BODY=$(jq -r '.issue.body // ""' "$GITHUB_EVENT_PATH" | head -c 10000)
+
+          PROMPT="Please read this GitHub issue and work on it: ${ISSUE_URL}
+
+          Issue title: ${ISSUE_TITLE}
+
+          Issue body:
+          ${ISSUE_BODY}"
+
+          RESPONSE=$(curl -s -X POST "https://api.devin.ai/v1/sessions" \
+            -H "Authorization: Bearer ${{ secrets.DEVIN_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n --arg prompt "$PROMPT" '{prompt: $prompt}')")
+
+          SESSION_URL=$(echo "$RESPONSE" | jq -r '.url // empty')
+          SESSION_ID=$(echo "$RESPONSE" | jq -r '.session_id // empty')
+
+          if [ -z "$SESSION_URL" ]; then
+            echo "Error creating Devin session:"
+            echo "$RESPONSE"
+            exit 1
+          fi
+
+          echo "session_url=$SESSION_URL" >> "$GITHUB_OUTPUT"
+          echo "session_id=$SESSION_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Comment on issue with session link
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sessionUrl = '${{ steps.create-session.outputs.session_url }}';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `🤖 Devin session started for this issue!\n\n[View Devin session](${sessionUrl})`
+            });
