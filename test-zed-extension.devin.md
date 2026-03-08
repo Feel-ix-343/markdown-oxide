@@ -2,7 +2,7 @@
 
 ## Outcome
 
-Verify that the markdown-oxide Zed extension works correctly by installing Zed, building the markdown-oxide binary, installing the extension, and testing LSP features (completions, go-to-definition, hover, tags) against the `TestFiles/` directory.
+Verify that the markdown-oxide Zed extension works correctly by installing Zed, building the markdown-oxide binary, installing the extension, and testing LSP features (completions, go-to-definition, hover, tags) against the `TestFiles/` directory. Testing is done in two recorded phases: first reproduce/demonstrate the current behavior, then validate the fix or expected behavior.
 
 ## Procedure
 
@@ -60,7 +60,26 @@ Verify the LSP process is running: `pgrep -a markdown-oxide`
 
 ### 6. Test LSP features
 
-Open `TestFiles/Test.md` and start a screen recording. Test each feature:
+Open `TestFiles/Test.md`. Testing is split into two recorded phases:
+
+#### Phase 1: Reproduce current behavior
+
+Start a screen recording (`recording_start`). Demonstrate the current state of each feature **before any fix**. This establishes a baseline and captures any issues:
+
+- Annotate the recording: "Phase 1: Reproducing current behavior in Zed"
+- Exercise each feature below and note what works and what doesn't
+- Stop the recording (`recording_stop`) when done
+
+#### Phase 2: Validate the fix
+
+After applying the fix (rebuild markdown-oxide, copy to PATH, restart LSP in Zed via `Ctrl+Shift+P` → `editor: restart language server`):
+
+- Start a new screen recording (`recording_start`)
+- Annotate the recording: "Phase 2: Validating fix in Zed"
+- Re-test each feature and confirm it works correctly
+- Stop the recording (`recording_stop`) when done
+
+Test each feature:
 
 #### Wiki Link Completions
 - Go to the end of the file, add a new line, and type `[[`
@@ -90,9 +109,23 @@ Open `TestFiles/Test.md` and start a screen recording. Test each feature:
 - Place cursor on a heading like `# Heading 1`
 - Press `Shift+F12` to find all references/backlinks
 
-### 7. Clean up
+### 7. Post recordings to PR
 
-Undo any test edits in the files. Stop the recording and report results.
+After both recording phases are complete, post the recordings as comments on the PR:
+
+1. Use `git_comment_on_pr` to post the Phase 1 recording with a comment like:
+   > **Phase 1: Reproducing current behavior in Zed**
+   > ![Phase 1 recording](/path/to/phase1-recording.mp4)
+
+2. Use `git_comment_on_pr` to post the Phase 2 recording with a comment like:
+   > **Phase 2: Validating fix in Zed**
+   > ![Phase 2 recording](/path/to/phase2-recording.mp4)
+
+This provides reviewers with visual evidence of the issue and its resolution.
+
+### 8. Clean up
+
+Undo any test edits in the files. Report results to the user.
 
 ## Specifications
 
@@ -100,6 +133,8 @@ Undo any test edits in the files. Stop the recording and report results.
 - The LSP server process (`markdown-oxide`) must be running (verify with `pgrep`)
 - Completions should include a preview panel showing content and backlinks
 - Go-to-definition should navigate to the correct target file
+- Two screen recordings must be produced: one showing current behavior (reproduce), one showing the fix (validate)
+- Both recordings must be posted as comments on the PR
 
 ## Advice
 
