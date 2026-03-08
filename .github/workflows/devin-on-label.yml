@@ -12,8 +12,8 @@ jobs:
       - name: Create Devin session
         id: create-session
         run: |
-          ISSUE_TITLE="${{ github.event.issue.title }}"
-          ISSUE_URL="${{ github.event.issue.html_url }}"
+          ISSUE_TITLE=$(jq -r '.issue.title // ""' "$GITHUB_EVENT_PATH")
+          ISSUE_URL=$(jq -r '.issue.html_url // ""' "$GITHUB_EVENT_PATH")
           ISSUE_BODY=$(jq -r '.issue.body // ""' "$GITHUB_EVENT_PATH" | head -c 10000)
 
           PROMPT="Please read this GitHub issue and work on it: ${ISSUE_URL}
