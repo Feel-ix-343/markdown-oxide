@@ -50,6 +50,29 @@ fn parse_relative_directive(input: &str) -> Option<i64> {
     }
 }
 
+/// Normalize "next <weekday>" to just "<weekday>" to work around a fuzzydate bug
+/// where "next monday" skips to the Monday after the upcoming one instead of
+/// the nearest upcoming Monday. See: https://github.com/Feel-ix-343/markdown-oxide/issues/335
+fn normalize_fuzzydate_input(input: &str) -> &str {
+    const WEEKDAYS: &[&str] = &[
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+    ];
+
+    let lower = input.trim();
+    if let Some(day) = lower.strip_prefix("next ") {
+        if WEEKDAYS.iter().any(|wd| day.eq_ignore_ascii_case(wd)) {
+            return day;
+        }
+    }
+    input
+}
+
 pub async fn jump(
     client: &tower_lsp::Client,
     root_dir: &Path,
@@ -72,7 +95,8 @@ pub async fn jump(
 
                 target_date.and_then(|date| date_to_file(date, daily_note_format, &daily_note_path))
             } else {
-                parse(jmp_str)
+                let normalized = normalize_fuzzydate_input(jmp_str);
+                parse(normalized)
                     .ok()
                     .and_then(|dt| datetime_to_file(dt, daily_note_format, &daily_note_path))
             }
@@ -119,7 +143,10 @@ mod tests {
     use chrono::NaiveDate;
     use fuzzydate::parse;
 
-    use super::{datetime_to_file, extract_date_from_filename, parse_relative_directive};
+    use super::{
+        datetime_to_file, extract_date_from_filename, normalize_fuzzydate_input,
+        parse_relative_directive,
+    };
 
     #[test]
     fn test_string_to_file() {
@@ -170,6 +197,20 @@ mod tests {
         assert_eq!(parse_relative_directive("invalid"), None);
         assert_eq!(parse_relative_directive("next monday"), None);
         assert_eq!(parse_relative_directive(""), None);
+    }
+
+    #[test]
+    fn test_normalize_fuzzydate_input() {
+        assert_eq!(normalize_fuzzydate_input("next monday"), "monday");
+        assert_eq!(normalize_fuzzydate_input("next tuesday"), "tuesday");
+        assert_eq!(normalize_fuzzydate_input("next Friday"), "Friday");
+        assert_eq!(normalize_fuzzydate_input("next SUNDAY"), "SUNDAY");
+        // Non-weekday inputs should pass through unchanged
+        assert_eq!(normalize_fuzzydate_input("today"), "today");
+        assert_eq!(normalize_fuzzydate_input("yesterday"), "yesterday");
+        assert_eq!(normalize_fuzzydate_input("last monday"), "last monday");
+        assert_eq!(normalize_fuzzydate_input("next week"), "next week");
+        assert_eq!(normalize_fuzzydate_input("two days ago"), "two days ago");
     }
 
     #[test]
