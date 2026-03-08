@@ -697,9 +697,15 @@ impl LanguageServer for Backend {
                     .await?;
                 commands::jump(&self.client, &root_dir, &settings, jump_to).await
             }
-            ExecuteCommandParams { command, .. } => {
+            ExecuteCommandParams { command, .. } if is_date_command(&command) => {
                 jump_to_specific(&command, &self.client, &root_dir, &settings).await
-            } // _ => Ok(None),
+            }
+            ExecuteCommandParams { command, .. } => {
+                self.client
+                    .log_message(MessageType::WARNING, format!("Unknown command: {command}"))
+                    .await;
+                Ok(None)
+            }
         }
     }
 
@@ -878,6 +884,31 @@ impl LanguageServer for Backend {
 
         hints
     }
+}
+
+/// The set of date-string commands registered in `executeCommandProvider`.
+const DATE_COMMANDS: &[&str] = &[
+    "tomorrow",
+    "today",
+    "yesterday",
+    "last friday",
+    "last saturday",
+    "last sunday",
+    "last monday",
+    "last tuesday",
+    "last wednesday",
+    "last thursday",
+    "next friday",
+    "next saturday",
+    "next sunday",
+    "next monday",
+    "next tuesday",
+    "next wednesday",
+    "next thursday",
+];
+
+fn is_date_command(command: &str) -> bool {
+    DATE_COMMANDS.contains(&command)
 }
 
 async fn jump_to_specific(
