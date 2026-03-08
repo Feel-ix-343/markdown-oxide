@@ -31,7 +31,12 @@ Set up the PKM for your text editor...
 ## Neovim
 
 - Give Neovim access to the binary.
-
+    - Arch Linux: `pacman -S markdown-oxide`
+    - [Mason.nvim](https://github.com/williamboman/mason.nvim) (from hosted binary)
+    - Nix: `pkgs.markdown-oxide`
+    - Alpine Linux: `apk add markdown-oxide`
+    - openSUSE: `zypper install markdown-oxide`
+    - Conda: `conda install conda-forge::markdown-oxide`
     - <details>
          <summary>Cargo Install (from source)</summary>
     
@@ -40,7 +45,6 @@ Set up the PKM for your text editor...
         ```
     
     </details>
-
     - <details>
          <summary>Cargo binstall (from hosted binary)</summary>
     
@@ -49,19 +53,6 @@ Set up the PKM for your text editor...
         ```
     
     </details>
-    
-    - <details>
-         <summary>Package Managers</summary>
-
-        - Arch Linux: `pacman -S markdown-oxide`
-        - [Mason.nvim](https://github.com/williamboman/mason.nvim) (from hosted binary)
-        - Nix: `pkgs.markdown-oxide`
-        - Alpine Linux: `apk add markdown-oxide`
-        - openSUSE: `zypper install markdown-oxide`
-        - Conda: `conda install conda-forge::markdown-oxide`
-
-    </details>
-    
     - <details>
          <summary>Winget (Windows)</summary>
     
@@ -70,7 +61,6 @@ Set up the PKM for your text editor...
         ```
     
     </details>
-    
     - <details>
          <summary>Homebrew (from package manager)</summary>
     
@@ -251,7 +241,11 @@ Set up the PKM for your text editor...
 Install the [vscode extension](https://marketplace.visualstudio.com/items?itemName=FelixZeller.markdown-oxide) (called `Markdown Oxide`). As for how the extension uses the language server, there are two options
 - Recommended: the extension will download the server's binary and use that
 - The extension will use `markdown-oxide` from path. To install to your path, there are the following methods for VSCode:
-
+    - Arch Linux: `pacman -S markdown-oxide`
+    - Nix: `pkgs.markdown-oxide`
+    - Alpine Linux: `apk add markdown-oxide`
+    - openSUSE: `zypper install markdown-oxide`
+    - Conda: `conda install conda-forge::markdown-oxide`
     - <details>
          <summary>Cargo Install (from source)</summary>
     
@@ -260,7 +254,6 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
         ```
     
     </details>
-
     - <details>
          <summary>Cargo binstall[1] (from hosted binary)</summary>
     
@@ -269,18 +262,6 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
         ```
     
     </details>
-    
-    - <details>
-         <summary>Package Managers</summary>
-
-        - Arch Linux: `pacman -S markdown-oxide`
-        - Nix: `pkgs.markdown-oxide`
-        - Alpine Linux: `apk add markdown-oxide`
-        - openSUSE: `zypper install markdown-oxide`
-        - Conda: `conda install conda-forge::markdown-oxide`
-
-    </details>
-    
     - <details>
          <summary>Winget (Windows)</summary>
     
@@ -289,7 +270,6 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
         ```
     
     </details>
-    
     - <details>
          <summary>Homebrew (from package manager)</summary>
     
@@ -304,7 +284,11 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
 Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly to VSCode, there are two methods for this extension to access the language server
 - Recommended: the extension will download the server's binary and use that
 - The extension will use `markdown-oxide` from path. To install to your path, there are the following methods for Zed:
-
+    - Arch Linux: `pacman -S markdown-oxide`
+    - Nix: `pkgs.markdown-oxide`
+    - Alpine Linux: `apk add markdown-oxide`
+    - openSUSE: `zypper install markdown-oxide`
+    - Conda: `conda install conda-forge::markdown-oxide`
     - <details>
          <summary>Cargo Install (from source)</summary>
     
@@ -313,7 +297,6 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
         ```
     
     </details>
-
     - <details>
          <summary>Cargo binstall[1] (from hosted binary)</summary>
     
@@ -322,18 +305,6 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
         ```
     
     </details>
-    
-    - <details>
-         <summary>Package Managers</summary>
-
-        - Arch Linux: `pacman -S markdown-oxide`
-        - Nix: `pkgs.markdown-oxide`
-        - Alpine Linux: `apk add markdown-oxide`
-        - openSUSE: `zypper install markdown-oxide`
-        - Conda: `conda install conda-forge::markdown-oxide`
-
-    </details>
-    
     - <details>
          <summary>Winget (Windows)</summary>
     
@@ -342,7 +313,6 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
         ```
     
     </details>
-    
     - <details>
          <summary>Homebrew (from package manager)</summary>
     
@@ -357,6 +327,11 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
 ## Helix
 
 For Helix, all you must do is install the language server's binary to your path. The following installation methods are available:
+- Arch Linux: `pacman -S markdown-oxide`
+- Nix: `pkgs.markdown-oxide`
+- Alpine Linux: `apk add markdown-oxide`
+- openSUSE: `zypper install markdown-oxide`
+- Conda: `conda install conda-forge::markdown-oxide`
 - <details>
      <summary>Cargo Install (from source)</summary>
 
@@ -365,7 +340,6 @@ For Helix, all you must do is install the language server's binary to your path.
     ```
 
 </details>
-
 - <details>
     <summary>Cargo binstall[1] (from hosted binary)</summary>
     
@@ -374,18 +348,6 @@ For Helix, all you must do is install the language server's binary to your path.
     ```
     
 </details>
-
-- <details>
-     <summary>Package Managers</summary>
-
-    - Arch Linux: `pacman -S markdown-oxide`
-    - Nix: `pkgs.markdown-oxide`
-    - Alpine Linux: `apk add markdown-oxide`
-    - openSUSE: `zypper install markdown-oxide`
-    - Conda: `conda install conda-forge::markdown-oxide`
-
-</details>
-
 - <details>
      <summary>Winget (Windows)</summary>
 
@@ -394,7 +356,6 @@ For Helix, all you must do is install the language server's binary to your path.
     ```
 
 </details>
-
 - <details>
      <summary>Homebrew (from package manager)</summary>
 
@@ -409,6 +370,11 @@ For Helix, all you must do is install the language server's binary to your path.
 Kakoune communicates with LSP servers through [kakoune-lsp](https://github.com/kakoune-lsp/kakoune-lsp) (binary name: `kak-lsp`). Install kakoune-lsp first if you haven't already.
 
 - Install the language server's binary to your path. The following installation methods are available:
+    - Arch Linux: `pacman -S markdown-oxide`
+    - Nix: `pkgs.markdown-oxide`
+    - Alpine Linux: `apk add markdown-oxide`
+    - openSUSE: `zypper install markdown-oxide`
+    - Conda: `conda install conda-forge::markdown-oxide`
 
 - <details>
      <summary>Cargo Install (from source)</summary>
@@ -418,7 +384,6 @@ Kakoune communicates with LSP servers through [kakoune-lsp](https://github.com/k
     ```
 
 </details>
-
 - <details>
     <summary>Cargo binstall (from hosted binary)</summary>
 
@@ -427,18 +392,6 @@ Kakoune communicates with LSP servers through [kakoune-lsp](https://github.com/k
     ```
 
 </details>
-
-- <details>
-     <summary>Package Managers</summary>
-
-    - Arch Linux: `pacman -S markdown-oxide`
-    - Nix: `pkgs.markdown-oxide`
-    - Alpine Linux: `apk add markdown-oxide`
-    - openSUSE: `zypper install markdown-oxide`
-    - Conda: `conda install conda-forge::markdown-oxide`
-
-</details>
-
 - <details>
      <summary>Winget (Windows)</summary>
 
@@ -447,7 +400,6 @@ Kakoune communicates with LSP servers through [kakoune-lsp](https://github.com/k
     ```
 
 </details>
-
 - <details>
      <summary>Homebrew (from package manager)</summary>
 
