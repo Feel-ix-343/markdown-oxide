@@ -64,8 +64,9 @@ fn normalize_fuzzydate_input(input: &str) -> &str {
         "sunday",
     ];
 
-    let lower = input.trim();
-    if let Some(day) = lower.strip_prefix("next ") {
+    let trimmed = input.trim();
+    if trimmed.len() > 5 && trimmed[..5].eq_ignore_ascii_case("next ") {
+        let day = &trimmed[5..];
         if WEEKDAYS.iter().any(|wd| day.eq_ignore_ascii_case(wd)) {
             return day;
         }
@@ -205,6 +206,9 @@ mod tests {
         assert_eq!(normalize_fuzzydate_input("next tuesday"), "tuesday");
         assert_eq!(normalize_fuzzydate_input("next Friday"), "Friday");
         assert_eq!(normalize_fuzzydate_input("next SUNDAY"), "SUNDAY");
+        // Case-insensitive prefix matching
+        assert_eq!(normalize_fuzzydate_input("Next Monday"), "Monday");
+        assert_eq!(normalize_fuzzydate_input("NEXT wednesday"), "wednesday");
         // Non-weekday inputs should pass through unchanged
         assert_eq!(normalize_fuzzydate_input("today"), "today");
         assert_eq!(normalize_fuzzydate_input("yesterday"), "yesterday");
