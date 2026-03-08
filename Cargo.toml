@@ -9,6 +9,7 @@ repository = "https://github.com/Feel-ix-343/markdown-oxide"
 [dependencies]
 anyhow = "1.0.80"
 chrono = "0.4.35"
+clap = { version = "4.5", features = ["derive"] }
 config = "0.14.0"
 fuzzydate = "0.2.3"
 indexmap = "2.2.6"
