@@ -166,13 +166,13 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                     })
                 }
                 Reference::MDFileLink(data) if matches!(referenceable, Referenceable::File(..)) => {
+                    let new_path = replace_filename_in_path(&data.reference_text, &new_ref_name);
+                    let encoded_path = encode_md_link_path(&new_path);
+
                     let new_text = format!(
-                        "[{}]({})",
-                        data.display_text
-                            .as_ref()
-                            .map(|text| format!("|{text}"))
-                            .unwrap_or_else(|| String::from("")),
-                        new_ref_name,
+                        "[{}]({}.md)",
+                        data.display_text.as_deref().unwrap_or(""),
+                        encoded_path,
                     );
 
                     Some(TextDocumentEdit {
@@ -188,17 +188,17 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                     })
                 }
 
-                Reference::MDHeadingLink(data, _file, infile)
-                | Reference::MDIndexedBlockLink(data, _file, infile)
+                Reference::MDHeadingLink(data, file_ref, infile)
+                | Reference::MDIndexedBlockLink(data, file_ref, infile)
                     if matches!(referenceable, Referenceable::File(..)) =>
                 {
+                    let new_path = replace_filename_in_path(file_ref, &new_ref_name);
+                    let encoded_path = encode_md_link_path(&new_path);
+
                     let new_text = format!(
-                        "[{}]({}#{})",
-                        data.display_text
-                            .as_ref()
-                            .map(|text| format!("|{text}"))
-                            .unwrap_or_else(|| String::from("")),
-                        new_ref_name,
+                        "[{}]({}.md#{})",
+                        data.display_text.as_deref().unwrap_or(""),
+                        encoded_path,
                         infile,
                     );
 
@@ -258,4 +258,24 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
         )),
         ..Default::default()
     })
+}
+
+/// URL-encode each segment of a path for use in markdown links,
+/// preserving `/` separators.
+fn encode_md_link_path(path: &str) -> String {
+    path.split('/')
+        .map(|segment| urlencoding::encode(segment))
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+/// Replace the filename (last path component) in a reference path with a new name,
+/// preserving the directory structure.
+/// e.g. `./🌀 General/Lorem Ipsum` + `Hello World` => `./🌀 General/Hello World`
+fn replace_filename_in_path(reference_text: &str, new_name: &str) -> String {
+    if let Some(pos) = reference_text.rfind('/') {
+        format!("{}/{}", &reference_text[..pos], new_name)
+    } else {
+        new_name.to_string()
+    }
 }
