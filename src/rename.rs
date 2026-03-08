@@ -9,7 +9,12 @@ use tower_lsp::lsp_types::{
 use crate::config::{LinkFormat, Settings};
 use crate::vault::{get_obsidian_ref_path, Reference, Referenceable, Vault};
 
-pub fn rename(vault: &Vault, params: &RenameParams, path: &Path, settings: &Settings) -> Option<WorkspaceEdit> {
+pub fn rename(
+    vault: &Vault,
+    params: &RenameParams,
+    path: &Path,
+    settings: &Settings,
+) -> Option<WorkspaceEdit> {
     let position = params.text_document_position.position;
     let referenceable = vault.select_referenceable_at_position(path, position)?;
 
@@ -30,9 +35,7 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path, settings: &Sett
                 });
 
                 let file_path = match settings.link_format {
-                    LinkFormat::Absolute => {
-                        get_obsidian_ref_path(vault.root_dir(), path)?
-                    }
+                    LinkFormat::Absolute => get_obsidian_ref_path(vault.root_dir(), path)?,
                     _ => path.file_stem()?.to_string_lossy().to_string(),
                 };
                 let name = format!("{}#{}", file_path, params.new_name);
