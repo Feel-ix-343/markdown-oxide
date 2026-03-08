@@ -629,11 +629,34 @@ impl MDFile {
         };
         let metadata = MDMetadata::new(text);
 
+        // Parse frontmatter tags and add them to both tags and references
+        let frontmatter_tags = metadata
+            .as_ref()
+            .map(|m| MDTag::from_frontmatter(text, m))
+            .unwrap_or_default();
+
+        let frontmatter_tag_refs: Vec<Reference> = frontmatter_tags
+            .iter()
+            .map(|tag| {
+                Tag(ReferenceData {
+                    display_text: None,
+                    range: tag.range,
+                    reference_text: format!("#{}", tag.tag_ref),
+                })
+            })
+            .collect();
+
+        let mut all_tags = tags;
+        all_tags.extend(frontmatter_tags);
+
+        let mut all_links = links;
+        all_links.extend(frontmatter_tag_refs);
+
         MDFile {
-            references: links,
+            references: all_links,
             headings: headings.collect(),
             indexed_blocks: indexed_blocks.collect(),
-            tags,
+            tags: all_tags,
             footnotes: footnotes.collect(),
             path,
             link_reference_definitions: link_refs.collect(),
@@ -1292,11 +1315,11 @@ impl MDTag {
                     (?<tag>
                         # First character of the tag:
                         # Cannot be a digit. Can be letters (Unicode), underscore, hyphen, slash, or various quotes.
-                        [\p{L}_/'"‘’“”-]
+                        [\p{L}_/'"''""-]
         
                         # Subsequent characters of the tag:
                         # Can be letters (Unicode), digits, underscore, hyphen, slash, or various quotes.
-                        [\p{L}0-9_/'"‘’“”-]*
+                        [\p{L}0-9_/'"''""-]*
                     )
                 )
     "#).unwrap()
@@ -1315,6 +1338,51 @@ impl MDTag {
             });
 
         tagged_blocks
+    }
+
+    /// Creates MDTag instances from frontmatter metadata tags.
+    /// Searches for each tag string in the frontmatter section of the text to compute accurate ranges.
+    fn from_frontmatter(text: &str, metadata: &MDMetadata) -> Vec<MDTag> {
+        static FRONTMATTER_RE: Lazy<Regex> =
+            Lazy::new(|| Regex::new(r"^---\n(?<metadata>(\n|.)*?)\n---").unwrap());
+
+        let frontmatter_tags = metadata.tags();
+        if frontmatter_tags.is_empty() {
+            return Vec::new();
+        }
+
+        let frontmatter_match = match FRONTMATTER_RE
+            .captures_iter(text)
+            .next()
+            .and_then(|c| c.name("metadata"))
+        {
+            Some(m) => m,
+            None => return Vec::new(),
+        };
+
+        let rope = Rope::from_str(text);
+        let frontmatter_str = frontmatter_match.as_str();
+        let frontmatter_start = frontmatter_match.start();
+
+        let mut tags = Vec::new();
+        // Track search offset within the frontmatter to handle duplicate tag values
+        let mut search_offset = 0;
+
+        for tag_str in frontmatter_tags {
+            // Find the tag value within the frontmatter text, starting from search_offset
+            if let Some(pos) = frontmatter_str[search_offset..].find(tag_str.as_str()) {
+                let abs_start = frontmatter_start + search_offset + pos;
+                let abs_end = abs_start + tag_str.len();
+                tags.push(MDTag {
+                    tag_ref: tag_str.clone(),
+                    range: MyRange::from_range(&rope, abs_start..abs_end),
+                });
+                // Advance search_offset past this match
+                search_offset += pos + tag_str.len();
+            }
+        }
+
+        tags
     }
 }
 
@@ -2798,6 +2866,76 @@ Continued
 
         assert_eq!(parsed, expected);
     }
+    #[test]
+    fn test_frontmatter_tags_block_list() {
+        let text = r"---
+tags:
+  - foo
+  - bar
+---
+
+Some content here";
+
+        let metadata = crate::vault::metadata::MDMetadata::new(text).unwrap();
+        let tags = MDTag::from_frontmatter(text, &metadata);
+
+        assert_eq!(tags.len(), 2);
+        assert_eq!(tags[0].tag_ref, "foo");
+        assert_eq!(tags[1].tag_ref, "bar");
+        // Verify ranges point to the correct lines in frontmatter
+        assert_eq!(tags[0].range.start.line, 2);
+        assert_eq!(tags[1].range.start.line, 3);
+    }
+
+    #[test]
+    fn test_frontmatter_tags_inline_list() {
+        let text = "---\ntags: [foo, bar]\n---\n\nSome content";
+
+        let metadata = crate::vault::metadata::MDMetadata::new(text).unwrap();
+        let tags = MDTag::from_frontmatter(text, &metadata);
+
+        assert_eq!(tags.len(), 2);
+        assert_eq!(tags[0].tag_ref, "foo");
+        assert_eq!(tags[1].tag_ref, "bar");
+    }
+
+    #[test]
+    fn test_frontmatter_tags_single_string() {
+        let text = "---\ntags: mytag\n---\n\nSome content";
+
+        let metadata = crate::vault::metadata::MDMetadata::new(text).unwrap();
+        let tags = MDTag::from_frontmatter(text, &metadata);
+
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0].tag_ref, "mytag");
+    }
+
+    #[test]
+    fn test_frontmatter_tags_not_duplicated_with_body_tags() {
+        // Frontmatter tags and body #tags should both be captured independently
+        let text = "---\ntags: [foo]\n---\n\nSome #bar content";
+
+        let metadata = crate::vault::metadata::MDMetadata::new(text).unwrap();
+        let frontmatter_tags = MDTag::from_frontmatter(text, &metadata);
+        let body_tags: Vec<MDTag> = MDTag::new(text).collect();
+
+        assert_eq!(frontmatter_tags.len(), 1);
+        assert_eq!(frontmatter_tags[0].tag_ref, "foo");
+
+        // Body should have #bar (and possibly #tags from frontmatter line matched by regex)
+        assert!(body_tags.iter().any(|t| t.tag_ref == "bar"));
+    }
+
+    #[test]
+    fn test_frontmatter_no_tags() {
+        let text = "---\naliases: [a1]\n---\n\nSome content";
+
+        let metadata = crate::vault::metadata::MDMetadata::new(text).unwrap();
+        let tags = MDTag::from_frontmatter(text, &metadata);
+
+        assert!(tags.is_empty());
+    }
+
     #[test]
     fn parse_weird_url_encoded_file_link() {
         let text = "[f](%D1%84%D0%B0%D0%B9%D0%BB%20with%20%C3%A9mojis%20%F0%9F%9A%80%20%26%20symbols%20%21%23%40%24%25%26%2A%28%29%2B%3D%7B%7D%7C%5C%22%5C%5C%3A%3B%3F)".into();
