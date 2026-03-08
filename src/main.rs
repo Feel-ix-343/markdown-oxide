@@ -54,7 +54,7 @@ struct TextDocumentItem {
 impl Backend {
     async fn update_vault(&self, params: TextDocumentItem) {
         self.client
-            .log_message(MessageType::WARNING, "Update Vault Started")
+            .log_message(MessageType::LOG, "Update Vault Started")
             .await;
 
         let Ok(path) = params.uri.to_file_path() else {
@@ -79,7 +79,7 @@ impl Backend {
         drop(guard);
 
         self.client
-            .log_message(MessageType::WARNING, "Update Vault Done")
+            .log_message(MessageType::LOG, "Update Vault Done")
             .await;
 
         match self.publish_diagnostics().await {
@@ -135,7 +135,7 @@ impl Backend {
         if elapsed.as_millis() > 10 {
             self.client
                 .log_message(
-                    MessageType::WARNING,
+                    MessageType::LOG,
                     format!("Vault Construction took {}ms", elapsed.as_millis()),
                 )
                 .await;
@@ -165,7 +165,7 @@ impl Backend {
         let timer = std::time::Instant::now();
 
         self.client
-            .log_message(MessageType::WARNING, "Diagnostics Started")
+            .log_message(MessageType::LOG, "Diagnostics Started")
             .await;
 
         let uris = self
@@ -198,14 +198,14 @@ impl Backend {
         }
 
         self.client
-            .log_message(MessageType::WARNING, "Diagnostics Done")
+            .log_message(MessageType::LOG, "Diagnostics Done")
             .await;
 
         let elapsed = timer.elapsed();
 
         self.client
             .log_message(
-                MessageType::WARNING,
+                MessageType::LOG,
                 format!("Diagnostics Done took {}ms", elapsed.as_millis()),
             )
             .await;
@@ -241,7 +241,7 @@ impl Backend {
                 .await;
         } else {
             self.client
-                .log_message(MessageType::ERROR, "VAULT Lock is good")
+                .log_message(MessageType::LOG, "VAULT Lock is good")
                 .await;
         }
 
@@ -283,7 +283,7 @@ impl Backend {
                 .await;
         } else {
             self.client
-                .log_message(MessageType::ERROR, "FILES Lock is good")
+                .log_message(MessageType::LOG, "FILES Lock is good")
                 .await;
         }
 
@@ -295,11 +295,21 @@ impl Backend {
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(&self, i: InitializeParams) -> Result<InitializeResult> {
-        let root_dir = match i.root_uri {
-            Some(uri) => uri
-                .to_file_path()
-                .or(Err(Error::new(ErrorCode::InvalidParams)))?,
-            None => std::env::current_dir().or(Err(Error::new(ErrorCode::InvalidParams)))?,
+        // Try root_uri first, then workspace_folders, then fall back to current_dir
+        let root_dir = if let Some(ref uri) = i.root_uri {
+            uri.to_file_path()
+                .or(Err(Error::new(ErrorCode::InvalidParams)))?
+        } else if let Some(ref folders) = i.workspace_folders {
+            if let Some(folder) = folders.iter().next() {
+                folder
+                    .uri
+                    .to_file_path()
+                    .or(Err(Error::new(ErrorCode::InvalidParams)))?
+            } else {
+                std::env::current_dir().or(Err(Error::new(ErrorCode::InvalidParams)))?
+            }
+        } else {
+            std::env::current_dir().or(Err(Error::new(ErrorCode::InvalidParams)))?
         };
 
         let read_settings = match Settings::new(&root_dir, &i.capabilities) {
@@ -442,7 +452,7 @@ impl LanguageServer for Backend {
             .await
             .unwrap();
         self.client
-            .log_message(MessageType::WARNING, format!("Settings: {:?}", settings))
+            .log_message(MessageType::LOG, format!("Settings: {:?}", settings))
             .await;
 
         let Ok(root_path) = self.bind_vault(|vault| Ok(vault.root_dir().clone())).await else {
@@ -566,7 +576,7 @@ impl LanguageServer for Backend {
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         self.client
-            .log_message(MessageType::WARNING, "Completions Started")
+            .log_message(MessageType::LOG, "Completions Started")
             .await;
 
         let timer = std::time::Instant::now();
@@ -588,7 +598,7 @@ impl LanguageServer for Backend {
 
         self.client
             .log_message(
-                MessageType::WARNING,
+                MessageType::LOG,
                 format!("Completions Done took {}ms", elapsed.as_millis()),
             )
             .await;
@@ -699,7 +709,7 @@ impl LanguageServer for Backend {
 
         self.client
             .log_message(
-                MessageType::WARNING,
+                MessageType::LOG,
                 format!("Semantic Tokens Done took {}ms", elapsed.as_millis()),
             )
             .await;
@@ -800,7 +810,7 @@ impl LanguageServer for Backend {
 
         self.client
             .log_message(
-                MessageType::INFO,
+                MessageType::LOG,
                 format!("Recalculating inlayHints for {params:?} {hints:?}"),
             )
             .await;
