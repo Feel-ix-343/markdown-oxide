@@ -618,18 +618,25 @@ impl LinkCompletion<'_> {
                         .collect(),
                     )
                 }
-                Referenceable::Heading(path, mdheading) => Some(
-                    once(Heading {
-                        heading: mdheading,
-                        match_string: format!(
-                            "{}#{}",
-                            path.file_stem()?.to_str()?,
-                            heading_to_slug(&mdheading.heading_text)
-                        ),
-                        referenceable,
-                    })
-                    .collect(),
-                ),
+                Referenceable::Heading(path, mdheading) => {
+                    let heading_text = if completer.settings().heading_slug {
+                        heading_to_slug(&mdheading.heading_text)
+                    } else {
+                        mdheading.heading_text.clone()
+                    };
+                    Some(
+                        once(Heading {
+                            heading: mdheading,
+                            match_string: format!(
+                                "{}#{}",
+                                path.file_stem()?.to_str()?,
+                                heading_text
+                            ),
+                            referenceable,
+                        })
+                        .collect(),
+                    )
+                }
                 Referenceable::IndexedBlock(path, indexed) => Some(
                     once(Block {
                         match_string: format!("{}#^{}", path.file_stem()?.to_str()?, indexed.index),

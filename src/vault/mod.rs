@@ -259,18 +259,36 @@ impl Vault {
                     .par_iter()
                     .flat_map(|resolved| {
                         resolved.get_refname(self.root_dir()).and_then(|refname| {
-                            vec![
-                                refname.to_string(),
-                                format!(
-                                    "{}{}",
-                                    refname.link_file_key()?,
-                                    refname
-                                        .infile_ref
-                                        .map(|refe| format!("#{}", refe))
-                                        .unwrap_or("".to_string())
-                                ),
-                            ]
-                            .into()
+                            let full = refname.to_string();
+                            let short = format!(
+                                "{}{}",
+                                refname.link_file_key()?,
+                                refname
+                                    .infile_ref
+                                    .as_ref()
+                                    .map(|refe| format!("#{}", refe))
+                                    .unwrap_or("".to_string())
+                            );
+                            // For heading refnames, also add the slugified
+                            // (spaces→dashes) form so that both
+                            // "file#Some Heading" and "file#Some-Heading"
+                            // are recognised as resolved.
+                            let mut entries = vec![full.clone(), short.clone()];
+                            if let Some((file_part, heading_part)) = full.split_once('#') {
+                                let slugged =
+                                    format!("{}#{}", file_part, heading_to_slug(heading_part));
+                                if slugged != full {
+                                    entries.push(slugged);
+                                }
+                            }
+                            if let Some((file_part, heading_part)) = short.split_once('#') {
+                                let slugged =
+                                    format!("{}#{}", file_part, heading_to_slug(heading_part));
+                                if slugged != short {
+                                    entries.push(slugged);
+                                }
+                            }
+                            Some(entries)
                         })
                     })
                     .flatten()
@@ -1453,13 +1471,15 @@ impl Referenceable<'_> {
 
             Referenceable::Heading(path, heading) => get_obsidian_ref_path(root_dir, path)
                 .map(|refpath| {
-                    let slug = heading_to_slug(&heading.heading_text);
-                    (refpath.clone(), format!("{}#{}", refpath, slug))
+                    (
+                        refpath.clone(),
+                        format!("{}#{}", refpath, heading.heading_text),
+                    )
                 })
                 .map(|(path, full_refname)| Refname {
                     full_refname,
                     path: path.into(),
-                    infile_ref: heading_to_slug(&heading.heading_text).into(),
+                    infile_ref: <std::string::String as Clone>::clone(&heading.heading_text).into(),
                 }),
 
             Referenceable::IndexedBlock(path, index) => get_obsidian_ref_path(root_dir, path)
@@ -2274,9 +2294,9 @@ more text
         assert_eq!(
             refname,
             Some(Refname {
-                full_refname: "test#Test-Heading".to_string(),
+                full_refname: "test#Test Heading".to_string(),
                 path: Some("test".to_string()),
-                infile_ref: Some("Test-Heading".to_string())
+                infile_ref: Some("Test Heading".to_string())
             })
         )
     }
