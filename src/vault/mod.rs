@@ -1315,11 +1315,11 @@ impl MDTag {
                     (?<tag>
                         # First character of the tag:
                         # Cannot be a digit. Can be letters (Unicode), underscore, hyphen, slash, or various quotes.
-                        [\p{L}_/'"''""-]
+                        [\p{L}_/'"‘’“”-]
         
                         # Subsequent characters of the tag:
                         # Can be letters (Unicode), digits, underscore, hyphen, slash, or various quotes.
-                        [\p{L}0-9_/'"''""-]*
+                        [\p{L}0-9_/'"‘’“”-]*
                     )
                 )
     "#).unwrap()
