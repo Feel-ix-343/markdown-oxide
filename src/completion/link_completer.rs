@@ -19,7 +19,7 @@ use crate::{
     completion::util::check_in_code_block,
     config::Settings,
     ui::preview_referenceable,
-    vault::{MDFile, MDHeading, Reference, Referenceable, Vault},
+    vault::{heading_to_slug, MDFile, MDHeading, Reference, Referenceable, Vault},
 };
 
 use super::{
@@ -636,18 +636,25 @@ impl LinkCompletion<'_> {
                         .collect(),
                     )
                 }
-                Referenceable::Heading(path, mdheading) => Some(
-                    once(Heading {
-                        heading: mdheading,
-                        match_string: format!(
-                            "{}#{}",
-                            path.file_stem()?.to_str()?,
-                            mdheading.heading_text
-                        ),
-                        referenceable,
-                    })
-                    .collect(),
-                ),
+                Referenceable::Heading(path, mdheading) => {
+                    let heading_text = if completer.settings().heading_slug {
+                        heading_to_slug(&mdheading.heading_text)
+                    } else {
+                        mdheading.heading_text.clone()
+                    };
+                    Some(
+                        once(Heading {
+                            heading: mdheading,
+                            match_string: format!(
+                                "{}#{}",
+                                path.file_stem()?.to_str()?,
+                                heading_text
+                            ),
+                            referenceable,
+                        })
+                        .collect(),
+                    )
+                }
                 Referenceable::IndexedBlock(path, indexed) => Some(
                     once(Block {
                         match_string: format!("{}#^{}", path.file_stem()?.to_str()?, indexed.index),
