@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use completion::get_completions;
@@ -607,11 +607,6 @@ impl LanguageServer for Backend {
     }
 
     async fn execute_command(&self, params: ExecuteCommandParams) -> Result<Option<Value>> {
-        let settings = self.bind_settings(|settings| Ok(settings.clone())).await?;
-        let root_dir = self
-            .bind_vault(|vault| Ok(vault.root_dir().to_owned()))
-            .await?;
-
         match params {
             ExecuteCommandParams { command, .. } if *command == *"apply_edits" => {
                 let edits = params
@@ -637,8 +632,14 @@ impl LanguageServer for Backend {
                 commands::jump(&self.client, &root_dir, &settings, jump_to).await
             }
             ExecuteCommandParams { command, .. } => {
-                jump_to_specific(&command, &self.client, &root_dir, &settings).await
-            } // _ => Ok(None),
+                self.client
+                    .log_message(
+                        MessageType::WARNING,
+                        format!("Unknown execute_command: {command}"),
+                    )
+                    .await;
+                Ok(None)
+            }
         }
     }
 
@@ -817,15 +818,6 @@ impl LanguageServer for Backend {
 
         hints
     }
-}
-
-async fn jump_to_specific(
-    day: &str,
-    client: &Client,
-    root_dir: &Path,
-    settings: &Settings,
-) -> Result<Option<Value>> {
-    commands::jump(client, root_dir, settings, Some(day)).await
 }
 
 use clap::Parser;
