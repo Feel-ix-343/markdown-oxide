@@ -66,7 +66,7 @@ pub fn diagnostics(
                 num if num > 1 => format!("Unresolved Reference used {} times", num),
                 _ => "Unresolved Reference".to_string(),
             },
-            source: Some("Obsidian LS".into()),
+            source: Some("markdown-oxide".into()),
             severity: Some(DiagnosticSeverity::INFORMATION),
             ..Default::default()
         })

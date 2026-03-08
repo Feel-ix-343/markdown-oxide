@@ -124,7 +124,11 @@ Give Neovim access to the binary using one of the following installation methods
   </Accordion>
 
   <Accordion title="(optional) Enable opening daily notes with natural language">
-    Modify your lsp `on_attach` function to support opening daily notes with, for example, `:Daily two days ago` or `:Daily next monday`. 
+    Modify your lsp `on_attach` function to support opening daily notes with natural language and relative directives. 
+
+    Examples:
+    - Natural language: `:Daily two days ago`, `:Daily next monday`
+    - Relative directives: `:Daily prev`, `:Daily next`, `:Daily +7`, `:Daily -3`
 
     ```lua
     -- setup Markdown Oxide daily note commands
