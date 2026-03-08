@@ -284,10 +284,16 @@ impl Vault {
                         .into_par_iter()
                         .filter(|(_, reference)| {
                             let ref_text = &reference.data().reference_text;
-                            // Normalize heading references (spaces to dashes) so that
-                            // e.g. "file#Some Heading" matches the slugified refname
-                            // "file#Some-Heading" in the resolved set.
-                            let normalized = heading_to_slug(ref_text);
+                            // Normalize only the heading portion (after #) of the
+                            // reference text so that e.g. "file#Some Heading" matches
+                            // the slugified refname "file#Some-Heading" in the resolved
+                            // set, without corrupting spaces in file paths.
+                            let normalized =
+                                if let Some((file_part, heading_part)) = ref_text.split_once('#') {
+                                    format!("{}#{}", file_part, heading_to_slug(heading_part))
+                                } else {
+                                    ref_text.clone()
+                                };
                             !resolved_referenceables_refnames.contains(ref_text)
                                 && !resolved_referenceables_refnames.contains(&normalized)
                         })
