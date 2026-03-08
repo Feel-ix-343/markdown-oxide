@@ -34,6 +34,18 @@ pub fn workspace_symbol(
     vault: &Vault,
     _params: &WorkspaceSymbolParams,
 ) -> Option<Vec<SymbolInformation>> {
+    let symbols = vault
+        .select_referenceable_nodes(None)
+        .into_iter()
+        .flat_map(|referenceable| vault.to_symbol_information(referenceable))
+        .collect_vec();
+
+    // Some clients (e.g. one-shot workspace symbol pickers) send an empty query first and
+    // expect the full symbol list so they can handle filtering on their side.
+    if _params.query.trim().is_empty() {
+        return Some(symbols);
+    }
+
     // Initialize the fuzzy matcher
     let mut matcher = Matcher::new(nucleo_matcher::Config::DEFAULT);
     let pattern = pattern::Pattern::parse(
@@ -44,10 +56,8 @@ pub fn workspace_symbol(
 
     // Collect symbols and order by fuzzy matching score
     Some(
-        vault
-            .select_referenceable_nodes(None)
+        symbols
             .into_iter()
-            .flat_map(|referenceable| vault.to_symbol_information(referenceable))
             // Fuzzy matcher - compute match score
             .map(|symbol| compute_match_score(&mut matcher, &pattern, symbol))
             // Remove all items with no matches
