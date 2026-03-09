@@ -77,6 +77,11 @@ link_filenames_only = false
 # When true, completions insert headings with dashes: [[file#My-Heading]]
 # Note: Go-to-definition and diagnostics always resolve both forms regardless of this setting
 heading_slug = false
+
+# Folders to exclude from vault indexing
+# Files within excluded folders will not appear in completions, references, diagnostics, or other LSP features
+# Matching is by directory name, so excluding "Archive" will skip any directory named Archive at any depth
+excluded_folders = []
 ```
 
 # Daily Note Format Config Option
