@@ -1226,6 +1226,14 @@ impl MDHeading {
         static HEADING_RE: Lazy<Regex> =
             Lazy::new(|| Regex::new(r"(?<starter>#+) (?<heading_text>.+)").unwrap());
 
+        // Compute the byte offset where frontmatter ends so we can skip
+        // YAML comment lines (which start with `#`) that would otherwise
+        // be misinterpreted as markdown headings.
+        static FRONTMATTER_RE: Lazy<Regex> =
+            Lazy::new(|| Regex::new(r"^---\n(\n|.)*?\n---").unwrap());
+
+        let frontmatter_end = FRONTMATTER_RE.find(text).map(|m| m.end()).unwrap_or(0);
+
         let headings = HEADING_RE
             .captures_iter(text)
             .flat_map(
@@ -1234,6 +1242,7 @@ impl MDHeading {
                     _ => None,
                 },
             )
+            .filter(move |(full_heading, _, _)| full_heading.start() >= frontmatter_end)
             .map(|(full_heading, heading_match, starter)| MDHeading {
                 heading_text: heading_match.as_str().trim_end().into(),
                 range: MyRange::from_range(&Rope::from_str(text), full_heading.range()),
@@ -2452,6 +2461,59 @@ more text
                     end: tower_lsp::lsp_types::Position {
                         line: 11,
                         character: 28,
+                    },
+                }
+                .into(),
+                level: HeadingLevel(2),
+            },
+        ];
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn heading_parsing_skips_frontmatter_comments() {
+        let text = r"---
+title: Some frontmatter
+# A comment
+---
+
+# The title
+
+A paragraph.
+
+## A Subheading
+
+Another paragraph.";
+
+        let parsed: Vec<_> = MDHeading::new(text).collect();
+
+        let expected = vec![
+            MDHeading {
+                heading_text: "The title".into(),
+                range: tower_lsp::lsp_types::Range {
+                    start: tower_lsp::lsp_types::Position {
+                        line: 5,
+                        character: 0,
+                    },
+                    end: tower_lsp::lsp_types::Position {
+                        line: 5,
+                        character: 11,
+                    },
+                }
+                .into(),
+                ..Default::default()
+            },
+            MDHeading {
+                heading_text: "A Subheading".into(),
+                range: tower_lsp::lsp_types::Range {
+                    start: tower_lsp::lsp_types::Position {
+                        line: 9,
+                        character: 0,
+                    },
+                    end: tower_lsp::lsp_types::Position {
+                        line: 9,
+                        character: 15,
                     },
                 }
                 .into(),
