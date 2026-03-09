@@ -121,16 +121,16 @@ pub fn code_actions(
                                         edits: vec![
                                             OneOf::Left(TextEdit{
                                                 new_text,
-                                                range: Range {
-                                                    start: Position {
-                                                        line: (length + 1) as u32,
-                                                        character: 0
-                                                    },
-                                                    end: Position {
-                                                        line: length as u32,
-                                                        character: 0
-                                                    }
-                                                }
+                                                                range: Range {
+                                                                    start: Position {
+                                                                        line: length as u32,
+                                                                        character: 0
+                                                                    },
+                                                                    end: Position {
+                                                                        line: length as u32,
+                                                                        character: 0
+                                                                    }
+                                                                }
                                             })
                                         ]
                                     })
