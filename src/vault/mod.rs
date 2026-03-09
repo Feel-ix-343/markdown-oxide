@@ -796,7 +796,7 @@ impl Reference {
 
     pub fn new<'a>(text: &'a str, file_name: &'a str) -> impl Iterator<Item = Reference> + 'a {
         static WIKI_LINK_RE: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r"\[\[(?<filepath>[^\[\]\|\.\#]+)?(\#(?<infileref>[^\[\]\.\|]+))?(?<ending>\.[^\# <>]+)?(\|(?<display>[^\[\]\.\|]+))?\]\]")
+            Regex::new(r"\[\[(?<filepath>[^\[\]\|\#]+?)?(?<ending>\.md)?(\#(?<infileref>[^\[\]\|]+))?(\|(?<display>[^\[\]\|]+))?\]\]")
 
                 .unwrap()
         }); // A [[link]] that does not have any [ or ] in it
@@ -815,7 +815,7 @@ impl Reference {
             });
 
         static MD_LINK_RE: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r"\[(?<display>[^\[\]\.]*?)\]\(<?(?<filepath>(\.?\/)?[^\[\]\|\.\#<>]+?)?(?<ending>\.[^\# <>]+?)?(\#(?<infileref>[^\[\]\.\|<>]+?))?>?\)")
+            Regex::new(r"\[(?<display>[^\[\]]*?)\]\(<?(?<filepath>(\.?\/)?[^\[\]\|\#<>]+?)?(?<ending>\.md)?(\#(?<infileref>[^\[\]\|<>]+?))?>?\)")
                 .expect("MD Link Not Constructing")
         }); // [display](relativePath)
 
@@ -1017,10 +1017,12 @@ struct RegexTuple<'a> {
     file_path: Option<Match<'a>>,
     infile_ref: Option<Match<'a>>,
     display_text: Option<Match<'a>>,
+    has_md_ending: bool,
 }
 
 impl RegexTuple<'_> {
     fn new(capture: Captures) -> Option<RegexTuple> {
+        let has_md_ending = capture.name("ending").is_some();
         match (
             capture.get(0),
             capture.name("filepath"),
@@ -1032,6 +1034,7 @@ impl RegexTuple<'_> {
                 file_path,
                 infile_ref,
                 display_text,
+                has_md_ending,
             }),
             _ => None,
         }
@@ -1071,6 +1074,16 @@ impl ParseableReferenceConstructor for MDReferenceConstructor {
     }
 }
 
+/// Returns true if the path ends with a known non-markdown file extension
+/// (images, media, documents, archives, etc.) that should not be treated
+/// as a markdown note reference.
+fn has_non_markdown_extension(path: &str) -> bool {
+    static NON_MD_EXT_RE: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(r"(?i)\.(png|jpe?g|gif|svg|bmp|webp|ico|tiff?|pdf|mp[34]|webm|mov|avi|mkv|flac|wav|ogg|mp3|aac|zip|tar|gz|bz2|xz|rar|7z|exe|dll|so|wasm|csv|xlsx?|docx?|pptx?|html?|css|js|ts|jsx|tsx|py|rb|rs|go|java|c|cpp|h|hpp|cs|php|sh|bash|zsh|bat|ps1|json|xml|ya?ml|toml|ini|cfg|conf|log|sql|db|sqlite)$").unwrap()
+    });
+    NON_MD_EXT_RE.is_match(path)
+}
+
 fn generic_link_constructor<T: ParseableReferenceConstructor>(
     text: &str,
     file_name: &str,
@@ -1079,6 +1092,7 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
         file_path,
         infile_ref,
         display_text,
+        has_md_ending,
     }: RegexTuple,
 ) -> Option<Reference> {
     if file_path.is_some_and(|path| {
@@ -1086,6 +1100,13 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
             || path.as_str().starts_with("https://")
             || path.as_str().starts_with("data:")
     }) {
+        return None;
+    }
+
+    // Filter out file paths that end with known non-markdown extensions
+    // (e.g., .png, .pdf, .jpg). These are attachment/media references, not note links.
+    // Skip this check if .md was explicitly present (e.g., [[image.png.md]] is a valid note).
+    if !has_md_ending && file_path.is_some_and(|path| has_non_markdown_extension(path.as_str())) {
         return None;
     }
 
@@ -2181,7 +2202,211 @@ mod vault_tests {
         let text = "This is a png [[link.png]] [[link|display.png]]";
         let parsed = Reference::new(text, "test.md").collect_vec();
 
-        assert_eq!(parsed, vec![])
+        // [[link.png]] is filtered out because .png is a known non-markdown extension.
+        // [[link|display.png]] is a valid link to note "link" with display text "display.png".
+        let expected = vec![WikiFileLink(ReferenceData {
+            reference_text: "link".into(),
+            range: tower_lsp::lsp_types::Range {
+                start: tower_lsp::lsp_types::Position {
+                    line: 0,
+                    character: 27,
+                },
+                end: tower_lsp::lsp_types::Position {
+                    line: 0,
+                    character: 47,
+                },
+            }
+            .into(),
+            display_text: Some("display.png".into()),
+        })];
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn wiki_link_with_dot_in_filename() {
+        // Issue #344: dots in filenames should not break link parsing
+        let text = "Link to [[Dr. Smith]] and [[file.name]] and [[v2.0 Release]]";
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        let expected = vec![
+            WikiFileLink(ReferenceData {
+                reference_text: "Dr. Smith".into(),
+                range: Range {
+                    start: Position {
+                        line: 0,
+                        character: 8,
+                    },
+                    end: Position {
+                        line: 0,
+                        character: 21,
+                    },
+                }
+                .into(),
+                ..ReferenceData::default()
+            }),
+            WikiFileLink(ReferenceData {
+                reference_text: "file.name".into(),
+                range: Range {
+                    start: Position {
+                        line: 0,
+                        character: 26,
+                    },
+                    end: Position {
+                        line: 0,
+                        character: 39,
+                    },
+                }
+                .into(),
+                ..ReferenceData::default()
+            }),
+            WikiFileLink(ReferenceData {
+                reference_text: "v2.0 Release".into(),
+                range: Range {
+                    start: Position {
+                        line: 0,
+                        character: 44,
+                    },
+                    end: Position {
+                        line: 0,
+                        character: 60,
+                    },
+                }
+                .into(),
+                ..ReferenceData::default()
+            }),
+        ];
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn wiki_link_with_dot_in_filename_and_heading() {
+        let text = "Link to [[file.name#heading]]";
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        let expected = vec![WikiHeadingLink(
+            ReferenceData {
+                reference_text: "file.name#heading".into(),
+                range: Range {
+                    start: Position {
+                        line: 0,
+                        character: 8,
+                    },
+                    end: Position {
+                        line: 0,
+                        character: 29,
+                    },
+                }
+                .into(),
+                ..ReferenceData::default()
+            },
+            "file.name".into(),
+            "heading".into(),
+        )];
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn wiki_link_with_dot_in_filename_and_md_extension() {
+        // [[file.name.md]] should strip .md and produce reference_text "file.name"
+        let text = "Link to [[file.name.md]]";
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        let expected = vec![WikiFileLink(ReferenceData {
+            reference_text: "file.name".into(),
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 8,
+                },
+                end: Position {
+                    line: 0,
+                    character: 24,
+                },
+            }
+            .into(),
+            ..ReferenceData::default()
+        })];
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn md_link_with_dot_in_filename() {
+        let text = "Link to [display](file.name)";
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        let expected = vec![Reference::MDFileLink(ReferenceData {
+            reference_text: "file.name".into(),
+            display_text: Some("display".into()),
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 8,
+                },
+                end: Position {
+                    line: 0,
+                    character: 28,
+                },
+            }
+            .into(),
+        })];
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn md_link_with_dot_in_filename_and_heading() {
+        let text = "Link to [display](file.name#heading)";
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        let expected = vec![Reference::MDHeadingLink(
+            ReferenceData {
+                reference_text: "file.name#heading".into(),
+                display_text: Some("display".into()),
+                range: Range {
+                    start: Position {
+                        line: 0,
+                        character: 8,
+                    },
+                    end: Position {
+                        line: 0,
+                        character: 36,
+                    },
+                }
+                .into(),
+            },
+            "file.name".into(),
+            "heading".into(),
+        )];
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn md_link_with_dot_in_filename_and_md_extension() {
+        let text = "Link to [display](file.name.md)";
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        let expected = vec![Reference::MDFileLink(ReferenceData {
+            reference_text: "file.name".into(),
+            display_text: Some("display".into()),
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 8,
+                },
+                end: Position {
+                    line: 0,
+                    character: 31,
+                },
+            }
+            .into(),
+        })];
+
+        assert_eq!(parsed, expected)
     }
 
     #[test]
