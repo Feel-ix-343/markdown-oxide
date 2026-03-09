@@ -418,6 +418,7 @@ impl LanguageServer for Backend {
                     commands: vec![
                         "apply_edits".into(),
                         "jump".into(),
+                        "moxide.findReferences".into(),
                         "tomorrow".into(),
                         "today".into(),
                         "yesterday".into(),
