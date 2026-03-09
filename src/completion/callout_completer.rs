@@ -19,6 +19,10 @@ impl<'a> Completer<'a> for CalloutCompleter {
     where
         Self: Sized + Completer<'a>,
     {
+        if !context.settings.callout_completions {
+            return None;
+        }
+
         let line_chars = context.vault.select_line(context.path, line as isize)?;
 
         static PARTIAL_CALLOUT: Lazy<Regex> =
