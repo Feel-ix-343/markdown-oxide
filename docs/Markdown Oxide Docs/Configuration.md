@@ -1,5 +1,8 @@
 `Markdown-Oxide` supports several configuration options. All can be specified in a `~/.config/moxide/settings.toml` or `.moxide.toml` file. Moxide also tries to import some settings from Obsidian directly.   ^configurationinfo
 
+> [!note]
+> This configuration reference reflects the latest version on the master branch and may include settings not yet available in your installed version. If a setting doesn't seem to work, check that your version of Markdown Oxide is up to date.
+
 # Default Config File
 
 This contains all possible settings with brief descriptions. A bit of elaboration on the settings is included after. 
