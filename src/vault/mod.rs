@@ -977,12 +977,15 @@ impl Reference {
             )
             | &Referenceable::UnresovledIndexedBlock(.., infile_ref) => match self {
                 WikiHeadingLink(.., file_ref_text, link_infile_ref)
-                | WikiIndexedBlockLink(.., file_ref_text, link_infile_ref)
-                | MDHeadingLink(.., file_ref_text, link_infile_ref)
-                | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => {
+                | MDHeadingLink(.., file_ref_text, link_infile_ref) => {
                     matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir))
                         && heading_to_slug(&link_infile_ref.to_lowercase())
                             == heading_to_slug(&infile_ref.to_lowercase())
+                }
+                WikiIndexedBlockLink(.., file_ref_text, link_infile_ref)
+                | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => {
+                    matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir))
+                        && link_infile_ref.to_lowercase() == infile_ref.to_lowercase()
                 }
                 Tag(_) => false,
                 WikiFileLink(_) => false,
