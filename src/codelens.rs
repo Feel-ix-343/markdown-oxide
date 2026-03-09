@@ -5,13 +5,13 @@ use tower_lsp::lsp_types::{CodeLens, CodeLensParams, Command, Location, Position
 
 use crate::vault::{Referenceable, Vault};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Serialize)]
-struct FindReferencesData {
-    uri: Url,
-    position: Position,
-    locations: Vec<Location>,
+#[derive(Serialize, Deserialize)]
+pub struct FindReferencesData {
+    pub uri: Url,
+    pub position: Position,
+    pub locations: Vec<Location>,
 }
 
 pub fn code_lens(vault: &Vault, path: &Path, _params: &CodeLensParams) -> Option<Vec<CodeLens>> {
