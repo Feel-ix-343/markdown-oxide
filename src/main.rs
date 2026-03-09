@@ -697,14 +697,28 @@ impl LanguageServer for Backend {
                     .await?;
                 commands::jump(&self.client, &root_dir, &settings, jump_to).await
             }
-            ExecuteCommandParams { command, .. } if is_date_command(&command) => {
-                jump_to_specific(&command, &self.client, &root_dir, &settings).await
+            ExecuteCommandParams { command, .. } if *command == *"moxide.findReferences" => {
+                // CodeLens command: handled client-side in VSCode, but other editors
+                // (e.g. kakoune-lsp) may send it back via workspace/executeCommand.
+                // The locations are already pre-computed in the arguments, so we just
+                // return Ok(None) and let the client handle display.
+                Ok(None)
             }
             ExecuteCommandParams { command, .. } => {
-                self.client
-                    .log_message(MessageType::WARNING, format!("Unknown command: {command}"))
-                    .await;
-                Ok(None)
+                // Only route to the daily note jump handler if the command looks like
+                // a date string. Unknown commands should not be misrouted.
+                if DATE_COMMANDS.contains(&command.as_str()) {
+                    jump_to_specific(&command, &self.client, &root_dir, &settings).await
+                } else {
+                    self.client
+                        .log_message(MessageType::WARNING, format!("Unknown command: {command}"))
+                        .await;
+                    Err(Error {
+                        code: ErrorCode::InvalidParams,
+                        message: format!("Unknown command: {command}").into(),
+                        data: None,
+                    })
+                }
             }
         }
     }
@@ -906,10 +920,6 @@ const DATE_COMMANDS: &[&str] = &[
     "next wednesday",
     "next thursday",
 ];
-
-fn is_date_command(command: &str) -> bool {
-    DATE_COMMANDS.contains(&command)
-}
 
 async fn jump_to_specific(
     day: &str,
