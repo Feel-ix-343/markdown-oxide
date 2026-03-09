@@ -977,12 +977,15 @@ impl Reference {
             )
             | &Referenceable::UnresovledIndexedBlock(.., infile_ref) => match self {
                 WikiHeadingLink(.., file_ref_text, link_infile_ref)
-                | WikiIndexedBlockLink(.., file_ref_text, link_infile_ref)
-                | MDHeadingLink(.., file_ref_text, link_infile_ref)
-                | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => {
+                | MDHeadingLink(.., file_ref_text, link_infile_ref) => {
                     matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir))
                         && heading_to_slug(&link_infile_ref.to_lowercase())
                             == heading_to_slug(&infile_ref.to_lowercase())
+                }
+                WikiIndexedBlockLink(.., file_ref_text, link_infile_ref)
+                | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => {
+                    matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir))
+                        && link_infile_ref.to_lowercase() == infile_ref.to_lowercase()
                 }
                 Tag(_) => false,
                 WikiFileLink(_) => false,
@@ -1403,16 +1406,16 @@ pub enum Referenceable<'a> {
     LinkRefDef(&'a PathBuf, &'a MDLinkReferenceDefinition),
 }
 
-/// Utility function
-pub fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
-    diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(String::from))
-}
-
 /// Converts heading text to its slug form for use in links.
 /// Spaces are replaced with dashes, matching the behavior of GitHub, Obsidian,
 /// and tools like markdown-toc.
 pub fn heading_to_slug(heading: &str) -> String {
     heading.replace(' ', "-")
+}
+
+/// Utility function
+pub fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
+    diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(String::from))
 }
 
 #[derive(Debug, PartialEq, Eq, Default)]
