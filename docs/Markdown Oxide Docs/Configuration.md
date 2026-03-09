@@ -71,6 +71,12 @@ block_transclusion_length = "Full"
 # Enables autocompleting by heading but inserting link to filename (instead of filename + heading)
 # Useful for unique notes / Zettelkasten users
 link_filenames_only = false
+
+# Use GitHub-style heading slugs in completions (spaces replaced with dashes)
+# When false (default), completions insert headings with spaces: [[file#My Heading]]
+# When true, completions insert headings with dashes: [[file#My-Heading]]
+# Note: Go-to-definition and diagnostics always resolve both forms regardless of this setting
+heading_slug = false
 ```
 
 # Daily Note Format Config Option
