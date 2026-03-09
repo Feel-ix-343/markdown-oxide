@@ -1,5 +1,8 @@
 # Test Markdown-Oxide in Neovim
 
+## Overview
+markdown-oxide is an LSP server for markdown/Obsidian vaults. It cannot be tested via browser or direct CLI invocation -- it requires an editor with LSP support. Neovim v0.11+ is the recommended testing environment.
+
 ## Outcome
 
 Verify that markdown-oxide LSP features work correctly in Neovim, including wiki link completions, block linking (with block ID insertion via `:wall`), go-to-definition, hover with backlinks, and tag completions against the `TestFiles/` directory. Testing is done in two recorded phases: first reproduce/demonstrate the current behavior, then validate the fix or expected behavior.
@@ -15,6 +18,8 @@ sudo cp target/debug/markdown-oxide /usr/local/bin/markdown-oxide
 
 Verify it's on PATH: `which markdown-oxide`
 
+For release builds (slower but optimized): `cargo build --release` then copy from `target/release/`.
+
 ### 2. Install Neovim (if not installed)
 
 ```bash
@@ -26,6 +31,8 @@ sudo ln -sf /opt/nvim/usr/bin/nvim /usr/local/bin/nvim
 ```
 
 Verify: `nvim --version | head -1` (should be v0.11+)
+
+On headless/VM environments, the AppImage may fail with FUSE errors. Use `--appimage-extract` to extract without FUSE.
 
 ### 3. Configure Neovim for markdown-oxide
 
@@ -148,6 +155,13 @@ Test each feature:
 - Place cursor on a heading like `# Heading 1`
 - Press `gr` to find all references/backlinks
 
+#### Testing Heading Links Specifically
+- Heading links with dashes (`[[File#My-Heading]]`) should resolve correctly
+- Heading links with spaces (`[[File#My Heading]]`) should also resolve (lenient matching)
+- Completions for headings show dash-separated format only when `heading_slug` config is true
+- Test headings in `TestFiles/Test.md`: `# Heading 1`, `## Here is a nested`, `### Here is a nested third`
+- Test cross-file heading links using `TestFiles/Resolved File.md` which has `# Resolved Heading`
+
 ### 6. Post recordings to PR
 
 After both recording phases are complete, post the recordings as comments on the PR:
@@ -166,6 +180,13 @@ This provides reviewers with visual evidence of the issue and its resolution.
 
 Undo any test edits: `Escape`, then `u` repeatedly until "Already at oldest change".
 Quit without saving: `:qa!`
+
+## Available Test Files
+
+- `TestFiles/Test.md` -- Main test file with headings, wiki links, block refs, tags
+- `TestFiles/Resolved File.md` -- Has `# Resolved Heading` and heading links
+- `TestFiles/Another Test.md` -- Has `# This is a test heading` and `## This is a nested test heading`
+- `TestFiles/This is another link.md` -- Target for wiki link navigation tests
 
 ## Specifications
 
@@ -187,6 +208,9 @@ Quit without saving: `:qa!`
 - After accepting a block completion, the block ID is edited into the target file's buffer but NOT saved. You must run `:wall` to persist it.
 - For a richer completion UI, install `nvim-cmp` with `cmp-nvim-lsp`. The built-in `vim.lsp.completion` works but `nvim-cmp` provides better UX.
 - Use `:LspLog` to inspect LSP communication for debugging.
+- After rebuilding the binary, you must quit Neovim and relaunch to restart the LSP (or copy binary while LSP is running and it may pick up changes).
+- Neovim's built-in completion can be slow to trigger -- use `Ctrl+Space` to force trigger.
+- `cargo build` (debug) is much faster than `cargo build --release` -- use debug for testing iterations.
 
 ## Forbidden Actions
 

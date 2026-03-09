@@ -1,5 +1,8 @@
 # Test Markdown-Oxide in Helix
 
+## Overview
+markdown-oxide is an LSP server for markdown/Obsidian vaults. Helix has built-in language server support for markdown-oxide -- no configuration files are needed. Just ensure the `markdown-oxide` binary is on PATH.
+
 ## Outcome
 
 Verify that markdown-oxide LSP features work correctly in Helix, including wiki link completions, tag completions, and fuzzy matching against the `TestFiles/` directory. Testing is done in two recorded phases: first reproduce/demonstrate the current behavior, then validate the fix or expected behavior.
@@ -109,6 +112,13 @@ This provides reviewers with visual evidence of the issue and its resolution.
 Undo any test edits: `Escape`, then `u` repeatedly.
 Quit without saving: `:q!`
 
+## Available Test Files
+
+- `TestFiles/Test.md` -- Main test file with headings, wiki links, block refs, tags
+- `TestFiles/Resolved File.md` -- Has `# Resolved Heading` and heading links
+- `TestFiles/Another Test.md` -- Has `# This is a test heading` and `## This is a nested test heading`
+- `TestFiles/This is another link.md` -- Target for wiki link navigation tests
+
 ## Specifications
 
 - Wiki link completions must show files, headings, and block references with fuzzy matching
@@ -124,6 +134,8 @@ Quit without saving: `:q!`
 - Helix's health check (`hx --health markdown`) is useful for verifying the LSP binary is detected.
 - Helix may also show `marksman` as a configured language server for markdown. This is fine -- markdown-oxide takes priority if both are available.
 - Use `:log-open` inside Helix to view the editor log for debugging LSP issues.
+- After rebuilding the binary, you must quit Helix and relaunch to restart the LSP.
+- `cargo build` (debug) is much faster than `cargo build --release` -- use debug for testing iterations.
 
 ## Forbidden Actions
 

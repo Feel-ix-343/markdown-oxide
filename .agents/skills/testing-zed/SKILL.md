@@ -1,5 +1,8 @@
 # Test Markdown-Oxide Extension in Zed
 
+## Overview
+markdown-oxide is an LSP server for markdown/Obsidian vaults. The Zed extension source is at https://github.com/Feel-ix-343/markdown-oxide-zed. It first checks PATH for the `markdown-oxide` binary via `worktree.which()`, then falls back to downloading from GitHub releases.
+
 ## Outcome
 
 Verify that the markdown-oxide Zed extension works correctly by installing Zed, building the markdown-oxide binary, installing the extension, and testing LSP features (completions, go-to-definition, hover, tags) against the `TestFiles/` directory. Testing is done in two recorded phases: first reproduce/demonstrate the current behavior, then validate the fix or expected behavior.
@@ -72,7 +75,7 @@ Start a screen recording (`recording_start`). Demonstrate the current state of e
 
 #### Phase 2: Validate the fix
 
-After applying the fix (rebuild markdown-oxide, copy to PATH, restart LSP in Zed via `Ctrl+Shift+P` → `editor: restart language server`):
+After applying the fix (rebuild markdown-oxide, copy to PATH, restart LSP in Zed via `Ctrl+Shift+P` then `editor: restart language server`):
 
 - Start a new screen recording (`recording_start`)
 - Annotate the recording: "Phase 2: Validating fix in Zed"
@@ -127,6 +130,13 @@ This provides reviewers with visual evidence of the issue and its resolution.
 
 Undo any test edits in the files. Report results to the user.
 
+## Available Test Files
+
+- `TestFiles/Test.md` -- Main test file with headings, wiki links, block refs, tags
+- `TestFiles/Resolved File.md` -- Has `# Resolved Heading` and heading links
+- `TestFiles/Another Test.md` -- Has `# This is a test heading` and `## This is a nested test heading`
+- `TestFiles/This is another link.md` -- Target for wiki link navigation tests
+
 ## Specifications
 
 - All four core features (wiki link completions, go-to-definition, hover, tag completions) must work
@@ -144,6 +154,8 @@ Undo any test edits in the files. Report results to the user.
 - Use `Ctrl+Shift+P` then `dev: open language server logs` to inspect LSP communication inside Zed.
 - Use `Ctrl+Shift+P` then `editor: restart language server` if you need to restart the LSP.
 - Zed's CLI wrapper (`zed`) just signals the running editor process -- to capture logs, launch the binary directly at `~/.local/zed.app/libexec/zed-editor`.
+- After rebuilding the binary, restart the LSP via command palette rather than relaunching Zed.
+- `cargo build` (debug) is much faster than `cargo build --release` -- use debug for testing iterations.
 
 ## Forbidden Actions
 
