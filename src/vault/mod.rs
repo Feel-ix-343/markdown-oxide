@@ -144,10 +144,7 @@ fn find_range(referenceable: &Referenceable) -> Option<tower_lsp::lsp_types::Ran
                 character: 1,
             },
         }),
-        _ => match referenceable.get_range() {
-            None => None,
-            Some(a_my_range) => Some(*a_my_range),
-        },
+        _ => referenceable.get_range().map(|r| *r),
     }
 }
 
@@ -390,23 +387,51 @@ impl Vault {
             .collect()
     }
 
-    #[allow(deprecated)] // field deprecated has been deprecated in favor of using tags and will be removed in the future
-    pub fn to_symbol_information(&self, referenceable: Referenceable) -> Option<SymbolInformation> {
-        Some(SymbolInformation {
-            name: referenceable.get_refname(self.root_dir())?.to_string(),
-            kind: match referenceable {
-                Referenceable::File(_, _) => SymbolKind::FILE,
-                Referenceable::Tag(_, _) => SymbolKind::CONSTANT,
-                _ => SymbolKind::KEY,
+    /// Returns one [`SymbolInformation`] per name for the given referenceable,
+    /// including any aliases defined in YAML frontmatter metadata.
+    #[allow(deprecated)] // SymbolInformation::deprecated field is deprecated in lsp-types
+    pub fn to_symbol_informations(&self, referenceable: &Referenceable) -> Vec<SymbolInformation> {
+        let uri = match Url::from_file_path(referenceable.get_path()).ok() {
+            Some(u) => u,
+            None => return vec![],
+        };
+        let range = match find_range(referenceable) {
+            Some(r) => r,
+            None => return vec![],
+        };
+        let kind = match referenceable {
+            Referenceable::File(_, _) => SymbolKind::FILE,
+            Referenceable::Tag(_, _) => SymbolKind::CONSTANT,
+            _ => SymbolKind::KEY,
+        };
+
+        let vault_name = referenceable
+            .get_refname(self.root_dir())
+            .map(|refname| refname.to_string());
+
+        let alias_names: &[String] = match referenceable {
+            Referenceable::File(_, mdfile) => match &mdfile.metadata {
+                Some(meta) => meta.aliases(),
+                None => &[],
             },
-            location: Location {
-                uri: Url::from_file_path(referenceable.get_path()).ok()?,
-                range: find_range(&referenceable)?,
-            },
-            container_name: None,
-            tags: None,
-            deprecated: None,
-        })
+            _ => &[],
+        };
+
+        std::iter::once(vault_name)
+            .chain(alias_names.iter().map(|a| Some(a.to_string())))
+            .flatten()
+            .map(|name| SymbolInformation {
+                name,
+                kind,
+                location: Location {
+                    uri: uri.clone(),
+                    range,
+                },
+                container_name: None,
+                tags: None,
+                deprecated: None,
+            })
+            .collect()
     }
 }
 
