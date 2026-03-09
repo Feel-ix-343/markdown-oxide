@@ -19,7 +19,7 @@ use crate::{
     completion::util::check_in_code_block,
     config::Settings,
     ui::preview_referenceable,
-    vault::{MDFile, MDHeading, Reference, Referenceable, Vault},
+    vault::{heading_to_slug, MDFile, MDHeading, Reference, Referenceable, Vault},
 };
 
 use super::{
@@ -303,9 +303,12 @@ impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
     }
 
     fn completions(&self) -> Vec<impl Completable<'a, MarkdownLinkCompleter<'a>>> {
+        // Strip .md extension from the path for fuzzy matching, since completion
+        // match_strings use file_stem (without .md)
+        let path_for_matching = self.path.0.strip_suffix(".md").unwrap_or(&self.path.0);
         let filter_text = format!(
             "{}{}",
-            self.path.0,
+            path_for_matching,
             self.infile_ref
                 .clone()
                 .map(|(infile, _)| format!("#{}", infile.completion_string()))
@@ -324,9 +327,24 @@ impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
     type FilterParams = &'a str;
 
     fn completion_filter_text(&self, params: Self::FilterParams) -> String {
-        let filter_text = format!("[{}]({}", self.display.0, params);
-
-        filter_text
+        // If the user typed .md in the path, include it in the filter text so the
+        // editor's client-side filtering matches the typed prefix.
+        // Guard against double .md (e.g. when called from UnindexedBlockCompleter
+        // with entered_refname() which already includes .md from self.path.0).
+        let adjusted_params = if self.path.0.ends_with(".md") {
+            let file_part = params.split_once('#').map(|(f, _)| f).unwrap_or(params);
+            if file_part.ends_with(".md") {
+                // params already contains .md, use as-is
+                params.to_string()
+            } else if let Some(hash_pos) = params.find('#') {
+                format!("{}.md{}", &params[..hash_pos], &params[hash_pos..])
+            } else {
+                format!("{}.md", params)
+            }
+        } else {
+            params.to_string()
+        };
+        format!("[{}]({}", self.display.0, adjusted_params)
     }
 }
 
@@ -618,18 +636,25 @@ impl LinkCompletion<'_> {
                         .collect(),
                     )
                 }
-                Referenceable::Heading(path, mdheading) => Some(
-                    once(Heading {
-                        heading: mdheading,
-                        match_string: format!(
-                            "{}#{}",
-                            path.file_stem()?.to_str()?,
-                            mdheading.heading_text
-                        ),
-                        referenceable,
-                    })
-                    .collect(),
-                ),
+                Referenceable::Heading(path, mdheading) => {
+                    let heading_text = if completer.settings().heading_slug {
+                        heading_to_slug(&mdheading.heading_text)
+                    } else {
+                        mdheading.heading_text.clone()
+                    };
+                    Some(
+                        once(Heading {
+                            heading: mdheading,
+                            match_string: format!(
+                                "{}#{}",
+                                path.file_stem()?.to_str()?,
+                                heading_text
+                            ),
+                            referenceable,
+                        })
+                        .collect(),
+                    )
+                }
                 Referenceable::IndexedBlock(path, indexed) => Some(
                     once(Block {
                         match_string: format!("{}#^{}", path.file_stem()?.to_str()?, indexed.index),

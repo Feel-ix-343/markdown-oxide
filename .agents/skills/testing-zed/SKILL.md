@@ -1,8 +1,11 @@
 # Test Markdown-Oxide Extension in Zed
 
+## Overview
+markdown-oxide is an LSP server for markdown/Obsidian vaults. The Zed extension source is at https://github.com/Feel-ix-343/markdown-oxide-zed. It first checks PATH for the `markdown-oxide` binary via `worktree.which()`, then falls back to downloading from GitHub releases.
+
 ## Outcome
 
-Verify that the markdown-oxide Zed extension works correctly by installing Zed, building the markdown-oxide binary, installing the extension, and testing LSP features (completions, go-to-definition, hover, tags) against the `TestFiles/` directory.
+Verify that the markdown-oxide Zed extension works correctly by installing Zed, building the markdown-oxide binary, installing the extension, and testing LSP features (completions, go-to-definition, hover, tags) against the `TestFiles/` directory. Testing is done in two recorded phases: first reproduce/demonstrate the current behavior, then validate the fix or expected behavior.
 
 ## Procedure
 
@@ -60,7 +63,26 @@ Verify the LSP process is running: `pgrep -a markdown-oxide`
 
 ### 6. Test LSP features
 
-Open `TestFiles/Test.md` and start a screen recording. Test each feature:
+Open `TestFiles/Test.md`. Testing is split into two recorded phases:
+
+#### Phase 1: Reproduce current behavior
+
+Start a screen recording (`recording_start`). Demonstrate the current state of each feature **before any fix**. This establishes a baseline and captures any issues:
+
+- Annotate the recording: "Phase 1: Reproducing current behavior in Zed"
+- Exercise each feature below and note what works and what doesn't
+- Stop the recording (`recording_stop`) when done
+
+#### Phase 2: Validate the fix
+
+After applying the fix (rebuild markdown-oxide, copy to PATH, restart LSP in Zed via `Ctrl+Shift+P` then `editor: restart language server`):
+
+- Start a new screen recording (`recording_start`)
+- Annotate the recording: "Phase 2: Validating fix in Zed"
+- Re-test each feature and confirm it works correctly
+- Stop the recording (`recording_stop`) when done
+
+Test each feature:
 
 #### Wiki Link Completions
 - Go to the end of the file, add a new line, and type `[[`
@@ -90,9 +112,30 @@ Open `TestFiles/Test.md` and start a screen recording. Test each feature:
 - Place cursor on a heading like `# Heading 1`
 - Press `Shift+F12` to find all references/backlinks
 
-### 7. Clean up
+### 7. Post recordings to PR
 
-Undo any test edits in the files. Stop the recording and report results.
+After both recording phases are complete, post the recordings as comments on the PR:
+
+1. Use `git_comment_on_pr` to post the Phase 1 recording with a comment like:
+   > **Phase 1: Reproducing current behavior in Zed**
+   > ![Phase 1 recording](/path/to/phase1-recording.mp4)
+
+2. Use `git_comment_on_pr` to post the Phase 2 recording with a comment like:
+   > **Phase 2: Validating fix in Zed**
+   > ![Phase 2 recording](/path/to/phase2-recording.mp4)
+
+This provides reviewers with visual evidence of the issue and its resolution.
+
+### 8. Clean up
+
+Undo any test edits in the files. Report results to the user.
+
+## Available Test Files
+
+- `TestFiles/Test.md` -- Main test file with headings, wiki links, block refs, tags
+- `TestFiles/Resolved File.md` -- Has `# Resolved Heading` and heading links
+- `TestFiles/Another Test.md` -- Has `# This is a test heading` and `## This is a nested test heading`
+- `TestFiles/This is another link.md` -- Target for wiki link navigation tests
 
 ## Specifications
 
@@ -100,6 +143,8 @@ Undo any test edits in the files. Stop the recording and report results.
 - The LSP server process (`markdown-oxide`) must be running (verify with `pgrep`)
 - Completions should include a preview panel showing content and backlinks
 - Go-to-definition should navigate to the correct target file
+- Two screen recordings must be produced: one showing current behavior (reproduce), one showing the fix (validate)
+- Both recordings must be posted as comments on the PR
 
 ## Advice
 
@@ -109,6 +154,8 @@ Undo any test edits in the files. Stop the recording and report results.
 - Use `Ctrl+Shift+P` then `dev: open language server logs` to inspect LSP communication inside Zed.
 - Use `Ctrl+Shift+P` then `editor: restart language server` if you need to restart the LSP.
 - Zed's CLI wrapper (`zed`) just signals the running editor process -- to capture logs, launch the binary directly at `~/.local/zed.app/libexec/zed-editor`.
+- After rebuilding the binary, restart the LSP via command palette rather than relaunching Zed.
+- `cargo build` (debug) is much faster than `cargo build --release` -- use debug for testing iterations.
 
 ## Forbidden Actions
 

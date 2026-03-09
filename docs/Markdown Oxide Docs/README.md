@@ -31,7 +31,12 @@ Set up the PKM for your text editor...
 ## Neovim
 
 - Give Neovim access to the binary.
-
+    - Arch Linux: `pacman -S markdown-oxide`
+    - [Mason.nvim](https://github.com/williamboman/mason.nvim) (from hosted binary)
+    - Nix: `pkgs.markdown-oxide`
+    - Alpine Linux: `apk add markdown-oxide`
+    - openSUSE: `zypper install markdown-oxide`
+    - Conda: `conda install conda-forge::markdown-oxide`
     - <details>
          <summary>Cargo Install (from source)</summary>
     
@@ -40,7 +45,6 @@ Set up the PKM for your text editor...
         ```
     
     </details>
-
     - <details>
          <summary>Cargo binstall (from hosted binary)</summary>
     
@@ -49,14 +53,6 @@ Set up the PKM for your text editor...
         ```
     
     </details>
-    
-    - Arch Linux: `pacman -S markdown-oxide`
-    - [Mason.nvim](https://github.com/williamboman/mason.nvim) (from hosted binary)
-    - Nix: `pkgs.markdown-oxide`
-    - Alpine Linux: `apk add markdown-oxide`
-    - openSUSE: `zypper install markdown-oxide`
-    - Conda: `conda install conda-forge::markdown-oxide`
-    
     - <details>
          <summary>Winget (Windows)</summary>
     
@@ -65,7 +61,6 @@ Set up the PKM for your text editor...
         ```
     
     </details>
-    
     - <details>
          <summary>Homebrew (from package manager)</summary>
     
@@ -76,8 +71,59 @@ Set up the PKM for your text editor...
     </details>
   
 - Modify your Neovim Configuration ^nvimconfigsetup
+
     - <details>
-        <summary>Modify LSP Config (making sure to adjust capabilities as follows)</summary>
+        <summary>Neovim >= 0.11: Native LSP Config (recommended)</summary>
+
+        Neovim >= 0.11 has built-in LSP support via `vim.lsp.config` / `vim.lsp.enable`. If you have [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig) installed, it provides the default `lsp/markdown_oxide.lua` config (with `cmd`, `filetypes`, and `root_markers`). You only need to add your custom capabilities on top.
+
+        > **Important**: Use the function call form `vim.lsp.config('markdown_oxide', { ... })` to **merge** your settings with the defaults. Using the assignment form `vim.lsp.config.markdown_oxide = { ... }` will **replace** the entire config, losing `cmd`, `root_markers`, and `filetypes`.
+
+        ```lua
+        -- Merge capabilities with the default config from lsp/markdown_oxide.lua
+        local capabilities = vim.lsp.protocol.make_client_capabilities()
+
+        -- If using nvim-cmp, extend capabilities (optional)
+        -- local capabilities = require("cmp_nvim_lsp").default_capabilities(vim.lsp.protocol.make_client_capabilities())
+
+        -- Use the function call form to MERGE (not replace) the config
+        vim.lsp.config('markdown_oxide', {
+            -- Ensure that dynamicRegistration is enabled! This allows the LS to take into account actions like the
+            -- Create Unresolved File code action, resolving completions for unindexed code blocks, ...
+            capabilities = vim.tbl_deep_extend(
+                'force',
+                capabilities,
+                {
+                    workspace = {
+                        didChangeWatchedFiles = {
+                            dynamicRegistration = true,
+                        },
+                    },
+                }
+            ),
+        })
+        vim.lsp.enable('markdown_oxide')
+        ```
+
+        If you are **not** using nvim-lspconfig, you need to provide the full config yourself:
+
+        ```lua
+        local capabilities = vim.lsp.protocol.make_client_capabilities()
+        capabilities.workspace.didChangeWatchedFiles.dynamicRegistration = true
+
+        vim.lsp.config('markdown_oxide', {
+            cmd = { 'markdown-oxide' },
+            filetypes = { 'markdown' },
+            root_markers = { '.git', '.obsidian', '.moxide.toml' },
+            capabilities = capabilities,
+        })
+        vim.lsp.enable('markdown_oxide')
+        ```
+
+    </details>
+
+    - <details>
+        <summary>Neovim < 0.11: nvim-lspconfig</summary>
 
         ```lua        
         -- An example nvim-lspconfig capabilities setting
@@ -195,7 +241,11 @@ Set up the PKM for your text editor...
 Install the [vscode extension](https://marketplace.visualstudio.com/items?itemName=FelixZeller.markdown-oxide) (called `Markdown Oxide`). As for how the extension uses the language server, there are two options
 - Recommended: the extension will download the server's binary and use that
 - The extension will use `markdown-oxide` from path. To install to your path, there are the following methods for VSCode:
-
+    - Arch Linux: `pacman -S markdown-oxide`
+    - Nix: `pkgs.markdown-oxide`
+    - Alpine Linux: `apk add markdown-oxide`
+    - openSUSE: `zypper install markdown-oxide`
+    - Conda: `conda install conda-forge::markdown-oxide`
     - <details>
          <summary>Cargo Install (from source)</summary>
     
@@ -204,7 +254,6 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
         ```
     
     </details>
-
     - <details>
          <summary>Cargo binstall[1] (from hosted binary)</summary>
     
@@ -213,13 +262,6 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
         ```
     
     </details>
-    
-    - Arch Linux: `pacman -S markdown-oxide`
-    - Nix: `pkgs.markdown-oxide`
-    - Alpine Linux: `apk add markdown-oxide`
-    - openSUSE: `zypper install markdown-oxide`
-    - Conda: `conda install conda-forge::markdown-oxide`
-    
     - <details>
          <summary>Winget (Windows)</summary>
     
@@ -228,7 +270,6 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
         ```
     
     </details>
-    
     - <details>
          <summary>Homebrew (from package manager)</summary>
     
@@ -243,7 +284,11 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
 Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly to VSCode, there are two methods for this extension to access the language server
 - Recommended: the extension will download the server's binary and use that
 - The extension will use `markdown-oxide` from path. To install to your path, there are the following methods for Zed:
-
+    - Arch Linux: `pacman -S markdown-oxide`
+    - Nix: `pkgs.markdown-oxide`
+    - Alpine Linux: `apk add markdown-oxide`
+    - openSUSE: `zypper install markdown-oxide`
+    - Conda: `conda install conda-forge::markdown-oxide`
     - <details>
          <summary>Cargo Install (from source)</summary>
     
@@ -252,7 +297,6 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
         ```
     
     </details>
-
     - <details>
          <summary>Cargo binstall[1] (from hosted binary)</summary>
     
@@ -261,13 +305,6 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
         ```
     
     </details>
-    
-    - Arch Linux: `pacman -S markdown-oxide`
-    - Nix: `pkgs.markdown-oxide`
-    - Alpine Linux: `apk add markdown-oxide`
-    - openSUSE: `zypper install markdown-oxide`
-    - Conda: `conda install conda-forge::markdown-oxide`
-    
     - <details>
          <summary>Winget (Windows)</summary>
     
@@ -276,7 +313,6 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
         ```
     
     </details>
-    
     - <details>
          <summary>Homebrew (from package manager)</summary>
     
@@ -291,6 +327,11 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
 ## Helix
 
 For Helix, all you must do is install the language server's binary to your path. The following installation methods are available:
+- Arch Linux: `pacman -S markdown-oxide`
+- Nix: `pkgs.markdown-oxide`
+- Alpine Linux: `apk add markdown-oxide`
+- openSUSE: `zypper install markdown-oxide`
+- Conda: `conda install conda-forge::markdown-oxide`
 - <details>
      <summary>Cargo Install (from source)</summary>
 
@@ -299,7 +340,6 @@ For Helix, all you must do is install the language server's binary to your path.
     ```
 
 </details>
-
 - <details>
     <summary>Cargo binstall[1] (from hosted binary)</summary>
     
@@ -308,13 +348,6 @@ For Helix, all you must do is install the language server's binary to your path.
     ```
     
 </details>
-
-- Arch Linux: `pacman -S markdown-oxide`
-- Nix: `pkgs.markdown-oxide`
-- Alpine Linux: `apk add markdown-oxide`
-- openSUSE: `zypper install markdown-oxide`
-- Conda: `conda install conda-forge::markdown-oxide`
-
 - <details>
      <summary>Winget (Windows)</summary>
 
@@ -323,7 +356,6 @@ For Helix, all you must do is install the language server's binary to your path.
     ```
 
 </details>
-
 - <details>
      <summary>Homebrew (from package manager)</summary>
 
@@ -338,6 +370,11 @@ For Helix, all you must do is install the language server's binary to your path.
 Kakoune communicates with LSP servers through [kakoune-lsp](https://github.com/kakoune-lsp/kakoune-lsp) (binary name: `kak-lsp`). Install kakoune-lsp first if you haven't already.
 
 - Install the language server's binary to your path. The following installation methods are available:
+    - Arch Linux: `pacman -S markdown-oxide`
+    - Nix: `pkgs.markdown-oxide`
+    - Alpine Linux: `apk add markdown-oxide`
+    - openSUSE: `zypper install markdown-oxide`
+    - Conda: `conda install conda-forge::markdown-oxide`
 
 - <details>
      <summary>Cargo Install (from source)</summary>
@@ -347,7 +384,6 @@ Kakoune communicates with LSP servers through [kakoune-lsp](https://github.com/k
     ```
 
 </details>
-
 - <details>
     <summary>Cargo binstall (from hosted binary)</summary>
 
@@ -356,13 +392,6 @@ Kakoune communicates with LSP servers through [kakoune-lsp](https://github.com/k
     ```
 
 </details>
-
-- Arch Linux: `pacman -S markdown-oxide`
-- Nix: `pkgs.markdown-oxide`
-- Alpine Linux: `apk add markdown-oxide`
-- openSUSE: `zypper install markdown-oxide`
-- Conda: `conda install conda-forge::markdown-oxide`
-
 - <details>
      <summary>Winget (Windows)</summary>
 
@@ -371,7 +400,6 @@ Kakoune communicates with LSP servers through [kakoune-lsp](https://github.com/k
     ```
 
 </details>
-
 - <details>
      <summary>Homebrew (from package manager)</summary>
 

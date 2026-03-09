@@ -259,18 +259,36 @@ impl Vault {
                     .par_iter()
                     .flat_map(|resolved| {
                         resolved.get_refname(self.root_dir()).and_then(|refname| {
-                            vec![
-                                refname.to_string(),
-                                format!(
-                                    "{}{}",
-                                    refname.link_file_key()?,
-                                    refname
-                                        .infile_ref
-                                        .map(|refe| format!("#{}", refe))
-                                        .unwrap_or("".to_string())
-                                ),
-                            ]
-                            .into()
+                            let full = refname.to_string();
+                            let short = format!(
+                                "{}{}",
+                                refname.link_file_key()?,
+                                refname
+                                    .infile_ref
+                                    .as_ref()
+                                    .map(|refe| format!("#{}", refe))
+                                    .unwrap_or("".to_string())
+                            );
+                            // For heading refnames, also add the slugified
+                            // (spaces→dashes) form so that both
+                            // "file#Some Heading" and "file#Some-Heading"
+                            // are recognised as resolved.
+                            let mut entries = vec![full.clone(), short.clone()];
+                            if let Some((file_part, heading_part)) = full.split_once('#') {
+                                let slugged =
+                                    format!("{}#{}", file_part, heading_to_slug(heading_part));
+                                if slugged != full {
+                                    entries.push(slugged);
+                                }
+                            }
+                            if let Some((file_part, heading_part)) = short.split_once('#') {
+                                let slugged =
+                                    format!("{}#{}", file_part, heading_to_slug(heading_part));
+                                if slugged != short {
+                                    entries.push(slugged);
+                                }
+                            }
+                            Some(entries)
                         })
                     })
                     .flatten()
@@ -283,8 +301,19 @@ impl Vault {
                         .par_bridge()
                         .into_par_iter()
                         .filter(|(_, reference)| {
-                            !resolved_referenceables_refnames
-                                .contains(&reference.data().reference_text)
+                            let ref_text = &reference.data().reference_text;
+                            // Normalize only the heading portion (after #) of the
+                            // reference text so that e.g. "file#Some Heading" matches
+                            // the slugified refname "file#Some-Heading" in the resolved
+                            // set, without corrupting spaces in file paths.
+                            let normalized =
+                                if let Some((file_part, heading_part)) = ref_text.split_once('#') {
+                                    format!("{}#{}", file_part, heading_to_slug(heading_part))
+                                } else {
+                                    ref_text.clone()
+                                };
+                            !resolved_referenceables_refnames.contains(ref_text)
+                                && !resolved_referenceables_refnames.contains(&normalized)
                         })
                         .flat_map(|(_, reference)| match reference {
                             Reference::WikiFileLink(data) | Reference::MDFileLink(data) => {
@@ -952,7 +981,8 @@ impl Reference {
                 | MDHeadingLink(.., file_ref_text, link_infile_ref)
                 | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => {
                     matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir))
-                        && link_infile_ref.to_lowercase() == infile_ref.to_lowercase()
+                        && heading_to_slug(&link_infile_ref.to_lowercase())
+                            == heading_to_slug(&infile_ref.to_lowercase())
                 }
                 Tag(_) => false,
                 WikiFileLink(_) => false,
@@ -1376,6 +1406,13 @@ pub enum Referenceable<'a> {
 /// Utility function
 pub fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
     diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(String::from))
+}
+
+/// Converts heading text to its slug form for use in links.
+/// Spaces are replaced with dashes, matching the behavior of GitHub, Obsidian,
+/// and tools like markdown-toc.
+pub fn heading_to_slug(heading: &str) -> String {
+    heading.replace(' ', "-")
 }
 
 #[derive(Debug, PartialEq, Eq, Default)]

@@ -295,6 +295,16 @@ impl Backend {
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(&self, i: InitializeParams) -> Result<InitializeResult> {
+        self.client
+            .log_message(
+                MessageType::LOG,
+                format!(
+                    "Initializing with root_uri: {:?}, workspace_folders: {:?}",
+                    i.root_uri, i.workspace_folders
+                ),
+            )
+            .await;
+
         // Try root_uri first, then workspace_folders, then fall back to current_dir
         let root_dir = if let Some(ref uri) = i.root_uri {
             uri.to_file_path()
@@ -306,11 +316,29 @@ impl LanguageServer for Backend {
                     .to_file_path()
                     .or(Err(Error::new(ErrorCode::InvalidParams)))?
             } else {
+                self.client
+                    .log_message(
+                        MessageType::WARNING,
+                        "No root_uri or workspace_folders provided, falling back to current_dir. \
+                         This may indicate misconfigured LSP client root_markers or root_dir.",
+                    )
+                    .await;
                 std::env::current_dir().or(Err(Error::new(ErrorCode::InvalidParams)))?
             }
         } else {
+            self.client
+                .log_message(
+                    MessageType::WARNING,
+                    "No root_uri or workspace_folders provided, falling back to current_dir. \
+                     This may indicate misconfigured LSP client root_markers or root_dir.",
+                )
+                .await;
             std::env::current_dir().or(Err(Error::new(ErrorCode::InvalidParams)))?
         };
+
+        self.client
+            .log_message(MessageType::LOG, format!("Using root_dir: {:?}", root_dir))
+            .await;
 
         let read_settings = match Settings::new(&root_dir, &i.capabilities) {
             Ok(settings) => settings,
@@ -447,29 +475,53 @@ impl LanguageServer for Backend {
     }
 
     async fn initialized(&self, _: InitializedParams) {
-        let settings = self
-            .bind_settings(|settings| Ok(settings.clone()))
-            .await
-            .unwrap();
+        let Ok(settings) = self.bind_settings(|settings| Ok(settings.clone())).await else {
+            self.client
+                .log_message(
+                    MessageType::ERROR,
+                    "Failed to read settings in initialized callback",
+                )
+                .await;
+            return;
+        };
         self.client
             .log_message(MessageType::LOG, format!("Settings: {:?}", settings))
             .await;
 
         let Ok(root_path) = self.bind_vault(|vault| Ok(vault.root_dir().clone())).await else {
+            self.client
+                .log_message(
+                    MessageType::ERROR,
+                    "Failed to read vault root_dir in initialized callback",
+                )
+                .await;
             return;
         };
 
-        let Ok(_root_uri) = Url::from_directory_path(root_path) else {
+        let Ok(_root_uri) = Url::from_directory_path(&root_path) else {
+            self.client
+                .log_message(
+                    MessageType::ERROR,
+                    format!("Failed to convert root_dir to URI: {:?}", root_path),
+                )
+                .await;
             return;
         };
 
-        let value = serde_json::to_value(DidChangeWatchedFilesRegistrationOptions {
+        let Ok(value) = serde_json::to_value(DidChangeWatchedFilesRegistrationOptions {
             watchers: vec![FileSystemWatcher {
                 glob_pattern: GlobPattern::String("**/*.md".into()),
                 kind: None,
             }],
-        })
-        .unwrap();
+        }) else {
+            self.client
+                .log_message(
+                    MessageType::ERROR,
+                    "Failed to serialize file watcher registration options",
+                )
+                .await;
+            return;
+        };
 
         let registration = Registration {
             id: "myserver-fileWatcher".to_string(),
@@ -477,10 +529,19 @@ impl LanguageServer for Backend {
             register_options: Some(value),
         };
 
-        self.client
-            .register_capability(vec![registration])
-            .await
-            .unwrap();
+        if let Err(e) = self.client.register_capability(vec![registration]).await {
+            self.client
+                .log_message(
+                    MessageType::ERROR,
+                    format!(
+                        "Failed to register file watcher capability: {:?}. \
+                         File watching will not work. Ensure your editor supports \
+                         workspace/didChangeWatchedFiles dynamic registration.",
+                        e
+                    ),
+                )
+                .await;
+        }
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
@@ -631,12 +692,18 @@ impl LanguageServer for Backend {
                     .await?;
                 commands::jump(&self.client, &root_dir, &settings, jump_to).await
             }
+            ExecuteCommandParams { command, .. } if *command == *"moxide.findReferences" => {
+                // CodeLens command: handled client-side in VSCode, but other editors
+                // (e.g. kakoune-lsp) may send it back via workspace/executeCommand.
+                // The locations are already pre-computed in the arguments, so we just
+                // return Ok(None) and let the client handle display.
+                Ok(None)
+            }
             ExecuteCommandParams { command, .. } => {
                 // Try to handle the command as a date-string jump (e.g. "tomorrow",
                 // "next monday", etc.) which are registered in executeCommandProvider.
                 // If parsing succeeds, jump to that daily note; otherwise log a
-                // warning and return Ok(None) for truly unknown commands (e.g.
-                // "moxide.findReferences" from CodeLens).
+                // warning and return Ok(None) for truly unknown commands.
                 let settings = self
                     .bind_settings(|settings| Ok(settings.to_owned()))
                     .await?;
