@@ -418,6 +418,7 @@ impl LanguageServer for Backend {
                     commands: vec![
                         "apply_edits".into(),
                         "jump".into(),
+                        "moxide.findReferences".into(),
                         "tomorrow".into(),
                         "today".into(),
                         "yesterday".into(),
@@ -698,10 +699,28 @@ impl LanguageServer for Backend {
                 commands::jump(&self.client, &root_dir, &settings, jump_to).await
             }
             ExecuteCommandParams { command, .. } if *command == *"moxide.findReferences" => {
-                // CodeLens command: handled client-side in VSCode, but other editors
-                // (e.g. kakoune-lsp) may send it back via workspace/executeCommand.
-                // The locations are already pre-computed in the arguments, so we just
-                // return Ok(None) and let the client handle display.
+                // CodeLens command: handled client-side in VSCode via
+                // editor.action.peekLocations. For other editors (e.g. kakoune-lsp)
+                // that send the command back via workspace/executeCommand, we parse
+                // the pre-computed locations and show the first one.
+                let data = params.arguments.into_iter().find_map(|arg| {
+                    serde_json::from_value::<codelens::FindReferencesData>(arg).ok()
+                });
+
+                if let Some(data) = data {
+                    if let Some(first_location) = data.locations.first() {
+                        let _ = self
+                            .client
+                            .show_document(ShowDocumentParams {
+                                uri: first_location.uri.clone(),
+                                external: Some(false),
+                                take_focus: Some(true),
+                                selection: Some(first_location.range),
+                            })
+                            .await;
+                    }
+                }
+
                 Ok(None)
             }
             ExecuteCommandParams { command, .. } => {
