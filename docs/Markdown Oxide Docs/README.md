@@ -37,7 +37,7 @@ Set up the PKM for your text editor...
     - Alpine Linux: `apk add markdown-oxide`
     - openSUSE: `zypper install markdown-oxide`
     - Conda: `conda install conda-forge::markdown-oxide`
-    - <details>
+    <details>
          <summary>Cargo Install (from source)</summary>
     
         ```bash
@@ -45,7 +45,7 @@ Set up the PKM for your text editor...
         ```
     
     </details>
-    - <details>
+    <details>
          <summary>Cargo binstall (from hosted binary)</summary>
     
         ```bash
@@ -53,7 +53,7 @@ Set up the PKM for your text editor...
         ```
     
     </details>
-    - <details>
+    <details>
          <summary>Winget (Windows)</summary>
     
         ```bash
@@ -61,7 +61,7 @@ Set up the PKM for your text editor...
         ```
     
     </details>
-    - <details>
+    <details>
          <summary>Homebrew (from package manager)</summary>
     
         ```bash
@@ -246,7 +246,7 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
     - Alpine Linux: `apk add markdown-oxide`
     - openSUSE: `zypper install markdown-oxide`
     - Conda: `conda install conda-forge::markdown-oxide`
-    - <details>
+    <details>
          <summary>Cargo Install (from source)</summary>
     
         ```bash
@@ -254,7 +254,7 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
         ```
     
     </details>
-    - <details>
+    <details>
          <summary>Cargo binstall[1] (from hosted binary)</summary>
     
         ```bash
@@ -262,7 +262,7 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
         ```
     
     </details>
-    - <details>
+    <details>
          <summary>Winget (Windows)</summary>
     
         ```bash
@@ -270,7 +270,7 @@ Install the [vscode extension](https://marketplace.visualstudio.com/items?itemNa
         ```
     
     </details>
-    - <details>
+    <details>
          <summary>Homebrew (from package manager)</summary>
     
         ```bash
@@ -289,7 +289,7 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
     - Alpine Linux: `apk add markdown-oxide`
     - openSUSE: `zypper install markdown-oxide`
     - Conda: `conda install conda-forge::markdown-oxide`
-    - <details>
+    <details>
          <summary>Cargo Install (from source)</summary>
     
         ```bash
@@ -297,7 +297,7 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
         ```
     
     </details>
-    - <details>
+    <details>
          <summary>Cargo binstall[1] (from hosted binary)</summary>
     
         ```bash
@@ -305,7 +305,7 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
         ```
     
     </details>
-    - <details>
+    <details>
          <summary>Winget (Windows)</summary>
     
         ```bash
@@ -313,7 +313,7 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
         ```
     
     </details>
-    - <details>
+    <details>
          <summary>Homebrew (from package manager)</summary>
     
         ```bash
@@ -332,7 +332,7 @@ For Helix, all you must do is install the language server's binary to your path.
 - Alpine Linux: `apk add markdown-oxide`
 - openSUSE: `zypper install markdown-oxide`
 - Conda: `conda install conda-forge::markdown-oxide`
-- <details>
+<details>
      <summary>Cargo Install (from source)</summary>
 
     ```bash
@@ -340,7 +340,7 @@ For Helix, all you must do is install the language server's binary to your path.
     ```
 
 </details>
-- <details>
+<details>
     <summary>Cargo binstall[1] (from hosted binary)</summary>
     
     ```bash
@@ -348,7 +348,7 @@ For Helix, all you must do is install the language server's binary to your path.
     ```
     
 </details>
-- <details>
+<details>
      <summary>Winget (Windows)</summary>
 
     ```bash
@@ -356,7 +356,7 @@ For Helix, all you must do is install the language server's binary to your path.
     ```
 
 </details>
-- <details>
+<details>
      <summary>Homebrew (from package manager)</summary>
 
     ```bash
@@ -376,7 +376,7 @@ Kakoune communicates with LSP servers through [kakoune-lsp](https://github.com/k
     - openSUSE: `zypper install markdown-oxide`
     - Conda: `conda install conda-forge::markdown-oxide`
 
-- <details>
+<details>
      <summary>Cargo Install (from source)</summary>
 
     ```bash
@@ -384,7 +384,7 @@ Kakoune communicates with LSP servers through [kakoune-lsp](https://github.com/k
     ```
 
 </details>
-- <details>
+<details>
     <summary>Cargo binstall (from hosted binary)</summary>
 
     ```bash
@@ -392,7 +392,7 @@ Kakoune communicates with LSP servers through [kakoune-lsp](https://github.com/k
     ```
 
 </details>
-- <details>
+<details>
      <summary>Winget (Windows)</summary>
 
     ```bash
@@ -400,7 +400,7 @@ Kakoune communicates with LSP servers through [kakoune-lsp](https://github.com/k
     ```
 
 </details>
-- <details>
+<details>
      <summary>Homebrew (from package manager)</summary>
 
     ```bash
