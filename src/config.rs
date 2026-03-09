@@ -28,6 +28,7 @@ pub struct Settings {
     pub block_transclusion: bool,
     pub block_transclusion_length: EmbeddedBlockTransclusionLength,
     pub link_filenames_only: bool,
+    pub heading_slug: bool,
     pub callout_completions: bool,
 }
 
@@ -97,6 +98,7 @@ impl Settings {
                 }),
             )?
             .set_default("link_filenames_only", false)?
+            .set_default("heading_slug", false)?
             .set_default("callout_completions", true)?
             .build()
             .map_err(|err| anyhow!("Build err: {err}"))?;

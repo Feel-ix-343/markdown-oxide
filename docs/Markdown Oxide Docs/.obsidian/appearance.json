@@ -1,3 +1,6 @@
 {
-  "cssTheme": "Minimal"
+  "cssTheme": "",
+  "textFontFamily": "Trump Mediaeval",
+  "interfaceFontFamily": "Trump Mediaeval",
+  "monospaceFontFamily": "monospace"
 }

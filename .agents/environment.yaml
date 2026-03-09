@@ -1,0 +1,13 @@
+# markdown-oxide development environment
+setup:
+  - cargo build
+
+maintenance:
+  - cargo build
+
+lint:
+  - cargo clippy
+  - cargo fmt --check
+
+test:
+  - cargo test

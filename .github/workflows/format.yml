@@ -1,4 +1,4 @@
-name: Rust
+name: Format
 
 on:
   push:
@@ -10,7 +10,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  format:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -18,8 +18,8 @@ jobs:
       uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
         toolchain: nightly
+        components: rustfmt
+        override: true
         rustflags: ""
-    - name: Build
-      run: cargo build --verbose --locked
-    - name: Run tests
-      run: cargo test --verbose
+    - name: Rustfmt Check
+      run: cargo fmt --all --verbose -- --check
