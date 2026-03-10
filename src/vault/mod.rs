@@ -1012,7 +1012,12 @@ impl Reference {
                 | WikiFileLink(ReferenceData {
                     reference_text: file_ref_text,
                     ..
-                }) => matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir), root_dir, file_path),
+                }) => matches_path_or_file(
+                    file_ref_text,
+                    referenceable.get_refname(root_dir),
+                    root_dir,
+                    file_path,
+                ),
                 Tag(_) => false,
                 WikiHeadingLink(_, _, _) => false,
                 WikiIndexedBlockLink(_, _, _) => false,
@@ -1040,9 +1045,13 @@ impl Reference {
                 | WikiIndexedBlockLink(.., file_ref_text, link_infile_ref)
                 | MDHeadingLink(.., file_ref_text, link_infile_ref)
                 | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => {
-                    matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir), root_dir, file_path)
-                        && heading_to_slug(&link_infile_ref.to_lowercase())
-                            == heading_to_slug(&infile_ref.to_lowercase())
+                    matches_path_or_file(
+                        file_ref_text,
+                        referenceable.get_refname(root_dir),
+                        root_dir,
+                        file_path,
+                    ) && heading_to_slug(&link_infile_ref.to_lowercase())
+                        == heading_to_slug(&infile_ref.to_lowercase())
                 }
                 Tag(_) => false,
                 WikiFileLink(_) => false,
@@ -1715,9 +1724,12 @@ impl Referenceable<'_> {
                     ..
                 })
                 | MDHeadingLink(.., file_ref_text, _)
-                | MDIndexedBlockLink(.., file_ref_text, _) => {
-                    matches_path_or_file(file_ref_text, self.get_refname(root_dir), root_dir, reference_path)
-                }
+                | MDIndexedBlockLink(.., file_ref_text, _) => matches_path_or_file(
+                    file_ref_text,
+                    self.get_refname(root_dir),
+                    root_dir,
+                    reference_path,
+                ),
                 Tag(_) => false,
                 Footnote(_) => false,
                 LinkRef(_) => false,
@@ -1795,21 +1807,20 @@ fn matches_path_or_file(
                 let absolute_ref_path = reference_dir.join(&file_ref_text);
 
                 // Normalize the path and get it relative to root_dir
-                let normalized = absolute_ref_path.canonicalize().ok()
-                    .or_else(|| {
-                        // If canonicalize fails (file doesn't exist), try manual normalization
-                        let mut components = Vec::new();
-                        for component in absolute_ref_path.components() {
-                            match component {
-                                std::path::Component::ParentDir => {
-                                    components.pop();
-                                }
-                                std::path::Component::CurDir => {}
-                                comp => components.push(comp),
+                let normalized = absolute_ref_path.canonicalize().ok().or_else(|| {
+                    // If canonicalize fails (file doesn't exist), try manual normalization
+                    let mut components = Vec::new();
+                    for component in absolute_ref_path.components() {
+                        match component {
+                            std::path::Component::ParentDir => {
+                                components.pop();
                             }
+                            std::path::Component::CurDir => {}
+                            comp => components.push(comp),
                         }
-                        Some(components.iter().collect::<PathBuf>())
-                    })?;
+                    }
+                    Some(components.iter().collect::<PathBuf>())
+                })?;
 
                 // Get the path relative to root_dir
                 let relative_to_root = diff_paths(&normalized, root_dir)?;
