@@ -81,6 +81,10 @@ link_filenames_only = false
 # Note: Go-to-definition and diagnostics always resolve both forms regardless of this setting
 heading_slug = false
 
+# Enable callout completions (e.g. > [!NOTE], > [!WARNING], etc.)
+# Set to false if you use your own snippet system (e.g. LuaSnip) for callouts
+callout_completions = true
+
 # Folders to exclude from vault indexing
 # Files within excluded folders will not appear in completions, references, diagnostics, or other LSP features
 # Matching is by directory name, so excluding "Archive" will skip any directory named Archive at any depth
