@@ -611,14 +611,15 @@ pub trait Rangeable {
 
     /// Check if two ranges overlap (share any common area).
     /// This is true when neither range ends before the other starts.
+    /// Uses `<=` because range end positions are exclusive.
     fn overlaps(&self, other: &impl Rangeable) -> bool {
         let a = self.range();
         let b = other.range();
 
         let a_before_b = a.end.line < b.start.line
-            || (a.end.line == b.start.line && a.end.character < b.start.character);
+            || (a.end.line == b.start.line && a.end.character <= b.start.character);
         let b_before_a = b.end.line < a.start.line
-            || (b.end.line == a.start.line && b.end.character < a.start.character);
+            || (b.end.line == a.start.line && b.end.character <= a.start.character);
 
         !(a_before_b || b_before_a)
     }
@@ -3390,6 +3391,34 @@ Some content here";
         assert!(
             filtered_refs.is_empty(),
             "Cross-code-span wiki link should be filtered out by overlaps check"
+        );
+    }
+
+    /// Ensure that a wiki link immediately adjacent to an inline code span is NOT
+    /// filtered out. Range end positions are exclusive, so `code`[[link]] has the
+    /// code block ending where the wiki link starts — they should not overlap.
+    #[test]
+    fn adjacent_code_span_does_not_filter_wiki_link() {
+        use super::Rangeable;
+        use crate::vault::parsing::MDCodeBlock;
+
+        let text = "`code`[[link]]";
+
+        let raw_refs = Reference::new(text, "test").collect_vec();
+        assert_eq!(raw_refs.len(), 1, "Should find the wiki link");
+
+        let code_blocks = MDCodeBlock::new(text).collect_vec();
+        assert_eq!(code_blocks.len(), 1, "Should find one inline code span");
+
+        // The wiki link is adjacent to but NOT overlapping the code span
+        let filtered_refs: Vec<_> = raw_refs
+            .into_iter()
+            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
+            .collect();
+        assert_eq!(
+            filtered_refs.len(),
+            1,
+            "Adjacent wiki link should NOT be filtered out"
         );
     }
 }
