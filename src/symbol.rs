@@ -37,7 +37,7 @@ pub fn workspace_symbol(
     let symbols = vault
         .select_referenceable_nodes(None)
         .into_iter()
-        .flat_map(|referenceable| vault.to_symbol_information(referenceable))
+        .flat_map(|referenceable| vault.to_symbol_informations(&referenceable))
         .collect_vec();
 
     // Some clients (e.g. one-shot workspace symbol pickers) send an empty query first and
@@ -54,7 +54,7 @@ pub fn workspace_symbol(
         Normalization::Smart,
     );
 
-    // Collect symbols and order by fuzzy matching score
+    // Collect symbols (including aliases) and order by fuzzy matching score
     Some(
         symbols
             .into_iter()
