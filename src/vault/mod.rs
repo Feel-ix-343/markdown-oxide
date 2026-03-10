@@ -1135,11 +1135,18 @@ impl ParseableReferenceConstructor for MDReferenceConstructor {
 }
 
 /// Returns true if the path ends with a known non-markdown file extension
-/// (images, media, documents, archives, etc.) that should not be treated
-/// as a markdown note reference.
+/// that Obsidian natively supports for embedding (images, audio, video, PDF).
+/// Only these common attachment types are filtered to avoid false positives
+/// with note filenames that contain dots (e.g., `meeting.log.md` referenced
+/// as `[[meeting.log]]` should NOT be filtered out).
 fn has_non_markdown_extension(path: &str) -> bool {
     static NON_MD_EXT_RE: Lazy<Regex> = Lazy::new(|| {
-        Regex::new(r"(?i)\.(png|jpe?g|gif|svg|bmp|webp|ico|tiff?|pdf|mp[34]|webm|mov|avi|mkv|flac|wav|ogg|mp3|aac|zip|tar|gz|bz2|xz|rar|7z|exe|dll|so|wasm|csv|xlsx?|docx?|pptx?|html?|css|js|ts|jsx|tsx|py|rb|rs|go|java|c|cpp|h|hpp|cs|php|sh|bash|zsh|bat|ps1|json|xml|ya?ml|toml|ini|cfg|conf|log|sql|db|sqlite)$").unwrap()
+        // Only filter extensions that Obsidian natively embeds/displays:
+        // - Images: png, jpg/jpeg, gif, svg, bmp, webp, ico, tiff
+        // - Audio: mp3, wav, ogg, flac, aac, m4a
+        // - Video: mp4, webm, mov, avi, mkv, ogv
+        // - Documents: pdf
+        Regex::new(r"(?i)\.(png|jpe?g|gif|svg|bmp|webp|ico|tiff?|pdf|mp[34]|m4a|webm|mov|avi|mkv|ogv|flac|wav|ogg|aac)$").unwrap()
     });
     NON_MD_EXT_RE.is_match(path)
 }
@@ -2531,6 +2538,129 @@ mod vault_tests {
         })];
 
         assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn wiki_link_multi_dot_filename_issue_292() {
+        // Issue #292: wikilinks to files with multiple dots (e.g., link.to.this.md)
+        let text = "[[link.to.this]]";
+        let parsed = Reference::new(text, "main").collect_vec();
+
+        let expected = vec![WikiFileLink(ReferenceData {
+            reference_text: "link.to.this".into(),
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 0,
+                    character: 16,
+                },
+            }
+            .into(),
+            ..ReferenceData::default()
+        })];
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn wiki_link_adjacent_dotted_links_issue_292() {
+        // Issue #292: adjacent links where first has dots should not break second link
+        let text = "[[link.to.this]][[workingFile]]";
+        let parsed = Reference::new(text, "main").collect_vec();
+
+        assert_eq!(parsed.len(), 2, "Should parse exactly two references");
+
+        let expected = vec![
+            WikiFileLink(ReferenceData {
+                reference_text: "link.to.this".into(),
+                range: Range {
+                    start: Position {
+                        line: 0,
+                        character: 0,
+                    },
+                    end: Position {
+                        line: 0,
+                        character: 16,
+                    },
+                }
+                .into(),
+                ..ReferenceData::default()
+            }),
+            WikiFileLink(ReferenceData {
+                reference_text: "workingFile".into(),
+                range: Range {
+                    start: Position {
+                        line: 0,
+                        character: 16,
+                    },
+                    end: Position {
+                        line: 0,
+                        character: 31,
+                    },
+                }
+                .into(),
+                ..ReferenceData::default()
+            }),
+        ];
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn wiki_link_dotted_filename_resolves_to_file() {
+        // Issue #292: verify the reference actually matches the file
+        let root_dir = Path::new("/vault");
+        let file_path = std::path::PathBuf::from("/vault/link.to.this.md");
+        let md_file = MDFile::default();
+        let referenceable = Referenceable::File(&file_path, &md_file);
+
+        let refname = referenceable.get_refname(root_dir);
+        assert_eq!(
+            refname.as_ref().map(|r| r.full_refname.as_str()),
+            Some("link.to.this")
+        );
+
+        let text = "[[link.to.this]]";
+        let refs = Reference::new(text, "main").collect_vec();
+        let reference = &refs[0];
+
+        assert!(reference.references(root_dir, Path::new("/vault/main.md"), &referenceable));
+    }
+
+    #[test]
+    fn extension_filter_allows_non_media_dots() {
+        // Files with dots that look like non-media extensions should NOT be filtered.
+        // This ensures notes like meeting.log.md or data.csv.md can be referenced
+        // without the .md suffix.
+        let text = "[[meeting.log]] [[data.csv]] [[config.json]] [[notes.txt]]";
+        let parsed = Reference::new(text, "main").collect_vec();
+        assert_eq!(
+            parsed.len(),
+            4,
+            "All non-media dotted links should be parsed"
+        );
+
+        for reference in &parsed {
+            match reference {
+                WikiFileLink(_) => {}
+                other => panic!("Expected WikiFileLink, got {:?}", other),
+            }
+        }
+    }
+
+    #[test]
+    fn extension_filter_blocks_media_embeds() {
+        // Media/attachment extensions should still be filtered out
+        let text = "[[image.png]] [[photo.jpg]] [[doc.pdf]] [[video.mp4]]";
+        let parsed = Reference::new(text, "main").collect_vec();
+        assert_eq!(
+            parsed.len(),
+            0,
+            "All media extension links should be filtered out"
+        );
     }
 
     #[test]
