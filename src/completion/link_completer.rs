@@ -5,6 +5,8 @@ use std::{
     time::SystemTime,
 };
 
+use pathdiff::diff_paths;
+
 use chrono::{Duration, NaiveDate};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
@@ -57,6 +59,13 @@ pub trait LinkCompleter<'a>: Completer<'a> {
     where
         Self: Sync,
     {
+        let entered = self.entered_refname();
+        let is_relative = entered.starts_with("./") || entered.starts_with("../");
+
+        if is_relative {
+            return self.relative_link_completions();
+        }
+
         let referenceables = self.vault().select_referenceable_nodes(None);
 
         let position = self.position();
@@ -121,6 +130,36 @@ pub trait LinkCompleter<'a>: Completer<'a> {
             .map(LinkCompletion::DailyNote);
 
         completions.into_iter().chain(days).collect::<Vec<_>>()
+    }
+
+    /// Generate completions using relative paths from the current file's directory.
+    /// Called when the user has typed `./` or `../` as a path prefix.
+    fn relative_link_completions(&self) -> Vec<LinkCompletion<'a>>
+    where
+        Self: Sync,
+    {
+        let referenceables = self.vault().select_referenceable_nodes(None);
+        let current_dir = self.path().parent();
+        let root_dir = self.vault().root_dir();
+
+        let heading_completions = self.settings().heading_completions;
+
+        referenceables
+            .into_par_iter()
+            .filter(|referenceable| {
+                heading_completions
+                    || !matches!(
+                        referenceable,
+                        Referenceable::Heading(..) | Referenceable::UnresolvedHeading(..)
+                    )
+            })
+            .flat_map(|referenceable| {
+                LinkCompletion::new_relative(referenceable.clone(), self, root_dir, current_dir)
+                    .into_iter()
+                    .par_bridge()
+            })
+            .flatten()
+            .collect::<Vec<_>>()
     }
 }
 
@@ -688,6 +727,95 @@ impl LinkCompletion<'_> {
                 ),
                 _ => None,
             }
+        }
+    }
+
+    /// Create completions with relative paths from the current file's directory.
+    /// Computes paths like `./sibling`, `./subdir/file`, `../parent_file`, etc.
+    fn new_relative<'a>(
+        referenceable: Referenceable<'a>,
+        completer: &impl LinkCompleter<'a>,
+        _root_dir: &Path,
+        current_dir: Option<&Path>,
+    ) -> Option<Vec<LinkCompletion<'a>>> {
+        let current_dir = current_dir?;
+        let target_path = referenceable.get_path();
+
+        // Compute relative path from current file's directory to the target file
+        let relative = diff_paths(target_path, current_dir)?;
+        let relative_str = relative.with_extension("").to_str()?.to_string();
+
+        // Normalize the relative path to use ./ prefix for same-directory or child paths
+        let relative_ref = if relative_str.starts_with("../") {
+            relative_str
+        } else {
+            format!("./{}", relative_str)
+        };
+
+        // Skip self-references (the current file itself)
+        if relative_ref == "."
+            || relative_ref
+                == format!(
+                    "./{}",
+                    completer
+                        .path()
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("")
+                )
+        {
+            return None;
+        }
+
+        match referenceable {
+            Referenceable::File(_, mdfile) => Some(
+                once(File {
+                    mdfile,
+                    match_string: relative_ref,
+                    referenceable: referenceable.clone(),
+                })
+                .collect(),
+            ),
+            Referenceable::Heading(_, mdheading) => {
+                let heading_text = if completer.settings().heading_slug {
+                    heading_to_slug(&mdheading.heading_text)
+                } else {
+                    mdheading.heading_text.clone()
+                };
+                // Get the file-level relative path
+                let file_relative = diff_paths(target_path, current_dir)?;
+                let file_relative_str = file_relative.with_extension("").to_str()?.to_string();
+                let file_relative_ref = if file_relative_str.starts_with("../") {
+                    file_relative_str
+                } else {
+                    format!("./{}", file_relative_str)
+                };
+                Some(
+                    once(Heading {
+                        heading: mdheading,
+                        match_string: format!("{}#{}", file_relative_ref, heading_text),
+                        referenceable,
+                    })
+                    .collect(),
+                )
+            }
+            Referenceable::IndexedBlock(_, indexed) => {
+                let file_relative = diff_paths(target_path, current_dir)?;
+                let file_relative_str = file_relative.with_extension("").to_str()?.to_string();
+                let file_relative_ref = if file_relative_str.starts_with("../") {
+                    file_relative_str
+                } else {
+                    format!("./{}", file_relative_str)
+                };
+                Some(
+                    once(Block {
+                        match_string: format!("{}#^{}", file_relative_ref, indexed.index),
+                        referenceable,
+                    })
+                    .collect(),
+                )
+            }
+            _ => None,
         }
     }
 
