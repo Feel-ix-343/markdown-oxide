@@ -608,6 +608,20 @@ pub trait Rangeable {
             && (range.end.line > position.line
                 || (range.end.line == position.line && range.end.character >= position.character))
     }
+
+    /// Check if two ranges overlap (share any common area).
+    /// This is true when neither range ends before the other starts.
+    fn overlaps(&self, other: &impl Rangeable) -> bool {
+        let a = self.range();
+        let b = other.range();
+
+        let a_before_b = a.end.line < b.start.line
+            || (a.end.line == b.start.line && a.end.character < b.start.character);
+        let b_before_a = b.end.line < a.start.line
+            || (b.end.line == a.start.line && b.end.character < a.start.character);
+
+        !(a_before_b || b_before_a)
+    }
 }
 
 impl Rangeable for MDHeading {
@@ -672,24 +686,24 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
         let headings = MDHeading::new(text)
-            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
+            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)));
         let footnotes = MDFootnote::new(text)
-            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
+            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)));
         let link_refs = MDLinkReferenceDefinition::new(text)
-            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
+            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)));
         let indexed_blocks = MDIndexedBlock::new(text)
-            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
+            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)));
         let tags = match context {
             Settings {
                 tags_in_codeblocks: false,
                 ..
             } => MDTag::new(text)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
                 .collect_vec(),
             _ => MDTag::new(text).collect_vec(),
         };
@@ -3346,5 +3360,36 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    /// Regression test for https://github.com/Feel-ix-343/markdown-oxide/issues/269
+    /// `[[` and `]]` in separate inline code spans should not be detected as a wiki link.
+    #[test]
+    fn no_false_reference_across_inline_code_spans() {
+        use super::Rangeable;
+        use crate::vault::parsing::MDCodeBlock;
+
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers";
+
+        // The wiki link regex DOES match across the two code spans
+        let raw_refs = Reference::new(text, "test").collect_vec();
+        assert!(
+            !raw_refs.is_empty(),
+            "Regex should match the cross-span pattern (this is the raw, unfiltered result)"
+        );
+
+        // But code block detection finds both inline code spans
+        let code_blocks = MDCodeBlock::new(text).collect_vec();
+        assert_eq!(code_blocks.len(), 2, "Should detect two inline code spans");
+
+        // The overlaps filter should remove the false wiki link
+        let filtered_refs: Vec<_> = raw_refs
+            .into_iter()
+            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
+            .collect();
+        assert!(
+            filtered_refs.is_empty(),
+            "Cross-code-span wiki link should be filtered out by overlaps check"
+        );
     }
 }
