@@ -1012,7 +1012,7 @@ impl Reference {
                 | WikiFileLink(ReferenceData {
                     reference_text: file_ref_text,
                     ..
-                }) => matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir)),
+                }) => matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir), root_dir, file_path),
                 Tag(_) => false,
                 WikiHeadingLink(_, _, _) => false,
                 WikiIndexedBlockLink(_, _, _) => false,
@@ -1040,7 +1040,7 @@ impl Reference {
                 | WikiIndexedBlockLink(.., file_ref_text, link_infile_ref)
                 | MDHeadingLink(.., file_ref_text, link_infile_ref)
                 | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => {
-                    matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir))
+                    matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir), root_dir, file_path)
                         && heading_to_slug(&link_infile_ref.to_lowercase())
                             == heading_to_slug(&infile_ref.to_lowercase())
                 }
@@ -1716,7 +1716,7 @@ impl Referenceable<'_> {
                 })
                 | MDHeadingLink(.., file_ref_text, _)
                 | MDIndexedBlockLink(.., file_ref_text, _) => {
-                    matches_path_or_file(file_ref_text, self.get_refname(root_dir))
+                    matches_path_or_file(file_ref_text, self.get_refname(root_dir), root_dir, reference_path)
                 }
                 Tag(_) => false,
                 Footnote(_) => false,
@@ -1765,7 +1765,12 @@ impl Referenceable<'_> {
     }
 }
 
-fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
+fn matches_path_or_file(
+    file_ref_text: &str,
+    refname: Option<Refname>,
+    root_dir: &Path,
+    reference_path: &Path,
+) -> bool {
     (|| {
         let refname = refname?;
         let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
@@ -1775,12 +1780,46 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
             let file_ref_text = file_ref_text.replace(r"\ ", " ");
 
             let chars: Vec<char> = file_ref_text.chars().collect();
-            match chars.as_slice() {
-                &['.', '/', ref path @ ..] | &['/', ref path @ ..] => {
-                    Some(String::from_iter(path) == refname_path)
-                }
-                path => Some(String::from_iter(path) == refname_path),
+
+            // Handle absolute paths (starting with /)
+            if let &['/', ref path @ ..] = chars.as_slice() {
+                return Some(String::from_iter(path) == refname_path);
             }
+
+            // Handle relative paths (starting with ./ or ../)
+            if file_ref_text.starts_with("./") || file_ref_text.starts_with("../") {
+                // Get the directory of the file containing the reference
+                let reference_dir = reference_path.parent()?;
+
+                // Resolve the relative path relative to the reference file's directory
+                let absolute_ref_path = reference_dir.join(&file_ref_text);
+
+                // Normalize the path and get it relative to root_dir
+                let normalized = absolute_ref_path.canonicalize().ok()
+                    .or_else(|| {
+                        // If canonicalize fails (file doesn't exist), try manual normalization
+                        let mut components = Vec::new();
+                        for component in absolute_ref_path.components() {
+                            match component {
+                                std::path::Component::ParentDir => {
+                                    components.pop();
+                                }
+                                std::path::Component::CurDir => {}
+                                comp => components.push(comp),
+                            }
+                        }
+                        Some(components.iter().collect::<PathBuf>())
+                    })?;
+
+                // Get the path relative to root_dir
+                let relative_to_root = diff_paths(&normalized, root_dir)?;
+                let relative_str = relative_to_root.with_extension("").to_str()?.to_string();
+
+                return Some(relative_str == refname_path);
+            }
+
+            // Handle other paths with / (treated as relative to root)
+            Some(file_ref_text == refname_path)
         } else {
             let last_segment = refname.link_file_key()?;
 
@@ -3346,5 +3385,109 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn test_relative_path_resolution() {
+        use std::fs;
+        use std::io::Write;
+        use tempfile::TempDir;
+
+        // Create a temporary directory structure:
+        // root/
+        //   current_dir/
+        //     test.md (contains reference to ./sub_dir/target.md)
+        //     sub_dir/
+        //       target.md
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path();
+
+        let current_dir = root.join("current_dir");
+        let sub_dir = current_dir.join("sub_dir");
+        fs::create_dir_all(&sub_dir).unwrap();
+
+        let test_file = current_dir.join("test.md");
+        let target_file = sub_dir.join("target.md");
+
+        // Write some content to the files
+        fs::File::create(&test_file)
+            .unwrap()
+            .write_all(b"# Test\n[link](./sub_dir/target)")
+            .unwrap();
+        fs::File::create(&target_file)
+            .unwrap()
+            .write_all(b"# Target")
+            .unwrap();
+
+        // Create a reference from test.md
+        let reference_text = "./sub_dir/target";
+        let reference = Reference::MDFileLink(ReferenceData {
+            reference_text: reference_text.into(),
+            display_text: Some("link".into()),
+            range: Range::default().into(),
+        });
+
+        // Create a referenceable for target.md
+        let md_file = MDFile::default();
+        let referenceable = Referenceable::File(&target_file, &md_file);
+
+        // Test that the reference matches the target file
+        let matches = reference.references(root, &test_file, &referenceable);
+
+        assert!(
+            matches,
+            "Relative path ./sub_dir/target should resolve to current_dir/sub_dir/target.md"
+        );
+    }
+
+    #[test]
+    fn test_parent_dir_path_resolution() {
+        use std::fs;
+        use std::io::Write;
+        use tempfile::TempDir;
+
+        // Create a temporary directory structure:
+        // root/
+        //   target.md
+        //   sub_dir/
+        //     test.md (contains reference to ../target)
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path();
+
+        let sub_dir = root.join("sub_dir");
+        fs::create_dir_all(&sub_dir).unwrap();
+
+        let test_file = sub_dir.join("test.md");
+        let target_file = root.join("target.md");
+
+        // Write some content to the files
+        fs::File::create(&test_file)
+            .unwrap()
+            .write_all(b"# Test\n[link](../target)")
+            .unwrap();
+        fs::File::create(&target_file)
+            .unwrap()
+            .write_all(b"# Target")
+            .unwrap();
+
+        // Create a reference from test.md
+        let reference_text = "../target";
+        let reference = Reference::MDFileLink(ReferenceData {
+            reference_text: reference_text.into(),
+            display_text: Some("link".into()),
+            range: Range::default().into(),
+        });
+
+        // Create a referenceable for target.md
+        let md_file = MDFile::default();
+        let referenceable = Referenceable::File(&target_file, &md_file);
+
+        // Test that the reference matches the target file
+        let matches = reference.references(root, &test_file, &referenceable);
+
+        assert!(
+            matches,
+            "Relative path ../target should resolve to target.md in root"
+        );
     }
 }
