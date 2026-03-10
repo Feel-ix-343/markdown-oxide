@@ -1,3 +1,8 @@
+---
+name: testing-zed
+description: Test markdown-oxide LSP features in Zed
+---
+
 # Test Markdown-Oxide Extension in Zed
 
 ## Overview

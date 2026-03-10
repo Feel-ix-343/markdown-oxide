@@ -1,3 +1,8 @@
+---
+name: testing-neovim
+description: Test markdown-oxide LSP features in Neovim
+---
+
 # Test Markdown-Oxide in Neovim
 
 ## Overview
