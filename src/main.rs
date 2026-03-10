@@ -610,6 +610,50 @@ impl LanguageServer for Backend {
         self.reconstruct_vault().await
     }
 
+    async fn did_rename_files(&self, params: RenameFilesParams) {
+        self.client
+            .log_message(
+                MessageType::LOG,
+                format!("didRenameFiles: {:?}", params.files),
+            )
+            .await;
+
+        let edit = self
+            .bind_vault(|vault| Ok(rename::rename_files(vault, &params)))
+            .await;
+
+        match edit {
+            Ok(Some(edit)) => {
+                if let Err(e) = self.client.apply_edit(edit).await {
+                    self.client
+                        .log_message(
+                            MessageType::ERROR,
+                            format!("Failed to apply rename edits: {:?}", e),
+                        )
+                        .await;
+                }
+            }
+            Ok(None) => {
+                self.client
+                    .log_message(
+                        MessageType::LOG,
+                        "No references to update for renamed files",
+                    )
+                    .await;
+            }
+            Err(e) => {
+                self.client
+                    .log_message(
+                        MessageType::ERROR,
+                        format!("Failed to compute rename edits: {:?}", e),
+                    )
+                    .await;
+            }
+        }
+
+        self.reconstruct_vault().await;
+    }
+
     async fn goto_definition(
         &self,
         params: GotoDefinitionParams,

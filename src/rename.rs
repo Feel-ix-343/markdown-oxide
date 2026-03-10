@@ -3,7 +3,8 @@ use std::path::Path;
 
 use tower_lsp::lsp_types::{
     DocumentChangeOperation, DocumentChanges, OneOf, OptionalVersionedTextDocumentIdentifier,
-    RenameFile, RenameParams, ResourceOp, TextDocumentEdit, TextEdit, Url, WorkspaceEdit,
+    RenameFile, RenameFilesParams, RenameParams, ResourceOp, TextDocumentEdit, TextEdit, Url,
+    WorkspaceEdit,
 };
 
 use crate::vault::{Reference, Referenceable, Vault};
@@ -256,6 +257,137 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                 .chain(iter::once(referenceable_document_change).flatten())
                 .collect(), // order matters here
         )),
+        ..Default::default()
+    })
+}
+
+/// Handle `workspace/didRenameFiles` by updating all references to the renamed files.
+/// Unlike `rename()`, the file has already been renamed on disk by the editor, so we
+/// only need to produce reference-updating edits (no `RenameFile` resource operation).
+pub fn rename_files(vault: &Vault, params: &RenameFilesParams) -> Option<WorkspaceEdit> {
+    let mut all_changes: Vec<DocumentChangeOperation> = Vec::new();
+
+    for file_rename in &params.files {
+        let old_uri = Url::parse(&file_rename.old_uri).ok()?;
+        let old_path = old_uri.to_file_path().ok()?;
+
+        let new_uri = Url::parse(&file_rename.new_uri).ok()?;
+        let new_path = new_uri.to_file_path().ok()?;
+
+        let new_ref_name = new_path.file_stem()?.to_string_lossy().to_string();
+
+        // Find the Referenceable::File for the old path in the vault
+        let referenceable = vault
+            .select_referenceable_nodes(Some(&old_path))
+            .into_iter()
+            .find(|r| matches!(r, Referenceable::File(..)))?;
+
+        let references = vault.select_references_for_referenceable(&referenceable)?;
+
+        let reference_edits = references
+            .into_iter()
+            .filter_map(|(path, reference)| match reference {
+                Reference::WikiFileLink(data) => {
+                    let new_text = format!(
+                        "[[{}{}]]",
+                        new_ref_name,
+                        data.display_text
+                            .as_ref()
+                            .map(|text| format!("|{text}"))
+                            .unwrap_or_default()
+                    );
+
+                    Some(TextDocumentEdit {
+                        text_document: OptionalVersionedTextDocumentIdentifier {
+                            uri: Url::from_file_path(path).ok()?,
+                            version: None,
+                        },
+                        edits: vec![OneOf::Left(TextEdit {
+                            range: *data.range,
+                            new_text,
+                        })],
+                    })
+                }
+                Reference::WikiHeadingLink(data, _file, infile)
+                | Reference::WikiIndexedBlockLink(data, _file, infile) => {
+                    let new_text = format!(
+                        "[[{}#{}{}]]",
+                        new_ref_name,
+                        infile,
+                        data.display_text
+                            .as_ref()
+                            .map(|text| format!("|{text}"))
+                            .unwrap_or_default()
+                    );
+
+                    Some(TextDocumentEdit {
+                        text_document: OptionalVersionedTextDocumentIdentifier {
+                            uri: Url::from_file_path(path).ok()?,
+                            version: None,
+                        },
+                        edits: vec![OneOf::Left(TextEdit {
+                            range: *data.range,
+                            new_text,
+                        })],
+                    })
+                }
+                Reference::MDFileLink(data) => {
+                    let new_text = format!(
+                        "[{}]({})",
+                        data.display_text
+                            .as_ref()
+                            .map(|text| format!("|{text}"))
+                            .unwrap_or_default(),
+                        new_ref_name,
+                    );
+
+                    Some(TextDocumentEdit {
+                        text_document: OptionalVersionedTextDocumentIdentifier {
+                            uri: Url::from_file_path(path).ok()?,
+                            version: None,
+                        },
+                        edits: vec![OneOf::Left(TextEdit {
+                            range: *data.range,
+                            new_text,
+                        })],
+                    })
+                }
+                Reference::MDHeadingLink(data, _file, infile)
+                | Reference::MDIndexedBlockLink(data, _file, infile) => {
+                    let new_text = format!(
+                        "[{}]({}#{})",
+                        data.display_text
+                            .as_ref()
+                            .map(|text| format!("|{text}"))
+                            .unwrap_or_default(),
+                        new_ref_name,
+                        infile,
+                    );
+
+                    Some(TextDocumentEdit {
+                        text_document: OptionalVersionedTextDocumentIdentifier {
+                            uri: Url::from_file_path(path).ok()?,
+                            version: None,
+                        },
+                        edits: vec![OneOf::Left(TextEdit {
+                            range: *data.range,
+                            new_text,
+                        })],
+                    })
+                }
+                Reference::Tag(_) | Reference::Footnote(_) | Reference::LinkRef(_) => None,
+            })
+            .map(DocumentChangeOperation::Edit);
+
+        all_changes.extend(reference_edits);
+    }
+
+    if all_changes.is_empty() {
+        return None;
+    }
+
+    Some(WorkspaceEdit {
+        document_changes: Some(DocumentChanges::Operations(all_changes)),
         ..Default::default()
     })
 }
