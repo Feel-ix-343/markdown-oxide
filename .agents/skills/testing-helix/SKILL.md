@@ -1,3 +1,8 @@
+---
+name: testing-helix
+description: Test markdown-oxide LSP features in Helix
+---
+
 # Test Markdown-Oxide in Helix
 
 ## Overview
