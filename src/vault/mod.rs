@@ -2534,6 +2534,149 @@ mod vault_tests {
     }
 
     #[test]
+    fn md_link_with_dot_in_description() {
+        // Issue #293: dots in the display/description text should not break link parsing
+        let text = "[desc.](baz)";
+        let parsed = Reference::new(text, "test").collect_vec();
+
+        let expected = vec![Reference::MDFileLink(ReferenceData {
+            reference_text: "baz".into(),
+            display_text: Some("desc.".into()),
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 0,
+                    character: 12,
+                },
+            }
+            .into(),
+        })];
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn md_link_with_dot_in_description_and_heading() {
+        // Issue #293: dots in the display/description text with heading ref
+        let text = "[see sec.](file#heading)";
+        let parsed = Reference::new(text, "test").collect_vec();
+
+        let expected = vec![Reference::MDHeadingLink(
+            ReferenceData {
+                reference_text: "file#heading".into(),
+                display_text: Some("see sec.".into()),
+                range: Range {
+                    start: Position {
+                        line: 0,
+                        character: 0,
+                    },
+                    end: Position {
+                        line: 0,
+                        character: 24,
+                    },
+                }
+                .into(),
+            },
+            "file".into(),
+            "heading".into(),
+        )];
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn wiki_link_with_dot_in_description() {
+        // Issue #293: dots in the display/description text should not break wiki link parsing
+        let text = "[[baz|desc.]]";
+        let parsed = Reference::new(text, "test").collect_vec();
+
+        let expected = vec![WikiFileLink(ReferenceData {
+            reference_text: "baz".into(),
+            display_text: Some("desc.".into()),
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 0,
+                    character: 13,
+                },
+            }
+            .into(),
+        })];
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn wiki_link_with_dot_in_description_and_heading() {
+        // Issue #293: dots in the display/description text with heading ref
+        let text = "[[file#heading|sec. 2]]";
+        let parsed = Reference::new(text, "test").collect_vec();
+
+        let expected = vec![WikiHeadingLink(
+            ReferenceData {
+                reference_text: "file#heading".into(),
+                display_text: Some("sec. 2".into()),
+                range: Range {
+                    start: Position {
+                        line: 0,
+                        character: 0,
+                    },
+                    end: Position {
+                        line: 0,
+                        character: 23,
+                    },
+                }
+                .into(),
+            },
+            "file".into(),
+            "heading".into(),
+        )];
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn links_with_dots_in_description_full_file() {
+        // Issue #293: full scenario from the bug report
+        let text = "# work\n[[baz]]\n[[baz|desc]]\n[desc](baz)\n[desc(with parenthesis work)](baz)\n\n\n# don't work\n[desc.](baz)\n[[baz|desc.]]";
+        let parsed = Reference::new(text, "test").collect_vec();
+
+        // All six links should be parsed
+        assert_eq!(
+            parsed.len(),
+            6,
+            "Expected 6 references, got {}",
+            parsed.len()
+        );
+
+        // Verify [desc.](baz) is parsed correctly
+        let dot_md = parsed
+            .iter()
+            .find(|r| matches!(r, MDFileLink(d) if d.display_text.as_deref() == Some("desc.")));
+        assert!(
+            dot_md.is_some(),
+            "[desc.](baz) should be parsed as MDFileLink"
+        );
+        assert_eq!(dot_md.unwrap().data().reference_text, "baz");
+
+        // Verify [[baz|desc.]] is parsed correctly
+        let dot_wiki = parsed
+            .iter()
+            .find(|r| matches!(r, WikiFileLink(d) if d.display_text.as_deref() == Some("desc.")));
+        assert!(
+            dot_wiki.is_some(),
+            "[[baz|desc.]] should be parsed as WikiFileLink"
+        );
+        assert_eq!(dot_wiki.unwrap().data().reference_text, "baz");
+    }
+
+    #[test]
     fn heading_parsing() {
         let text = r"# This is a heading
 
