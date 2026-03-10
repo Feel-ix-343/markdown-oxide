@@ -268,7 +268,7 @@ impl Vault {
                     .par_iter()
                     .flat_map(|resolved| {
                         resolved.get_refname(self.root_dir()).and_then(|refname| {
-                            let full = refname.to_string();
+                            let full = refname.to_string().replace(MAIN_SEPARATOR, "/");
                             let short = format!(
                                 "{}{}",
                                 refname.link_file_key()?,
@@ -282,19 +282,20 @@ impl Vault {
                             // (spaces→dashes) form so that both
                             // "file#Some Heading" and "file#Some-Heading"
                             // are recognised as resolved.
-                            let mut entries = vec![full.clone(), short.clone()];
+                            // All entries are lowercased for case-insensitive matching.
+                            let mut entries = vec![full.to_lowercase(), short.to_lowercase()];
                             if let Some((file_part, heading_part)) = full.split_once('#') {
                                 let slugged =
                                     format!("{}#{}", file_part, heading_to_slug(heading_part));
                                 if slugged != full {
-                                    entries.push(slugged);
+                                    entries.push(slugged.to_lowercase());
                                 }
                             }
                             if let Some((file_part, heading_part)) = short.split_once('#') {
                                 let slugged =
                                     format!("{}#{}", file_part, heading_to_slug(heading_part));
                                 if slugged != short {
-                                    entries.push(slugged);
+                                    entries.push(slugged.to_lowercase());
                                 }
                             }
                             Some(entries)
@@ -311,18 +312,25 @@ impl Vault {
                         .into_par_iter()
                         .filter(|(_, reference)| {
                             let ref_text = &reference.data().reference_text;
+                            // Strip ./ prefix for comparison (relative path from current dir)
+                            let ref_text_cleaned = ref_text.strip_prefix("./").unwrap_or(ref_text);
                             // Normalize only the heading portion (after #) of the
                             // reference text so that e.g. "file#Some Heading" matches
                             // the slugified refname "file#Some-Heading" in the resolved
                             // set, without corrupting spaces in file paths.
-                            let normalized =
-                                if let Some((file_part, heading_part)) = ref_text.split_once('#') {
-                                    format!("{}#{}", file_part, heading_to_slug(heading_part))
-                                } else {
-                                    ref_text.clone()
-                                };
-                            !resolved_referenceables_refnames.contains(ref_text)
-                                && !resolved_referenceables_refnames.contains(&normalized)
+                            let normalized = if let Some((file_part, heading_part)) =
+                                ref_text_cleaned.split_once('#')
+                            {
+                                format!("{}#{}", file_part, heading_to_slug(heading_part))
+                            } else {
+                                ref_text_cleaned.to_string()
+                            };
+                            // Use case-insensitive comparison for matching against
+                            // the resolved set (consistent with Obsidian behavior)
+                            !resolved_referenceables_refnames
+                                .contains(&ref_text_cleaned.to_lowercase())
+                                && !resolved_referenceables_refnames
+                                    .contains(&normalized.to_lowercase())
                         })
                         .flat_map(|(_, reference)| match reference {
                             Reference::WikiFileLink(data) | Reference::MDFileLink(data) => {
@@ -1571,7 +1579,9 @@ impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
         let path = &self.path.clone()?;
 
-        let last = path.split(MAIN_SEPARATOR).next_back()?;
+        // Split by both '/' and the OS separator to handle cross-platform paths
+        let last = path.split('/').next_back()?;
+        let last = last.split(MAIN_SEPARATOR).next_back()?;
 
         Some(last.to_string())
     }
@@ -1770,17 +1780,21 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
         let refname = refname?;
         let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
 
+        // Normalize the refname_path to use forward slashes (for Windows compatibility)
+        let refname_path = refname_path.replace(MAIN_SEPARATOR, "/");
+
         if file_ref_text.contains('/') {
             let file_ref_text = file_ref_text.replace(r"%20", " ");
             let file_ref_text = file_ref_text.replace(r"\ ", " ");
 
             let chars: Vec<char> = file_ref_text.chars().collect();
-            match chars.as_slice() {
-                &['.', '/', ref path @ ..] | &['/', ref path @ ..] => {
-                    Some(String::from_iter(path) == refname_path)
-                }
-                path => Some(String::from_iter(path) == refname_path),
-            }
+            let cleaned = match chars.as_slice() {
+                &['.', '/', ref path @ ..] | &['/', ref path @ ..] => String::from_iter(path),
+                path => String::from_iter(path),
+            };
+            // Use case-insensitive comparison, consistent with filename-only matching
+            // and Obsidian's case-insensitive link resolution
+            Some(cleaned.to_lowercase() == refname_path.to_lowercase())
         } else {
             let last_segment = refname.link_file_key()?;
 
@@ -3346,5 +3360,177 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn test_matches_path_or_file_subfolder() {
+        use super::matches_path_or_file;
+
+        // Test: wiki link [[folder/File]] should match refname "folder/File"
+        let refname = Refname {
+            full_refname: "folder/File".into(),
+            path: Some("folder/File".into()),
+            infile_ref: None,
+        };
+        assert!(
+            matches_path_or_file("folder/File", Some(refname)),
+            "Exact subfolder path should match"
+        );
+
+        // Test: case-insensitive matching for subfolder paths
+        let refname = Refname {
+            full_refname: "Folder/File".into(),
+            path: Some("Folder/File".into()),
+            infile_ref: None,
+        };
+        assert!(
+            matches_path_or_file("folder/file", Some(refname)),
+            "Case-insensitive subfolder path should match"
+        );
+
+        // Test: ./ prefix should be stripped
+        let refname = Refname {
+            full_refname: "folder/File".into(),
+            path: Some("folder/File".into()),
+            infile_ref: None,
+        };
+        assert!(
+            matches_path_or_file("./folder/File", Some(refname)),
+            "./ prefix should be stripped for matching"
+        );
+
+        // Test: / prefix should be stripped
+        let refname = Refname {
+            full_refname: "folder/File".into(),
+            path: Some("folder/File".into()),
+            infile_ref: None,
+        };
+        assert!(
+            matches_path_or_file("/folder/File", Some(refname)),
+            "/ prefix should be stripped for matching"
+        );
+
+        // Test: filename-only matching is case-insensitive
+        let refname = Refname {
+            full_refname: "folder/File".into(),
+            path: Some("folder/File".into()),
+            infile_ref: None,
+        };
+        assert!(
+            matches_path_or_file("file", Some(refname)),
+            "Filename-only should match case-insensitively"
+        );
+
+        // Test: URL-encoded spaces in paths
+        let refname = Refname {
+            full_refname: "my folder/my file".into(),
+            path: Some("my folder/my file".into()),
+            infile_ref: None,
+        };
+        assert!(
+            matches_path_or_file("my%20folder/my%20file", Some(refname)),
+            "URL-encoded spaces should be decoded for matching"
+        );
+
+        // Test: non-matching path should not match
+        let refname = Refname {
+            full_refname: "folder/File".into(),
+            path: Some("folder/File".into()),
+            infile_ref: None,
+        };
+        assert!(
+            !matches_path_or_file("other/File", Some(refname)),
+            "Different subfolder path should not match"
+        );
+    }
+
+    #[test]
+    fn test_subfolder_wiki_link_references_file() {
+        // Test that a wiki link like [[folder/Fiile]] correctly references
+        // a Referenceable::File for folder/Fiile.md
+        let root_dir = Path::new("/vault");
+        let file_path = Path::new("/vault/test.md");
+        let target_path = std::path::PathBuf::from("/vault/folder/Fiile.md");
+
+        let reference = WikiFileLink(ReferenceData {
+            reference_text: "folder/Fiile".into(),
+            range: Range::default().into(),
+            ..ReferenceData::default()
+        });
+
+        let md_file = MDFile::default();
+        let referenceable = Referenceable::File(&target_path, &md_file);
+
+        assert!(
+            reference.references(root_dir, file_path, &referenceable),
+            "[[folder/Fiile]] should reference folder/Fiile.md"
+        );
+    }
+
+    #[test]
+    fn test_subfolder_wiki_link_case_insensitive() {
+        // Test case-insensitive matching for subfolder wiki links
+        let root_dir = Path::new("/vault");
+        let file_path = Path::new("/vault/test.md");
+        let target_path = std::path::PathBuf::from("/vault/Folder/File.md");
+
+        let reference = WikiFileLink(ReferenceData {
+            reference_text: "folder/file".into(),
+            range: Range::default().into(),
+            ..ReferenceData::default()
+        });
+
+        let md_file = MDFile::default();
+        let referenceable = Referenceable::File(&target_path, &md_file);
+
+        assert!(
+            reference.references(root_dir, file_path, &referenceable),
+            "[[folder/file]] should match Folder/File.md case-insensitively"
+        );
+    }
+
+    #[test]
+    fn test_subfolder_md_link_references_file() {
+        // Test that a markdown link [text](folder/Fiile) correctly references
+        // a Referenceable::File for folder/Fiile.md
+        let root_dir = Path::new("/vault");
+        let file_path = Path::new("/vault/test.md");
+        let target_path = std::path::PathBuf::from("/vault/folder/Fiile.md");
+
+        let reference = MDFileLink(ReferenceData {
+            reference_text: "folder/Fiile".into(),
+            display_text: Some("text".into()),
+            range: Range::default().into(),
+        });
+
+        let md_file = MDFile::default();
+        let referenceable = Referenceable::File(&target_path, &md_file);
+
+        assert!(
+            reference.references(root_dir, file_path, &referenceable),
+            "[text](folder/Fiile) should reference folder/Fiile.md"
+        );
+    }
+
+    #[test]
+    fn test_dot_slash_prefix_wiki_link() {
+        // Test that [[./folder/File]] correctly references folder/File.md
+        let root_dir = Path::new("/vault");
+        let file_path = Path::new("/vault/test.md");
+        let target_path = std::path::PathBuf::from("/vault/folder/File.md");
+
+        let reference = WikiFileLink(ReferenceData {
+            reference_text: "./folder/File".into(),
+            range: Range::default().into(),
+            ..ReferenceData::default()
+        });
+
+        let md_file = MDFile::default();
+        let referenceable = Referenceable::File(&target_path, &md_file);
+
+        assert!(
+            reference.references(root_dir, file_path, &referenceable),
+            "[[./folder/File]] should reference folder/File.md"
+        );
     }
 }
