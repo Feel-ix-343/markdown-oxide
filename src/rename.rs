@@ -268,118 +268,119 @@ pub fn rename_files(vault: &Vault, params: &RenameFilesParams) -> Option<Workspa
     let mut all_changes: Vec<DocumentChangeOperation> = Vec::new();
 
     for file_rename in &params.files {
-        let old_uri = Url::parse(&file_rename.old_uri).ok()?;
-        let old_path = old_uri.to_file_path().ok()?;
+        let edits = (|| -> Option<Vec<DocumentChangeOperation>> {
+            let old_uri = Url::parse(&file_rename.old_uri).ok()?;
+            let old_path = old_uri.to_file_path().ok()?;
 
-        let new_uri = Url::parse(&file_rename.new_uri).ok()?;
-        let new_path = new_uri.to_file_path().ok()?;
+            let new_uri = Url::parse(&file_rename.new_uri).ok()?;
+            let new_path = new_uri.to_file_path().ok()?;
 
-        let new_ref_name = new_path.file_stem()?.to_string_lossy().to_string();
+            let new_ref_name = new_path.file_stem()?.to_string_lossy().to_string();
 
-        // Find the Referenceable::File for the old path in the vault
-        let referenceable = vault
-            .select_referenceable_nodes(Some(&old_path))
-            .into_iter()
-            .find(|r| matches!(r, Referenceable::File(..)))?;
+            // Find the Referenceable::File for the old path in the vault
+            let referenceable = vault
+                .select_referenceable_nodes(Some(&old_path))
+                .into_iter()
+                .find(|r| matches!(r, Referenceable::File(..)))?;
 
-        let references = vault.select_references_for_referenceable(&referenceable)?;
+            let references = vault.select_references_for_referenceable(&referenceable)?;
 
-        let reference_edits = references
-            .into_iter()
-            .filter_map(|(path, reference)| match reference {
-                Reference::WikiFileLink(data) => {
-                    let new_text = format!(
-                        "[[{}{}]]",
-                        new_ref_name,
-                        data.display_text
-                            .as_ref()
-                            .map(|text| format!("|{text}"))
-                            .unwrap_or_default()
-                    );
+            let reference_edits = references
+                .into_iter()
+                .filter_map(|(path, reference)| match reference {
+                    Reference::WikiFileLink(data) => {
+                        let new_text = format!(
+                            "[[{}{}]]",
+                            new_ref_name,
+                            data.display_text
+                                .as_ref()
+                                .map(|text| format!("|{text}"))
+                                .unwrap_or_default()
+                        );
 
-                    Some(TextDocumentEdit {
-                        text_document: OptionalVersionedTextDocumentIdentifier {
-                            uri: Url::from_file_path(path).ok()?,
-                            version: None,
-                        },
-                        edits: vec![OneOf::Left(TextEdit {
-                            range: *data.range,
-                            new_text,
-                        })],
-                    })
-                }
-                Reference::WikiHeadingLink(data, _file, infile)
-                | Reference::WikiIndexedBlockLink(data, _file, infile) => {
-                    let new_text = format!(
-                        "[[{}#{}{}]]",
-                        new_ref_name,
-                        infile,
-                        data.display_text
-                            .as_ref()
-                            .map(|text| format!("|{text}"))
-                            .unwrap_or_default()
-                    );
+                        Some(TextDocumentEdit {
+                            text_document: OptionalVersionedTextDocumentIdentifier {
+                                uri: Url::from_file_path(path).ok()?,
+                                version: None,
+                            },
+                            edits: vec![OneOf::Left(TextEdit {
+                                range: *data.range,
+                                new_text,
+                            })],
+                        })
+                    }
+                    Reference::WikiHeadingLink(data, _file, infile)
+                    | Reference::WikiIndexedBlockLink(data, _file, infile) => {
+                        let new_text = format!(
+                            "[[{}#{}{}]]",
+                            new_ref_name,
+                            infile,
+                            data.display_text
+                                .as_ref()
+                                .map(|text| format!("|{text}"))
+                                .unwrap_or_default()
+                        );
 
-                    Some(TextDocumentEdit {
-                        text_document: OptionalVersionedTextDocumentIdentifier {
-                            uri: Url::from_file_path(path).ok()?,
-                            version: None,
-                        },
-                        edits: vec![OneOf::Left(TextEdit {
-                            range: *data.range,
-                            new_text,
-                        })],
-                    })
-                }
-                Reference::MDFileLink(data) => {
-                    let new_text = format!(
-                        "[{}]({})",
-                        data.display_text
-                            .as_ref()
-                            .map(|text| format!("|{text}"))
-                            .unwrap_or_default(),
-                        new_ref_name,
-                    );
+                        Some(TextDocumentEdit {
+                            text_document: OptionalVersionedTextDocumentIdentifier {
+                                uri: Url::from_file_path(path).ok()?,
+                                version: None,
+                            },
+                            edits: vec![OneOf::Left(TextEdit {
+                                range: *data.range,
+                                new_text,
+                            })],
+                        })
+                    }
+                    Reference::MDFileLink(data) => {
+                        let new_text = format!(
+                            "[{}]({})",
+                            data.display_text.as_ref().cloned().unwrap_or_default(),
+                            new_ref_name,
+                        );
 
-                    Some(TextDocumentEdit {
-                        text_document: OptionalVersionedTextDocumentIdentifier {
-                            uri: Url::from_file_path(path).ok()?,
-                            version: None,
-                        },
-                        edits: vec![OneOf::Left(TextEdit {
-                            range: *data.range,
-                            new_text,
-                        })],
-                    })
-                }
-                Reference::MDHeadingLink(data, _file, infile)
-                | Reference::MDIndexedBlockLink(data, _file, infile) => {
-                    let new_text = format!(
-                        "[{}]({}#{})",
-                        data.display_text
-                            .as_ref()
-                            .map(|text| format!("|{text}"))
-                            .unwrap_or_default(),
-                        new_ref_name,
-                        infile,
-                    );
+                        Some(TextDocumentEdit {
+                            text_document: OptionalVersionedTextDocumentIdentifier {
+                                uri: Url::from_file_path(path).ok()?,
+                                version: None,
+                            },
+                            edits: vec![OneOf::Left(TextEdit {
+                                range: *data.range,
+                                new_text,
+                            })],
+                        })
+                    }
+                    Reference::MDHeadingLink(data, _file, infile)
+                    | Reference::MDIndexedBlockLink(data, _file, infile) => {
+                        let new_text = format!(
+                            "[{}]({}#{})",
+                            data.display_text.as_ref().cloned().unwrap_or_default(),
+                            new_ref_name,
+                            infile,
+                        );
 
-                    Some(TextDocumentEdit {
-                        text_document: OptionalVersionedTextDocumentIdentifier {
-                            uri: Url::from_file_path(path).ok()?,
-                            version: None,
-                        },
-                        edits: vec![OneOf::Left(TextEdit {
-                            range: *data.range,
-                            new_text,
-                        })],
-                    })
-                }
-                Reference::Tag(_) | Reference::Footnote(_) | Reference::LinkRef(_) => None,
-            })
-            .map(DocumentChangeOperation::Edit);
+                        Some(TextDocumentEdit {
+                            text_document: OptionalVersionedTextDocumentIdentifier {
+                                uri: Url::from_file_path(path).ok()?,
+                                version: None,
+                            },
+                            edits: vec![OneOf::Left(TextEdit {
+                                range: *data.range,
+                                new_text,
+                            })],
+                        })
+                    }
+                    Reference::Tag(_) | Reference::Footnote(_) | Reference::LinkRef(_) => None,
+                })
+                .map(DocumentChangeOperation::Edit)
+                .collect();
 
-        all_changes.extend(reference_edits);
+            Some(reference_edits)
+        })();
+
+        if let Some(edits) = edits {
+            all_changes.extend(edits);
+        }
     }
 
     if all_changes.is_empty() {
