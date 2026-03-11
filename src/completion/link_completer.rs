@@ -709,7 +709,11 @@ impl LinkCompletion<'_> {
             Self::DailyNote(daily) => daily.referenceable(completer),
         };
 
-        let label = self.refname(completer);
+        let label = if matches!(completer.settings().link_format, LinkFormat::Absolute) {
+            self.refname(completer)
+        } else {
+            self.match_string().to_string()
+        };
 
         CompletionItem {
             label: label.to_string(),
