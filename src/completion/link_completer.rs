@@ -19,9 +19,7 @@ use crate::{
     completion::util::check_in_code_block,
     config::{LinkFormat, Settings},
     ui::preview_referenceable,
-    vault::{
-        get_obsidian_ref_path, heading_to_slug, MDFile, MDHeading, Reference, Referenceable, Vault,
-    },
+    vault::{heading_to_slug, MDFile, MDHeading, Reference, Referenceable, Vault},
 };
 
 use super::{
@@ -618,13 +616,8 @@ impl LinkCompletion<'_> {
         referenceable: Referenceable<'a>,
         completer: &impl LinkCompleter<'a>,
     ) -> Option<Vec<LinkCompletion<'a>>> {
-        let match_path = |path: &PathBuf| -> Option<String> {
-            if matches!(completer.settings().link_format, LinkFormat::Absolute) {
-                get_obsidian_ref_path(completer.vault().root_dir(), path)
-            } else {
-                Some(path.file_stem()?.to_str()?.to_string())
-            }
-        };
+        let match_path =
+            |path: &PathBuf| -> Option<String> { Some(path.file_stem()?.to_str()?.to_string()) };
 
         if let Some(daily) = MDDailyNote::from_referenceable(referenceable.clone(), completer) {
             Some(vec![DailyNote(daily)])
@@ -716,7 +709,7 @@ impl LinkCompletion<'_> {
             Self::DailyNote(daily) => daily.referenceable(completer),
         };
 
-        let label = self.match_string();
+        let label = self.refname(completer);
 
         CompletionItem {
             label: label.to_string(),
