@@ -81,6 +81,12 @@ link_filenames_only = false
 # Note: Go-to-definition and diagnostics always resolve both forms regardless of this setting
 heading_slug = false
 
+# Link format for completions and renames: "shortest" | "relative" | "absolute"
+# "shortest" (default): uses just the file name, e.g. [[note]]
+# "absolute": uses the vault-relative path, e.g. [[folder/note]]
+# If not specified, this is auto-detected from your Obsidian config (Settings > Files & Links > New link format)
+link_format = "shortest"
+
 # Folders to exclude from vault indexing
 # Files within excluded folders will not appear in completions, references, diagnostics, or other LSP features
 # Matching is by directory name, so excluding "Archive" will skip any directory named Archive at any depth
@@ -136,3 +142,4 @@ Examples:
         + `dailynote`: checks if you have the dailynote Obsidian plugin and translates this formatting to Markdown Oxide's date formatting   ^1862g
     * `new_file_folder_path`: uses the specific folder for new files you set in Obsidian if you have it enabled. This is relevant to the [Create Unresolved File Code Action](<Features Index.md#^implCodeAction>)
     * `daily_notes_folder_path`: uses the specific folder for new daily notes you set in the Obsidian Daily Notes plugin, if you have this option enabled. This is relevant to the path for [opening daily notes](<Features Index.md#Opening Daily Notes>) and for [the code action that creates unresolved links](<Features Index.md#^implCodeAction>) if they have the `dailynote` format.
+    * `link_format`: auto-detected from Obsidian's "New link format" setting (Settings > Files & Links). If set to "Shortest path when possible" in Obsidian, this maps to `"shortest"`; if set to "Absolute path in vault", this maps to `"absolute"`. You can override this in `.moxide.toml` by setting `link_format` explicitly.
