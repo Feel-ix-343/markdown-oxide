@@ -5,6 +5,7 @@ use tower_lsp::lsp_types::{CompletionItem, CompletionList, CompletionParams, Com
 use crate::{config::Settings, vault::Vault};
 
 use self::callout_completer::CalloutCompleter;
+use self::checkbox_completer::CheckboxCompleter;
 use self::link_completer::WikiLinkCompleter;
 use self::{
     footnote_completer::FootnoteCompleter, link_completer::MarkdownLinkCompleter,
@@ -12,6 +13,7 @@ use self::{
 };
 
 mod callout_completer;
+mod checkbox_completer;
 mod footnote_completer;
 mod link_completer;
 mod matcher;
@@ -65,11 +67,18 @@ pub fn get_completions(
     };
 
     // I would refactor this if I could figure out generic closures
-    run_completer::<UnindexedBlockCompleter<MarkdownLinkCompleter>>(
+    run_completer::<CheckboxCompleter>(
         completion_context,
         params.text_document_position.position.line,
         params.text_document_position.position.character,
     )
+    .or_else(|| {
+        run_completer::<UnindexedBlockCompleter<MarkdownLinkCompleter>>(
+            completion_context,
+            params.text_document_position.position.line,
+            params.text_document_position.position.character,
+        )
+    })
     .or_else(|| {
         run_completer::<UnindexedBlockCompleter<WikiLinkCompleter>>(
             completion_context,
