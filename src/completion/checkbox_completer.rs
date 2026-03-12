@@ -33,6 +33,7 @@ impl<'a> Completer<'a> for CheckboxCompleter {
             || bullet == "*"
             || bullet == "+"
             || (bullet.ends_with('.')
+                && bullet.len() > 1
                 && bullet[..bullet.len() - 1]
                     .chars()
                     .all(|c| c.is_ascii_digit()));
