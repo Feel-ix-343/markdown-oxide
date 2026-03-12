@@ -26,32 +26,43 @@ pub fn code_actions(
         let line_chars = vault.select_line(path, params.range.start.line as isize)?;
         let line_str: String = line_chars.into_iter().collect();
         let trimmed = line_str.trim_start();
-        
+
         let space_idx = trimmed.find(' ')?;
         let (bullet, rest) = trimmed.split_at(space_idx);
         let rest_trimmed = rest.trim_start();
-        
-        let is_valid_bullet = bullet == "-" 
-            || bullet == "*" 
-            || bullet == "+" 
-            || (bullet.ends_with('.') && bullet[..bullet.len() - 1].chars().all(|c| c.is_ascii_digit()));
 
-        if !is_valid_bullet { return None; }
+        let is_valid_bullet = bullet == "-"
+            || bullet == "*"
+            || bullet == "+"
+            || (bullet.ends_with('.')
+                && bullet[..bullet.len() - 1]
+                    .chars()
+                    .all(|c| c.is_ascii_digit()));
+
+        if !is_valid_bullet {
+            return None;
+        }
 
         // This doesn't check the actual checkbox type, so - [!] will also be toggled
-        let has_bracket = rest_trimmed.starts_with('[') 
-            && rest_trimmed.len() >= 4 
-            && rest_trimmed.chars().nth(2) == Some(']') 
+        let has_bracket = rest_trimmed.starts_with('[')
+            && rest_trimmed.len() >= 4
+            && rest_trimmed.chars().nth(2) == Some(']')
             && rest_trimmed.chars().nth(3) == Some(' ');
 
-        if !has_bracket { return None; }
+        if !has_bracket {
+            return None;
+        }
 
         let is_unchecked = rest_trimmed.chars().nth(1) == Some(' ');
         let prefix_bytes = line_str.len() - rest_trimmed.len();
         let char_index = line_str[..prefix_bytes].chars().count();
-        
+
         let new_char = if is_unchecked { "x" } else { " " };
-        let title = if is_unchecked { "Toggle checkbox (Check)" } else { "Toggle checkbox (Uncheck)" };
+        let title = if is_unchecked {
+            "Toggle checkbox (Check)"
+        } else {
+            "Toggle checkbox (Uncheck)"
+        };
 
         let uri = Url::from_file_path(path).ok()?;
 
@@ -86,8 +97,10 @@ pub fn code_actions(
         }))
     };
 
-    if let Some(action) = get_checkbox_action() {
-        actions.push(action);
+    if settings.checkbox_actions {
+        if let Some(action) = get_checkbox_action() {
+            actions.push(action);
+        }
     }
 
     // Diagnostics
@@ -210,7 +223,7 @@ pub fn code_actions(
 
             })
             .collect();
-            
+
         actions.append(&mut diagnostic_actions);
     }
 
@@ -220,4 +233,3 @@ pub fn code_actions(
         Some(actions)
     }
 }
-

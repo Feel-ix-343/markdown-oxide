@@ -85,6 +85,15 @@ heading_slug = false
 # Files within excluded folders will not appear in completions, references, diagnostics, or other LSP features
 # Matching is by directory name, so excluding "Archive" will skip any directory named Archive at any depth
 excluded_folders = []
+
+# Enable Obsidian-style checkbox completions on list items
+# When true, typing `- [` on a list item triggers completions for checkbox types
+# such as [x] Checked, [!] Important, [/] In Progress, [-] Cancelled, etc.
+checkbox_completions = false
+
+# Enable checkbox toggle code action
+# When true, a code action is available on checkbox lines to toggle between checked [x] and unchecked [ ]
+checkbox_actions = false
 ```
 
 # Daily Note Format Config Option

@@ -33,6 +33,7 @@ pub struct Settings {
     pub heading_slug: bool,
     pub callout_completions: bool,
     pub checkbox_completions: bool,
+    pub checkbox_actions: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -104,7 +105,8 @@ impl Settings {
             .set_default("excluded_folders", Vec::<String>::new())?
             .set_default("heading_slug", false)?
             .set_default("callout_completions", true)?
-            .set_default("checkbox_completions", true)?
+            .set_default("checkbox_completions", false)?
+            .set_default("checkbox_actions", false)?
             .build()
             .map_err(|err| anyhow!("Build err: {err}"))?;
 

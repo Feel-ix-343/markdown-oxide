@@ -24,21 +24,24 @@ impl<'a> Completer<'a> for CheckboxCompleter {
         let text_up_to_cursor: String = line_chars.into_iter().take(character).collect();
 
         let trimmed = text_up_to_cursor.trim_start();
-        
+
         let space_idx = trimmed.find(' ')?;
         let (bullet, rest) = trimmed.split_at(space_idx);
         let rest_trimmed = rest.trim_start();
-        
-        let is_valid_bullet = bullet == "-" 
-            || bullet == "*" 
-            || bullet == "+" 
-            || (bullet.ends_with('.') && bullet[..bullet.len() - 1].chars().all(|c| c.is_ascii_digit()));
+
+        let is_valid_bullet = bullet == "-"
+            || bullet == "*"
+            || bullet == "+"
+            || (bullet.ends_with('.')
+                && bullet[..bullet.len() - 1]
+                    .chars()
+                    .all(|c| c.is_ascii_digit()));
 
         if !is_valid_bullet || !rest_trimmed.starts_with('[') {
             return None;
         }
 
-        // To avoid conflicting with normal links (e.g. `- [Link](...)`), 
+        // To avoid conflicting with normal links (e.g. `- [Link](...)`),
         // we strictly only trigger if the user typed `[`, `[ `, or `[` followed by a single character.
         // It must not be longer than 2 characters (the bracket and one inner char)
         if rest_trimmed.len() > 2 {
