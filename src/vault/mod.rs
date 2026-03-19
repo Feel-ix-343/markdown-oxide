@@ -279,22 +279,38 @@ impl Vault {
                                     .unwrap_or("".to_string())
                             );
                             // For heading refnames, also add the slugified
-                            // (spaces→dashes) form so that both
-                            // "file#Some Heading" and "file#Some-Heading"
-                            // are recognised as resolved.
+                            // (spaces→dashes) form and lowercased-slug form so
+                            // that "file#Some Heading", "file#Some-Heading", and
+                            // "file#some-heading" are all recognised as resolved.
                             let mut entries = vec![full.clone(), short.clone()];
                             if let Some((file_part, heading_part)) = full.split_once('#') {
                                 let slugged =
                                     format!("{}#{}", file_part, heading_to_slug(heading_part));
+                                let lower_slugged = format!(
+                                    "{}#{}",
+                                    file_part,
+                                    heading_to_slug(&heading_part.to_lowercase())
+                                );
                                 if slugged != full {
                                     entries.push(slugged);
+                                }
+                                if !entries.contains(&lower_slugged) {
+                                    entries.push(lower_slugged);
                                 }
                             }
                             if let Some((file_part, heading_part)) = short.split_once('#') {
                                 let slugged =
                                     format!("{}#{}", file_part, heading_to_slug(heading_part));
+                                let lower_slugged = format!(
+                                    "{}#{}",
+                                    file_part,
+                                    heading_to_slug(&heading_part.to_lowercase())
+                                );
                                 if slugged != short {
                                     entries.push(slugged);
+                                }
+                                if !entries.contains(&lower_slugged) {
+                                    entries.push(lower_slugged);
                                 }
                             }
                             Some(entries)
@@ -315,14 +331,24 @@ impl Vault {
                             // reference text so that e.g. "file#Some Heading" matches
                             // the slugified refname "file#Some-Heading" in the resolved
                             // set, without corrupting spaces in file paths.
-                            let normalized =
+                            // Also produce a lowercased-slug form so that
+                            // "file#some-heading" matches "file#Some-Heading".
+                            let (normalized, lower_normalized) =
                                 if let Some((file_part, heading_part)) = ref_text.split_once('#') {
-                                    format!("{}#{}", file_part, heading_to_slug(heading_part))
+                                    (
+                                        format!("{}#{}", file_part, heading_to_slug(heading_part)),
+                                        format!(
+                                            "{}#{}",
+                                            file_part,
+                                            heading_to_slug(&heading_part.to_lowercase())
+                                        ),
+                                    )
                                 } else {
-                                    ref_text.clone()
+                                    (ref_text.clone(), ref_text.clone())
                                 };
                             !resolved_referenceables_refnames.contains(ref_text)
                                 && !resolved_referenceables_refnames.contains(&normalized)
+                                && !resolved_referenceables_refnames.contains(&lower_normalized)
                         })
                         .flat_map(|(_, reference)| match reference {
                             Reference::WikiFileLink(data) | Reference::MDFileLink(data) => {
