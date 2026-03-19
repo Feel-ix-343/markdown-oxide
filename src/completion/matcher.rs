@@ -70,9 +70,16 @@ pub fn fuzzy_match_completions<'a, 'b, C: Completer<'a>, T: Matchable + Completa
 ) -> Vec<OrderedCompletion<'a, C, T>> {
     let normal_fuzzy_match = fuzzy_match(filter_text, items, case);
 
+    // nucleo returns items sorted by score descending (best match first).
+    // We use zero-padded sequential indices as sort_text so that LSP clients
+    // (which sort sort_text lexicographically ascending) preserve the
+    // server-side ranking. This fixes sorting in clients like blink-cmp
+    // where the old raw-score-as-string approach broke because e.g. "8" > "90"
+    // in lexicographic order. (See issue #409)
     normal_fuzzy_match
         .into_iter()
-        .map(|(item, score)| OrderedCompletion::new(item, score.to_string()))
+        .enumerate()
+        .map(|(i, (item, _score))| OrderedCompletion::new(item, format!("{:05}", i)))
         .collect::<Vec<_>>()
 }
 
