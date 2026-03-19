@@ -1134,9 +1134,6 @@ impl ParseableReferenceConstructor for MDReferenceConstructor {
     }
 }
 
-/// Returns true if the path ends with a known non-markdown file extension
-/// (images, media, documents, archives, etc.) that should not be treated
-/// as a markdown note reference.
 /// Returns `true` when `path` looks like a URI with a scheme (e.g. `https://…`,
 /// `mailto:…`, `tel:…`).  We require at least two alphabetic characters before the
 /// colon so that single-letter Windows drive paths like `C:\…` are not matched.
@@ -1150,6 +1147,9 @@ fn has_uri_scheme(path: &str) -> bool {
     })
 }
 
+/// Returns true if the path ends with a known non-markdown file extension
+/// (images, media, documents, archives, etc.) that should not be treated
+/// as a markdown note reference.
 fn has_non_markdown_extension(path: &str) -> bool {
     static NON_MD_EXT_RE: Lazy<Regex> = Lazy::new(|| {
         Regex::new(r"(?i)\.(png|jpe?g|gif|svg|bmp|webp|ico|tiff?|pdf|mp[34]|webm|mov|avi|mkv|flac|wav|ogg|mp3|aac|zip|tar|gz|bz2|xz|rar|7z|exe|dll|so|wasm|csv|xlsx?|docx?|pptx?|html?|css|js|ts|jsx|tsx|py|rb|rs|go|java|c|cpp|h|hpp|cs|php|sh|bash|zsh|bat|ps1|json|xml|ya?ml|toml|ini|cfg|conf|log|sql|db|sqlite)$").unwrap()
