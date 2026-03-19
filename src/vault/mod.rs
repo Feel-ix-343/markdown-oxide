@@ -1134,6 +1134,19 @@ impl ParseableReferenceConstructor for MDReferenceConstructor {
     }
 }
 
+/// Returns `true` when `path` looks like a URI with a scheme (e.g. `https://…`,
+/// `mailto:…`, `tel:…`).  We require at least two alphabetic characters before the
+/// colon so that single-letter Windows drive paths like `C:\…` are not matched.
+fn has_uri_scheme(path: &str) -> bool {
+    path.find(':').is_some_and(|colon| {
+        colon >= 2
+            && path.as_bytes()[0].is_ascii_alphabetic()
+            && path[1..colon]
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'-' || b == b'.')
+    })
+}
+
 /// Returns true if the path ends with a known non-markdown file extension
 /// (images, media, documents, archives, etc.) that should not be treated
 /// as a markdown note reference.
@@ -1155,11 +1168,7 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
         has_md_ending,
     }: RegexTuple,
 ) -> Option<Reference> {
-    if file_path.is_some_and(|path| {
-        path.as_str().starts_with("http://")
-            || path.as_str().starts_with("https://")
-            || path.as_str().starts_with("data:")
-    }) {
+    if file_path.is_some_and(|path| has_uri_scheme(path.as_str())) {
         return None;
     }
 
@@ -1802,7 +1811,10 @@ mod vault_tests {
     use crate::vault::{MDLinkReferenceDefinition, Refname};
 
     use super::Reference::*;
-    use super::{MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference, Referenceable};
+    use super::{
+        has_uri_scheme, MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference,
+        Referenceable,
+    };
 
     #[test]
     fn wiki_link_parsing() {
@@ -3346,5 +3358,45 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn has_uri_scheme_detection() {
+        assert!(has_uri_scheme("http://example.com"));
+        assert!(has_uri_scheme("https://example.com"));
+        assert!(has_uri_scheme("tel:+12345678901"));
+        assert!(has_uri_scheme("mailto:user@example.com"));
+        assert!(has_uri_scheme("ftp://files.example.com"));
+        assert!(has_uri_scheme("data:image/png;base64,abc"));
+        assert!(has_uri_scheme("custom+scheme.v2:something"));
+
+        // Single-letter prefix should NOT match (Windows drive letters)
+        assert!(!has_uri_scheme("C:\\Users\\file.md"));
+        // No colon at all
+        assert!(!has_uri_scheme("path/to/file"));
+        // Colon but no valid scheme chars before it
+        assert!(!has_uri_scheme(":no-scheme"));
+        // Only one char before colon
+        assert!(!has_uri_scheme("x:not-a-scheme"));
+    }
+
+    #[test]
+    fn tel_link_not_parsed_as_reference() {
+        let text = "[+1 (234) 567 8901](tel:+12345678901)";
+        let parsed = Reference::new(text, "test.md").collect_vec();
+        assert!(
+            parsed.is_empty(),
+            "tel: links should not produce references"
+        );
+    }
+
+    #[test]
+    fn mailto_link_not_parsed_as_reference() {
+        let text = "[Email me](mailto:user@example.com)";
+        let parsed = Reference::new(text, "test.md").collect_vec();
+        assert!(
+            parsed.is_empty(),
+            "mailto: links should not produce references"
+        );
     }
 }
