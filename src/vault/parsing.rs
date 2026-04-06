@@ -31,11 +31,14 @@ impl MDCodeBlock {
 
         let short_captures = SHORT_RE.captures_iter(text);
 
-        captures.chain(short_captures).flat_map(|captures| {
-            Some(MDCodeBlock {
-                range: MyRange::from_range(rope, captures.name("fullblock")?.range()),
+        captures
+            .chain(short_captures)
+            .flat_map(|captures| {
+                Some(MDCodeBlock {
+                    range: MyRange::from_range(rope, captures.name("fullblock")?.range()),
+                })
             })
-        }).collect()
+            .collect()
     }
 }
 
@@ -295,7 +298,6 @@ fj aklfjd
     }
 
     #[test]
-    #[ignore]
     fn test_inline_code_block_perf_regression() {
         let repeated = "`inline` plain text ".repeat(20_000);
         let test = format!("{repeated}\n```rust\nfn main() {{}}\n```\n{repeated}");
@@ -305,6 +307,9 @@ fj aklfjd
         let elapsed = start.elapsed();
 
         assert_eq!(parsed.len(), 40_001);
-        assert!(elapsed < std::time::Duration::from_secs(3), "parsing took {elapsed:?}");
+        assert!(
+            elapsed < std::time::Duration::from_secs(3),
+            "parsing took {elapsed:?}"
+        );
     }
 }

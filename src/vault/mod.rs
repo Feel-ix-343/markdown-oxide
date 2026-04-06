@@ -3432,7 +3432,6 @@ Some content here";
     }
 
     #[test]
-    #[ignore]
     fn test_md_file_perf_regression() {
         let filler = "x".repeat(900);
         let mut text = String::new();
@@ -3450,6 +3449,9 @@ Some content here";
         assert_eq!(md_file.headings.len(), 4_000);
         assert_eq!(md_file.tags.len(), 4_000);
         assert_eq!(md_file.link_reference_definitions.len(), 4_000);
-        assert!(elapsed < std::time::Duration::from_secs(3), "parsing took {elapsed:?}");
+        assert!(
+            elapsed < std::time::Duration::from_secs(3),
+            "parsing took {elapsed:?}"
+        );
     }
 }

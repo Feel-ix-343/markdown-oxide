@@ -67,20 +67,21 @@ If your platform builds `markdown-oxide.exe`, pass that path to `--binary` inste
 
 ## Run the built-in cargo perf tests
 
-These tests are `#[ignore]`d on purpose and should be run in `--release`.
+These perf regression tests are part of the normal test suite now. Running them in `--release`
+keeps the timing signal less noisy when you want to inspect them directly.
 
 `46ec5ca` does not contain them yet.
 
 Available from `61b341f` and later:
 
 ```bash
-cargo test --release test_inline_code_block_perf_regression -- --ignored
+cargo test --release test_inline_code_block_perf_regression
 ```
 
 Available from `6d0e8cf` and later:
 
 ```bash
-cargo test --release test_md_file_perf_regression -- --ignored
+cargo test --release test_md_file_perf_regression
 ```
 
 On `e86720e` and later, the external benchmark also prints the `Initialize timings:` log line, which is the fastest way to confirm where startup time is spent.
