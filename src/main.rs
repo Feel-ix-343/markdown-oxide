@@ -51,6 +51,44 @@ struct TextDocumentItem {
     text: String,
 }
 
+fn vault_debug_summary(vault: &Vault) -> String {
+    let markdown_files = vault.md_files.len();
+    let references = vault
+        .md_files
+        .values()
+        .map(|file| file.references.len())
+        .sum::<usize>();
+    let headings = vault
+        .md_files
+        .values()
+        .map(|file| file.headings.len())
+        .sum::<usize>();
+    let tags = vault
+        .md_files
+        .values()
+        .map(|file| file.tags.len())
+        .sum::<usize>();
+    let footnotes = vault
+        .md_files
+        .values()
+        .map(|file| file.footnotes.len())
+        .sum::<usize>();
+    let indexed_blocks = vault
+        .md_files
+        .values()
+        .map(|file| file.indexed_blocks.len())
+        .sum::<usize>();
+    let link_ref_defs = vault
+        .md_files
+        .values()
+        .map(|file| file.link_reference_definitions.len())
+        .sum::<usize>();
+
+    format!(
+        "markdown_files={markdown_files}, references={references}, headings={headings}, tags={tags}, footnotes={footnotes}, indexed_blocks={indexed_blocks}, link_ref_defs={link_ref_defs}"
+    )
+}
+
 impl Backend {
     async fn update_vault(&self, params: TextDocumentItem) {
         self.client
@@ -112,21 +150,26 @@ impl Backend {
             return;
         };
 
-        {
-            let _ = self
-                .bind_vault_mut(|vault| {
-                    let Ok(new_vault) = Vault::construct_vault(&settings, vault.root_dir()) else {
-                        return Err(Error::new(ErrorCode::ServerError(0)));
-                    };
+        let build_timer = std::time::Instant::now();
 
-                    *vault = new_vault;
+        let Ok(vault_summary) = self
+            .bind_vault_mut(|vault| {
+                let Ok(new_vault) = Vault::construct_vault(&settings, vault.root_dir()) else {
+                    return Err(Error::new(ErrorCode::ServerError(0)));
+                };
 
-                    Ok(())
-                })
-                .await;
-        }
+                let summary = vault_debug_summary(&new_vault);
+                *vault = new_vault;
+
+                Ok(summary)
+            })
+            .await
+        else {
+            return;
+        };
 
         let elapsed = timer.elapsed();
+        let build_elapsed = build_timer.elapsed();
 
         progress
             .finish_with_message(format!("Finished in {}ms", elapsed.as_millis()))
@@ -136,7 +179,12 @@ impl Backend {
             self.client
                 .log_message(
                     MessageType::LOG,
-                    format!("Vault Construction took {}ms", elapsed.as_millis()),
+                    format!(
+                        "Vault Construction took {}ms (construct_vault={}ms, {})",
+                        elapsed.as_millis(),
+                        build_elapsed.as_millis(),
+                        vault_summary
+                    ),
                 )
                 .await;
         }
@@ -295,6 +343,7 @@ impl Backend {
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(&self, i: InitializeParams) -> Result<InitializeResult> {
+        let initialize_timer = std::time::Instant::now();
         self.client
             .log_message(
                 MessageType::LOG,
@@ -340,6 +389,7 @@ impl LanguageServer for Backend {
             .log_message(MessageType::LOG, format!("Using root_dir: {:?}", root_dir))
             .await;
 
+        let settings_timer = std::time::Instant::now();
         let read_settings = match Settings::new(&root_dir, &i.capabilities) {
             Ok(settings) => settings,
             Err(e) => {
@@ -352,15 +402,32 @@ impl LanguageServer for Backend {
                 return Err(Error::new(ErrorCode::ServerError(1)));
             }
         };
+        let settings_elapsed = settings_timer.elapsed();
 
+        let vault_timer = std::time::Instant::now();
         let Ok(vault) = Vault::construct_vault(&read_settings, &root_dir) else {
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
+        let vault_elapsed = vault_timer.elapsed();
+        let vault_summary = vault_debug_summary(&vault);
         let mut value = self.vault.write().await;
         *value = Some(vault);
 
         let mut settings = self.settings.write().await;
         *settings = Some(read_settings);
+
+        self.client
+            .log_message(
+                MessageType::LOG,
+                format!(
+                    "Initialize timings: settings={}ms, construct_vault={}ms, total={}ms, {}",
+                    settings_elapsed.as_millis(),
+                    vault_elapsed.as_millis(),
+                    initialize_timer.elapsed().as_millis(),
+                    vault_summary
+                ),
+            )
+            .await;
 
         let file_op_reg = FileOperationRegistrationOptions {
             filters: std::iter::once(FileOperationFilter {
