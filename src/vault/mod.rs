@@ -661,7 +661,8 @@ pub struct MDFile {
 
 impl MDFile {
     fn new(context: &Settings, text: &str, path: PathBuf) -> MDFile {
-        let code_blocks = MDCodeBlock::new(text).collect_vec();
+        let rope = Rope::from_str(text);
+        let code_blocks = MDCodeBlock::collect_with_rope(text, &rope);
         let file_name = path
             .file_stem()
             .expect("file should have file stem")
