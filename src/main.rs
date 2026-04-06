@@ -51,6 +51,44 @@ struct TextDocumentItem {
     text: String,
 }
 
+fn vault_debug_summary(vault: &Vault) -> String {
+    let markdown_files = vault.md_files.len();
+    let references = vault
+        .md_files
+        .values()
+        .map(|file| file.references.len())
+        .sum::<usize>();
+    let headings = vault
+        .md_files
+        .values()
+        .map(|file| file.headings.len())
+        .sum::<usize>();
+    let tags = vault
+        .md_files
+        .values()
+        .map(|file| file.tags.len())
+        .sum::<usize>();
+    let footnotes = vault
+        .md_files
+        .values()
+        .map(|file| file.footnotes.len())
+        .sum::<usize>();
+    let indexed_blocks = vault
+        .md_files
+        .values()
+        .map(|file| file.indexed_blocks.len())
+        .sum::<usize>();
+    let link_ref_defs = vault
+        .md_files
+        .values()
+        .map(|file| file.link_reference_definitions.len())
+        .sum::<usize>();
+
+    format!(
+        "markdown_files={markdown_files}, references={references}, headings={headings}, tags={tags}, footnotes={footnotes}, indexed_blocks={indexed_blocks}, link_ref_defs={link_ref_defs}"
+    )
+}
+
 impl Backend {
     async fn update_vault(&self, params: TextDocumentItem) {
         self.client
@@ -100,33 +138,62 @@ impl Backend {
     }
 
     async fn reconstruct_vault(&self) {
+        let timer = std::time::Instant::now();
+
+        let settings = match self.bind_settings(|settings| Ok(settings.clone())).await {
+            Ok(settings) => settings,
+            Err(err) => {
+                self.client
+                    .log_message(
+                        MessageType::ERROR,
+                        format!(
+                            "Failed to read settings during vault reconstruction {:?}",
+                            err
+                        ),
+                    )
+                    .await;
+                return;
+            }
+        };
+
         let progress = self
             .client
             .progress(ProgressToken::Number(1), "Constructing Vault")
             .begin()
             .await;
 
-        let timer = std::time::Instant::now();
+        let build_timer = std::time::Instant::now();
 
-        let Ok(settings) = self.bind_settings(|settings| Ok(settings.clone())).await else {
-            return;
+        let vault_summary = match self
+            .bind_vault_mut(|vault| {
+                let Ok(new_vault) = Vault::construct_vault(&settings, vault.root_dir()) else {
+                    return Err(Error::new(ErrorCode::ServerError(0)));
+                };
+
+                let summary = vault_debug_summary(&new_vault);
+                *vault = new_vault;
+
+                Ok(summary)
+            })
+            .await
+        {
+            Ok(summary) => summary,
+            Err(err) => {
+                progress
+                    .finish_with_message("Vault construction failed")
+                    .await;
+                self.client
+                    .log_message(
+                        MessageType::ERROR,
+                        format!("Failed reconstructing vault {:?}", err),
+                    )
+                    .await;
+                return;
+            }
         };
 
-        {
-            let _ = self
-                .bind_vault_mut(|vault| {
-                    let Ok(new_vault) = Vault::construct_vault(&settings, vault.root_dir()) else {
-                        return Err(Error::new(ErrorCode::ServerError(0)));
-                    };
-
-                    *vault = new_vault;
-
-                    Ok(())
-                })
-                .await;
-        }
-
         let elapsed = timer.elapsed();
+        let build_elapsed = build_timer.elapsed();
 
         progress
             .finish_with_message(format!("Finished in {}ms", elapsed.as_millis()))
@@ -136,7 +203,12 @@ impl Backend {
             self.client
                 .log_message(
                     MessageType::LOG,
-                    format!("Vault Construction took {}ms", elapsed.as_millis()),
+                    format!(
+                        "Vault Construction took {}ms (construct_vault={}ms, {})",
+                        elapsed.as_millis(),
+                        build_elapsed.as_millis(),
+                        vault_summary
+                    ),
                 )
                 .await;
         }
@@ -295,6 +367,7 @@ impl Backend {
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(&self, i: InitializeParams) -> Result<InitializeResult> {
+        let initialize_timer = std::time::Instant::now();
         self.client
             .log_message(
                 MessageType::LOG,
@@ -340,6 +413,7 @@ impl LanguageServer for Backend {
             .log_message(MessageType::LOG, format!("Using root_dir: {:?}", root_dir))
             .await;
 
+        let settings_timer = std::time::Instant::now();
         let read_settings = match Settings::new(&root_dir, &i.capabilities) {
             Ok(settings) => settings,
             Err(e) => {
@@ -352,15 +426,32 @@ impl LanguageServer for Backend {
                 return Err(Error::new(ErrorCode::ServerError(1)));
             }
         };
+        let settings_elapsed = settings_timer.elapsed();
 
+        let vault_timer = std::time::Instant::now();
         let Ok(vault) = Vault::construct_vault(&read_settings, &root_dir) else {
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
+        let vault_elapsed = vault_timer.elapsed();
+        let vault_summary = vault_debug_summary(&vault);
         let mut value = self.vault.write().await;
         *value = Some(vault);
 
         let mut settings = self.settings.write().await;
         *settings = Some(read_settings);
+
+        self.client
+            .log_message(
+                MessageType::LOG,
+                format!(
+                    "Initialize timings: settings={}ms, construct_vault={}ms, total={}ms, {}",
+                    settings_elapsed.as_millis(),
+                    vault_elapsed.as_millis(),
+                    initialize_timer.elapsed().as_millis(),
+                    vault_summary
+                ),
+            )
+            .await;
 
         let file_op_reg = FileOperationRegistrationOptions {
             filters: std::iter::once(FileOperationFilter {
@@ -981,5 +1072,194 @@ async fn main() {
             });
             Server::new(stdin, stdout, socket).serve(service).await;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::sync::Arc;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+    use futures::StreamExt;
+    use serde_json::{json, Value};
+    use tower::{Service, ServiceExt};
+    use tower_lsp::jsonrpc::Request;
+    use tower_lsp::lsp_types::Url;
+    use tower_lsp::{ClientSocket, LspService};
+
+    use super::Backend;
+
+    struct TestDir(PathBuf);
+
+    impl TestDir {
+        fn new(prefix: &str) -> Self {
+            let unique = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system clock should be after unix epoch")
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!(
+                "markdown-oxide-{prefix}-{}-{unique}",
+                std::process::id()
+            ));
+            fs::create_dir_all(&path).expect("test temp dir should be created");
+            Self(path)
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TestDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    async fn collect_notifications_while<T>(
+        socket: &mut ClientSocket,
+        future: impl std::future::Future<Output = T>,
+    ) -> (T, Vec<Request>) {
+        tokio::pin!(future);
+        let mut notifications = Vec::new();
+
+        loop {
+            tokio::select! {
+                result = &mut future => {
+                    loop {
+                        match tokio::time::timeout(Duration::from_millis(50), socket.next()).await {
+                            Ok(Some(notification)) => notifications.push(notification),
+                            Ok(None) | Err(_) => return (result, notifications),
+                        }
+                    }
+                }
+                notification = socket.next() => match notification {
+                    Some(notification) => notifications.push(notification),
+                    None => unreachable!("client socket should stay open during tests"),
+                },
+            }
+        }
+    }
+
+    async fn initialized_backend(root_dir: &Path) -> (LspService<Backend>, ClientSocket) {
+        let (mut service, socket) = LspService::new(|client| Backend {
+            client,
+            vault: Arc::new(tokio::sync::RwLock::new(None)),
+            opened_files: Arc::new(tokio::sync::RwLock::new(HashSet::new())),
+            settings: Arc::new(tokio::sync::RwLock::new(None)),
+        });
+        let mut socket = socket;
+
+        let root_uri =
+            Url::from_directory_path(root_dir).expect("test root dir should convert to file URL");
+        let (response, _) = collect_notifications_while(
+            &mut socket,
+            tokio::time::timeout(Duration::from_secs(5), async {
+                service
+                    .ready()
+                    .await
+                    .expect("service should be ready for initialize")
+                    .call(
+                        Request::build("initialize")
+                            .id(1)
+                            .params(json!({
+                                "processId": null,
+                                "rootUri": root_uri,
+                                "capabilities": {},
+                            }))
+                            .finish(),
+                    )
+                    .await
+                    .expect("initialize request should succeed")
+            }),
+        )
+        .await;
+        let response = response.expect("initialize request should not time out");
+
+        assert!(
+            matches!(response, Some(ref response) if response.error().is_none()),
+            "initialize should return a success response: {response:?}"
+        );
+
+        (service, socket)
+    }
+
+    fn progress_kind(request: &Request) -> Option<&str> {
+        request
+            .params()
+            .and_then(|params| params.get("value"))
+            .and_then(|value| value.get("kind"))
+            .and_then(Value::as_str)
+    }
+
+    fn progress_end_message(request: &Request) -> Option<&str> {
+        request
+            .params()
+            .and_then(|params| params.get("value"))
+            .and_then(|value| value.get("message"))
+            .and_then(Value::as_str)
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn reconstruct_vault_does_not_start_progress_without_settings() {
+        let root_dir = TestDir::new("reconstruct-no-settings");
+        let (service, mut socket) = initialized_backend(root_dir.path()).await;
+
+        *service.inner().settings.write().await = None;
+
+        let (result, notifications) = collect_notifications_while(
+            &mut socket,
+            tokio::time::timeout(Duration::from_secs(5), service.inner().reconstruct_vault()),
+        )
+        .await;
+        result.expect("reconstruct_vault should not time out");
+        let progress_notifications = notifications
+            .iter()
+            .filter(|notification| notification.method() == "$/progress")
+            .collect::<Vec<_>>();
+
+        assert!(
+            progress_notifications.is_empty(),
+            "expected no progress notifications when settings are missing, got {progress_notifications:?}"
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn reconstruct_vault_finishes_progress_when_vault_is_unavailable() {
+        let root_dir = TestDir::new("reconstruct-failure");
+        let (service, mut socket) = initialized_backend(root_dir.path()).await;
+
+        *service.inner().vault.write().await = None;
+
+        let (result, notifications) = collect_notifications_while(
+            &mut socket,
+            tokio::time::timeout(Duration::from_secs(5), service.inner().reconstruct_vault()),
+        )
+        .await;
+        result.expect("reconstruct_vault should not time out");
+        let progress_notifications = notifications
+            .iter()
+            .filter(|notification| notification.method() == "$/progress")
+            .collect::<Vec<_>>();
+        let progress_kinds = progress_notifications
+            .iter()
+            .filter_map(|notification| progress_kind(notification))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            progress_kinds,
+            vec!["begin", "end"],
+            "expected reconstruct_vault to close progress on rebuild failure, got {progress_notifications:?}"
+        );
+        assert_eq!(
+            progress_notifications
+                .iter()
+                .find(|notification| progress_kind(notification) == Some("end"))
+                .and_then(|notification| progress_end_message(notification)),
+            Some("Vault construction failed")
+        );
     }
 }

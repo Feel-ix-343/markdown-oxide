@@ -10,7 +10,13 @@ pub struct MDCodeBlock {
 }
 
 impl MDCodeBlock {
+    #[cfg(test)]
     pub fn new(text: &str) -> impl Iterator<Item = MDCodeBlock> + '_ {
+        let rope = Rope::from_str(text);
+        Self::collect_with_rope(text, &rope).into_iter()
+    }
+
+    pub fn collect_with_rope(text: &str, rope: &Rope) -> Vec<MDCodeBlock> {
         static RE: Lazy<Regex> = Lazy::new(|| {
             Regex::new(r"(^|\n)(?<fullblock>``` *(?<lang>[^\n]+)?\n(?<code>(\n|.)*?)\n```)")
                 .expect("Codeblock Regex Not Constructing")
@@ -25,14 +31,14 @@ impl MDCodeBlock {
 
         let short_captures = SHORT_RE.captures_iter(text);
 
-        captures.chain(short_captures).flat_map(|captures| {
-            Some(MDCodeBlock {
-                range: MyRange::from_range(
-                    &Rope::from_str(text),
-                    captures.name("fullblock")?.range(),
-                ),
+        captures
+            .chain(short_captures)
+            .flat_map(|captures| {
+                Some(MDCodeBlock {
+                    range: MyRange::from_range(rope, captures.name("fullblock")?.range()),
+                })
             })
-        })
+            .collect()
     }
 }
 
@@ -289,5 +295,21 @@ fj aklfjd
         ];
 
         assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn test_inline_code_block_perf_regression() {
+        let repeated = "`inline` plain text ".repeat(20_000);
+        let test = format!("{repeated}\n```rust\nfn main() {{}}\n```\n{repeated}");
+
+        let start = std::time::Instant::now();
+        let parsed = MDCodeBlock::new(&test).collect_vec();
+        let elapsed = start.elapsed();
+
+        assert_eq!(parsed.len(), 40_001);
+        assert!(
+            elapsed < std::time::Duration::from_secs(3),
+            "parsing took {elapsed:?}"
+        );
     }
 }
