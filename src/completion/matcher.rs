@@ -72,8 +72,12 @@ pub fn fuzzy_match_completions<'a, 'b, C: Completer<'a>, T: Matchable + Completa
 
     normal_fuzzy_match
         .into_iter()
-        .map(|(item, score)| OrderedCompletion::new(item, score.to_string()))
+        .map(|(item, score)| OrderedCompletion::new(item, score_to_sort_text(score)))
         .collect::<Vec<_>>()
+}
+
+fn score_to_sort_text(score: u32) -> String {
+    score.to_string()
 }
 
 pub fn fuzzy_match<T: Matchable>(
@@ -99,4 +103,44 @@ pub fn fuzzy_match<T: Matchable>(
         .into_iter()
         .map(|(item, score)| (item.0, score))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::score_to_sort_text;
+
+    #[test]
+    fn higher_score_sorts_lexicographically_first() {
+        // nucleo returns higher score = better match. LSP clients sort `sortText`
+        // ascending, so a better match must produce a *smaller* string.
+        let better = score_to_sort_text(1000);
+        let worse = score_to_sort_text(10);
+        assert!(
+            better < worse,
+            "better match (1000) should sort before worse (10): {better:?} vs {worse:?}"
+        );
+    }
+
+    #[test]
+    fn digit_count_does_not_invert_order() {
+        // Without zero-padding, "100" is a prefix of "1000" so "100" < "1000"
+        // lexicographically — but 1000 is the better score and must sort first.
+        let s_1000 = score_to_sort_text(1000);
+        let s_100 = score_to_sort_text(100);
+        assert!(
+            s_1000 < s_100,
+            "score 1000 should sort before score 100: {s_1000:?} vs {s_100:?}"
+        );
+    }
+
+    #[test]
+    fn lexicographic_sort_matches_descending_score_order() {
+        let mut entries: Vec<(u32, String)> = [9, 99, 100, 1000, 50, 7]
+            .iter()
+            .map(|&s| (s, score_to_sort_text(s)))
+            .collect();
+        entries.sort_by(|a, b| a.1.cmp(&b.1));
+        let scores: Vec<u32> = entries.iter().map(|(s, _)| *s).collect();
+        assert_eq!(scores, vec![1000, 100, 99, 50, 9, 7]);
+    }
 }
