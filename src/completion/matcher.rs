@@ -77,7 +77,12 @@ pub fn fuzzy_match_completions<'a, 'b, C: Completer<'a>, T: Matchable + Completa
 }
 
 fn score_to_sort_text(score: u32) -> String {
-    score.to_string()
+    // LSP clients sort `sortText` ascending and lexicographically. To express
+    // "higher nucleo score = earlier in the list," invert the score so better
+    // matches yield smaller numbers, and zero-pad to a fixed width so every
+    // string compares character-by-character as if it were numeric. u32::MAX
+    // is 10 digits, so 10 places is enough.
+    format!("{:010}", u32::MAX - score)
 }
 
 pub fn fuzzy_match<T: Matchable>(
