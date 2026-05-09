@@ -7,7 +7,7 @@ use std::{
     hash::Hash,
     iter,
     ops::{Deref, DerefMut, Not, Range},
-    path::{Path, PathBuf, MAIN_SEPARATOR},
+    path::{Path, PathBuf},
     time::SystemTime,
 };
 
@@ -1012,7 +1012,12 @@ impl Reference {
                 | WikiFileLink(ReferenceData {
                     reference_text: file_ref_text,
                     ..
-                }) => matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir)),
+                }) => matches_path_or_file(
+                    file_ref_text,
+                    referenceable.get_refname(root_dir),
+                    root_dir,
+                    file_path,
+                ),
                 Tag(_) => false,
                 WikiHeadingLink(_, _, _) => false,
                 WikiIndexedBlockLink(_, _, _) => false,
@@ -1040,7 +1045,12 @@ impl Reference {
                 | WikiIndexedBlockLink(.., file_ref_text, link_infile_ref)
                 | MDHeadingLink(.., file_ref_text, link_infile_ref)
                 | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => {
-                    matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir))
+                    matches_path_or_file(
+                        file_ref_text,
+                        referenceable.get_refname(root_dir),
+                        root_dir,
+                        file_path,
+                    )
                         && heading_to_slug(&link_infile_ref.to_lowercase())
                             == heading_to_slug(&infile_ref.to_lowercase())
                 }
@@ -1569,9 +1579,9 @@ pub struct Refname {
 
 impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
-        let path = &self.path.clone()?;
+        let path = self.path.clone()?.replace('\\', "/");
 
-        let last = path.split(MAIN_SEPARATOR).next_back()?;
+        let last = path.split('/').next_back()?;
 
         Some(last.to_string())
     }
@@ -1716,7 +1726,12 @@ impl Referenceable<'_> {
                 })
                 | MDHeadingLink(.., file_ref_text, _)
                 | MDIndexedBlockLink(.., file_ref_text, _) => {
-                    matches_path_or_file(file_ref_text, self.get_refname(root_dir))
+                    matches_path_or_file(
+                        file_ref_text,
+                        self.get_refname(root_dir),
+                        root_dir,
+                        reference_path,
+                    )
                 }
                 Tag(_) => false,
                 Footnote(_) => false,
@@ -1765,22 +1780,22 @@ impl Referenceable<'_> {
     }
 }
 
-fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
+fn matches_path_or_file(
+    file_ref_text: &str,
+    refname: Option<Refname>,
+    root_dir: &Path,
+    reference_path: &Path,
+) -> bool {
     (|| {
         let refname = refname?;
-        let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
+        // This function should only be used for files, headings, and indexed blocks.
+        let refname_path = normalize_ref_path(refname.path.as_deref()?)?;
+        let file_ref_text = file_ref_text.replace(r"%20", " ");
+        let file_ref_text = file_ref_text.replace(r"\ ", " ");
+        let file_ref_text = file_ref_text.replace('\\', "/");
 
         if file_ref_text.contains('/') {
-            let file_ref_text = file_ref_text.replace(r"%20", " ");
-            let file_ref_text = file_ref_text.replace(r"\ ", " ");
-
-            let chars: Vec<char> = file_ref_text.chars().collect();
-            match chars.as_slice() {
-                &['.', '/', ref path @ ..] | &['/', ref path @ ..] => {
-                    Some(String::from_iter(path) == refname_path)
-                }
-                path => Some(String::from_iter(path) == refname_path),
-            }
+            Some(resolve_link_ref_path(&file_ref_text, root_dir, reference_path)? == refname_path)
         } else {
             let last_segment = refname.link_file_key()?;
 
@@ -1788,6 +1803,47 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
         }
     })()
     .is_some_and(|b| b)
+}
+
+fn resolve_link_ref_path(
+    file_ref_text: &str,
+    root_dir: &Path,
+    reference_path: &Path,
+) -> Option<String> {
+    if file_ref_text.starts_with("./") || file_ref_text.starts_with("../") {
+        let reference_dir = reference_path.parent()?;
+        let reference_dir = diff_paths(reference_dir, root_dir)?;
+        let reference_dir = normalize_ref_path(reference_dir.to_string_lossy().as_ref())?;
+
+        normalize_ref_path(&join_ref_path(&reference_dir, file_ref_text))
+    } else {
+        normalize_ref_path(file_ref_text.trim_start_matches('/'))
+    }
+}
+
+fn join_ref_path(parent: &str, child: &str) -> String {
+    if parent.is_empty() {
+        child.to_string()
+    } else {
+        format!("{}/{}", parent, child)
+    }
+}
+
+fn normalize_ref_path(path: &str) -> Option<String> {
+    let path = path.replace('\\', "/");
+    let mut components: Vec<&str> = Vec::new();
+
+    for component in path.split('/') {
+        match component {
+            "" | "." => {}
+            ".." => {
+                components.pop()?;
+            }
+            component => components.push(component),
+        }
+    }
+
+    Some(components.join("/"))
 }
 
 // tests
@@ -2724,6 +2780,76 @@ Another paragraph.";
                 infile_ref: "^12345".to_string().into()
             })
         )
+    }
+
+    #[test]
+    fn relative_wiki_file_links_match_from_reference_directory() {
+        let root_dir = Path::new("/home/vault");
+        let reference_path = Path::new("/home/vault/current_dir/note.md");
+        let target_path = Path::new("/home/vault/current_dir/sub_dir/file.md").to_path_buf();
+        let md_file = MDFile::default();
+        let referenceable = Referenceable::File(&target_path, &md_file);
+        let reference = WikiFileLink(ReferenceData {
+            reference_text: "./sub_dir/file".into(),
+            ..Default::default()
+        });
+
+        assert!(reference.references(root_dir, reference_path, &referenceable));
+    }
+
+    #[test]
+    fn parent_directory_markdown_file_links_match_from_reference_directory() {
+        let root_dir = Path::new("/home/vault");
+        let reference_path = Path::new("/home/vault/current_dir/note.md");
+        let target_path = Path::new("/home/vault/shared/file.md").to_path_buf();
+        let md_file = MDFile::default();
+        let referenceable = Referenceable::File(&target_path, &md_file);
+        let reference = Reference::MDFileLink(ReferenceData {
+            reference_text: "../shared/file".into(),
+            ..Default::default()
+        });
+
+        assert!(reference.references(root_dir, reference_path, &referenceable));
+    }
+
+    #[test]
+    fn relative_wiki_heading_links_match_from_reference_directory() {
+        let root_dir = Path::new("/home/vault");
+        let reference_path = Path::new("/home/vault/current_dir/note.md");
+        let target_path = Path::new("/home/vault/current_dir/sub_dir/file.md").to_path_buf();
+        let md_heading = MDHeading {
+            heading_text: "Target Heading".into(),
+            ..Default::default()
+        };
+        let referenceable = Referenceable::Heading(&target_path, &md_heading);
+        let reference = WikiHeadingLink(
+            ReferenceData {
+                reference_text: "./sub_dir/file#Target Heading".into(),
+                ..Default::default()
+            },
+            "./sub_dir/file".into(),
+            "Target Heading".into(),
+        );
+
+        assert!(reference.references(root_dir, reference_path, &referenceable));
+    }
+
+    #[test]
+    fn slash_links_match_backslash_refnames() {
+        let root_dir = Path::new("/home/vault");
+        let reference_path = Path::new("/home/vault/current_dir/note.md");
+        let refname = Refname {
+            full_refname: "current_dir\\sub_dir\\file".into(),
+            path: Some("current_dir\\sub_dir\\file".into()),
+            ..Default::default()
+        };
+
+        assert!(super::matches_path_or_file(
+            "current_dir/sub_dir/file",
+            Some(refname),
+            root_dir,
+            reference_path
+        ));
     }
 
     #[test]
