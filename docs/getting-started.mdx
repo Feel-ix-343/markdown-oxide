@@ -93,34 +93,26 @@ Give Neovim access to the binary using one of the following installation methods
   </Accordion>
 
   <Accordion title="(optional) Enable Code Lens (eg for UI reference count)">
-    Modify your lsp `on_attach` function.
+    Neovim 0.12+ manages Code Lens refreshes automatically once enabled. Add this after `vim.lsp.enable('markdown_oxide')`, or anywhere during startup if your LSP config is enabled elsewhere:
 
     ```lua
-    local function codelens_supported(bufnr)
-      for _, c in ipairs(vim.lsp.get_clients({ bufnr = bufnr })) do
-        if c.server_capabilities and c.server_capabilities.codeLensProvider then
-          return true
-        end
-      end
-      return false
-    end
-
-    vim.api.nvim_create_autocmd(
-      { 'TextChanged', 'InsertLeave', 'CursorHold', 'BufEnter' },
-      {
-        buffer = bufnr,
-        callback = function()
-          if codelens_supported(bufnr) then
-            vim.lsp.codelens.refresh({ bufnr = bufnr })
-          end
-        end,
-      }
-    )
-
-    if codelens_supported(bufnr) then
-      vim.lsp.codelens.refresh({ bufnr = bufnr })
-    end
+    vim.lsp.codelens.enable(true)
     ```
+
+    To enable Code Lens only when `markdown_oxide` attaches, put this in an `LspAttach` autocommand:
+
+    ```lua
+    vim.api.nvim_create_autocmd('LspAttach', {
+      callback = function(args)
+        local client = vim.lsp.get_client_by_id(args.data.client_id)
+        if client and client.name == 'markdown_oxide' and client.server_capabilities.codeLensProvider then
+          vim.lsp.codelens.enable(true, { bufnr = args.buf, client_id = client.id })
+        end
+      end,
+    })
+    ```
+
+    On Neovim <= 0.11, `vim.lsp.codelens.refresh({ bufnr = args.buf })` in autocmds is still the supported approach.
   </Accordion>
 
   <Accordion title="(optional) Enable opening daily notes with natural language">
