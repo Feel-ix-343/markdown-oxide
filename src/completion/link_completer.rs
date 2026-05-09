@@ -49,6 +49,7 @@ pub struct MarkdownLinkCompleter<'a> {
 pub trait LinkCompleter<'a>: Completer<'a> {
     fn settings(&self) -> &'a Settings;
     fn completion_text_edit(&self, display: Option<&str>, refname: &str) -> CompletionTextEdit;
+    fn shorten_block_ref_paths(&self) -> bool;
     fn entered_refname(&self) -> String;
     fn vault(&self) -> &'a Vault;
     fn position(&self) -> Position;
@@ -138,6 +139,10 @@ impl<'a> LinkCompleter<'a> for MarkdownLinkCompleter<'a> {
 
     fn vault(&self) -> &'a Vault {
         self.vault
+    }
+
+    fn shorten_block_ref_paths(&self) -> bool {
+        false
     }
 
     fn entered_refname(&self) -> String {
@@ -403,6 +408,10 @@ impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
 
     fn vault(&self) -> &'a Vault {
         self.vault
+    }
+
+    fn shorten_block_ref_paths(&self) -> bool {
+        true
     }
 
     fn entered_refname(&self) -> String {

@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use itertools::Itertools;
 use rayon::prelude::*;
 use tower_lsp::lsp_types::{
@@ -7,7 +9,7 @@ use tower_lsp::lsp_types::{
 
 use crate::{
     ui::preview_referenceable,
-    vault::{get_obsidian_ref_path, Block, Referenceable},
+    vault::{get_obsidian_ref_path, Block, Referenceable, Vault},
 };
 use nanoid::nanoid;
 
@@ -142,8 +144,6 @@ impl<'a> UnindexedBlock<'a> {
     ) -> Option<(String, CompletionItem)> {
         let rand_id = &completer.new_id;
 
-        let path_ref =
-            get_obsidian_ref_path(completer.link_completer.vault().root_dir(), self.0.file)?;
         let url = Url::from_file_path(self.0.file).ok()?;
 
         let block = self.0;
@@ -175,7 +175,11 @@ impl<'a> UnindexedBlock<'a> {
                     detail: Some("Indexed Block".to_string()),
                     description: None,
                 }),
-                format!("{}#^{}", path_ref, indexed_block.index),
+                format!(
+                    "{}#^{}",
+                    block_ref_path(completer, block, &indexed_block.index, false)?,
+                    indexed_block.index
+                ),
             ),
             _ => (
                 Some(Documentation::MarkupContent(MarkupContent {
@@ -234,7 +238,11 @@ impl<'a> UnindexedBlock<'a> {
                 }),
                 CompletionItemKind::TEXT,
                 None,
-                format!("{}#^{}", path_ref, rand_id),
+                format!(
+                    "{}#^{}",
+                    block_ref_path(completer, block, rand_id, true)?,
+                    rand_id
+                ),
             ),
         };
 
@@ -310,5 +318,111 @@ impl<'a> Completable<'a, UnindexedBlockCompleter<'a, WikiLinkCompleter<'a>>>
 impl Matchable for UnindexedBlock<'_> {
     fn match_string(&self) -> &str {
         self.0.text
+    }
+}
+
+fn block_ref_path<'a, T: LinkCompleter<'a>>(
+    completer: &UnindexedBlockCompleter<'a, T>,
+    block: Block<'_>,
+    block_id: &str,
+    is_new_block: bool,
+) -> Option<String> {
+    let vault = completer.link_completer.vault();
+    let full_path = get_obsidian_ref_path(vault.root_dir(), block.file)?;
+
+    if !completer.link_completer.shorten_block_ref_paths() {
+        return Some(full_path);
+    }
+
+    let file_stem = block.file.file_stem()?.to_str()?;
+
+    if block_ref_path_is_ambiguous(vault, block.file, file_stem, block_id, is_new_block) {
+        Some(full_path)
+    } else {
+        Some(file_stem.to_string())
+    }
+}
+
+fn block_ref_path_is_ambiguous(
+    vault: &Vault,
+    file: &Path,
+    file_stem: &str,
+    block_id: &str,
+    is_new_block: bool,
+) -> bool {
+    if is_new_block
+        && any_other_file_with_stem(
+            vault.select_blocks().into_iter().map(|block| block.file),
+            file,
+            file_stem,
+        )
+    {
+        return true;
+    }
+
+    vault
+        .select_referenceable_nodes(None)
+        .into_iter()
+        .any(|referenceable| match referenceable {
+            Referenceable::IndexedBlock(path, indexed_block) => {
+                path.as_path() != file
+                    && path_has_file_stem(path, file_stem)
+                    && indexed_block.index.eq_ignore_ascii_case(block_id)
+            }
+            _ => false,
+        })
+}
+
+fn any_other_file_with_stem<'a>(
+    paths: impl IntoIterator<Item = &'a Path>,
+    file: &Path,
+    file_stem: &str,
+) -> bool {
+    paths
+        .into_iter()
+        .any(|path| path != file && path_has_file_stem(path, file_stem))
+}
+
+fn path_has_file_stem(path: &Path, file_stem: &str) -> bool {
+    path.file_stem()
+        .and_then(|stem| stem.to_str())
+        .is_some_and(|stem| stem.eq_ignore_ascii_case(file_stem))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detects_duplicate_file_stems() {
+        let target = Path::new("/vault/one/Note.md");
+        let duplicate = Path::new("/vault/two/Note.md");
+        let distinct = Path::new("/vault/two/Other.md");
+
+        assert!(any_other_file_with_stem(
+            [target, duplicate, distinct],
+            target,
+            "Note"
+        ));
+    }
+
+    #[test]
+    fn ignores_current_file_when_detecting_duplicate_file_stems() {
+        let target = Path::new("/vault/one/Note.md");
+        let distinct = Path::new("/vault/two/Other.md");
+
+        assert!(!any_other_file_with_stem(
+            [target, distinct],
+            target,
+            "Note"
+        ));
+    }
+
+    #[test]
+    fn compares_file_stems_case_insensitively() {
+        assert!(path_has_file_stem(
+            Path::new("/vault/Folder/Note.md"),
+            "note"
+        ));
     }
 }
