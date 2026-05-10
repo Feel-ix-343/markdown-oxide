@@ -81,11 +81,24 @@ link_filenames_only = false
 # Note: Go-to-definition and diagnostics always resolve both forms regardless of this setting
 heading_slug = false
 
+# Enable Obsidian-style callout completions
+callout_completions = true
+
 # Folders to exclude from vault indexing
 # Files within excluded folders will not appear in completions, references, diagnostics, or other LSP features
 # Matching is by directory name, so excluding "Archive" will skip any directory named Archive at any depth
 excluded_folders = []
 ```
+
+# Callout Completion Config Option
+
+Set `callout_completions = false` to disable Markdown-Oxide's built-in Obsidian-style callout completions while keeping the rest of the completion providers enabled.
+
+```toml
+callout_completions = false
+```
+
+This is useful in Neovim setups where callouts are managed by a snippet engine such as LuaSnip.
 
 # Daily Note Format Config Option
 
