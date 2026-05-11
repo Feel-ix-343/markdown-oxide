@@ -601,6 +601,17 @@ pub trait Rangeable {
                     && self_range.end.character >= other_range.end.character))
     }
 
+    fn overlaps(&self, other: &impl Rangeable) -> bool {
+        fn before(left: Position, right: Position) -> bool {
+            left.line < right.line || (left.line == right.line && left.character < right.character)
+        }
+
+        let self_range = self.range();
+        let other_range = other.range();
+
+        before(self_range.start, other_range.end) && before(other_range.start, self_range.end)
+    }
+
     fn includes_position(&self, position: Position) -> bool {
         let range = self.range();
         (range.start.line < position.line
@@ -672,7 +683,7 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -1793,16 +1804,42 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
 // tests
 #[cfg(test)]
 mod vault_tests {
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use itertools::Itertools;
     use tower_lsp::lsp_types::{Position, Range};
 
-    use crate::vault::{HeadingLevel, MyRange, ReferenceData};
+    use crate::config::{Case, EmbeddedBlockTransclusionLength, Settings};
+    use crate::vault::{HeadingLevel, ReferenceData};
     use crate::vault::{MDLinkReferenceDefinition, Refname};
 
     use super::Reference::*;
     use super::{MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference, Referenceable};
+
+    fn test_settings() -> Settings {
+        Settings {
+            dailynote: "%Y-%m-%d".into(),
+            new_file_folder_path: String::new(),
+            daily_notes_folder: String::new(),
+            heading_completions: true,
+            title_headings: true,
+            unresolved_diagnostics: true,
+            semantic_tokens: true,
+            tags_in_codeblocks: false,
+            references_in_codeblocks: false,
+            include_md_extension_md_link: false,
+            include_md_extension_wikilink: false,
+            hover: true,
+            case_matching: Case::Smart,
+            inlay_hints: true,
+            block_transclusion: true,
+            block_transclusion_length: EmbeddedBlockTransclusionLength::Full,
+            link_filenames_only: false,
+            excluded_folders: Vec::new(),
+            heading_slug: false,
+            callout_completions: true,
+        }
+    }
 
     #[test]
     fn wiki_link_parsing() {
@@ -1858,6 +1895,20 @@ mod vault_tests {
         ];
 
         assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn md_file_ignores_references_that_overlap_inline_code() {
+        let text =
+            "* DO NOT use the square bracket `[[` and `]]` markers\n\nA real [[target]] remains";
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("test.md"));
+        let references = parsed
+            .references
+            .iter()
+            .map(|reference| reference.data().reference_text.as_str())
+            .collect_vec();
+
+        assert_eq!(references, vec!["target"]);
     }
 
     #[test]
