@@ -659,6 +659,14 @@ pub struct MDFile {
     pub codeblocks: Vec<MDCodeBlock>,
 }
 
+fn has_endpoint_in_codeblock(rangeable: &impl Rangeable, code_blocks: &[MDCodeBlock]) -> bool {
+    let range = rangeable.range();
+
+    code_blocks.iter().any(|codeblock| {
+        codeblock.includes_position(range.start) || codeblock.includes_position(range.end)
+    })
+}
+
 impl MDFile {
     fn new(context: &Settings, text: &str, path: PathBuf) -> MDFile {
         let code_blocks = MDCodeBlock::new(text).collect_vec();
@@ -672,7 +680,10 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| {
+                    !code_blocks.iter().any(|codeblock| codeblock.includes(it))
+                        && !has_endpoint_in_codeblock(it, &code_blocks)
+                })
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -1793,16 +1804,21 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
 // tests
 #[cfg(test)]
 mod vault_tests {
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use itertools::Itertools;
     use tower_lsp::lsp_types::{Position, Range};
 
-    use crate::vault::{HeadingLevel, MyRange, ReferenceData};
+    use crate::config::Settings;
+    use crate::vault::{HeadingLevel, ReferenceData};
     use crate::vault::{MDLinkReferenceDefinition, Refname};
 
     use super::Reference::*;
     use super::{MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference, Referenceable};
+
+    fn test_settings() -> Settings {
+        Settings::new(Path::new("."), &Default::default()).unwrap()
+    }
 
     #[test]
     fn wiki_link_parsing() {
@@ -1858,6 +1874,23 @@ mod vault_tests {
         ];
 
         assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn wiki_link_markers_in_inline_code_are_not_references() {
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers";
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("test.md"));
+
+        assert!(parsed.references.is_empty());
+    }
+
+    #[test]
+    fn wiki_link_outside_inline_code_is_still_a_reference() {
+        let text = "Use `[[` and `]]` markers around [[real link]]";
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("test.md"));
+
+        assert_eq!(parsed.references.len(), 1);
+        assert_eq!(parsed.references[0].reference_text, "real link");
     }
 
     #[test]
