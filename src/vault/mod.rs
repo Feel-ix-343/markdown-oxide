@@ -601,6 +601,17 @@ pub trait Rangeable {
                     && self_range.end.character >= other_range.end.character))
     }
 
+    fn intersects(&self, other: &impl Rangeable) -> bool {
+        fn before(a: Position, b: Position) -> bool {
+            a.line < b.line || (a.line == b.line && a.character < b.character)
+        }
+
+        let self_range = self.range();
+        let other_range = other.range();
+
+        before(self_range.start, other_range.end) && before(other_range.start, self_range.end)
+    }
+
     fn includes_position(&self, position: Position) -> bool {
         let range = self.range();
         (range.start.line < position.line
@@ -672,7 +683,7 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.intersects(it)))
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -1798,7 +1809,8 @@ mod vault_tests {
     use itertools::Itertools;
     use tower_lsp::lsp_types::{Position, Range};
 
-    use crate::vault::{HeadingLevel, MyRange, ReferenceData};
+    use crate::config::Settings;
+    use crate::vault::{HeadingLevel, ReferenceData};
     use crate::vault::{MDLinkReferenceDefinition, Refname};
 
     use super::Reference::*;
@@ -1858,6 +1870,15 @@ mod vault_tests {
         ];
 
         assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn inline_code_bracket_markers_are_not_references() {
+        let settings = Settings::new(Path::new("."), &Default::default()).unwrap();
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers";
+        let md_file = MDFile::new(&settings, text, Path::new("test.md").to_path_buf());
+
+        assert!(md_file.references.is_empty());
     }
 
     #[test]
