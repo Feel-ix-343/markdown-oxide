@@ -667,14 +667,16 @@ impl MDFile {
             .expect("file should have file stem")
             .to_str()
             .unwrap_or_default();
+        let references = Reference::new(text, file_name)
+            .filter(|reference| !reference_crosses_codeblock_boundary(reference, &code_blocks));
         let links = match context {
             Settings {
                 references_in_codeblocks: false,
                 ..
-            } => Reference::new(text, file_name)
+            } => references
                 .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
                 .collect_vec(),
-            _ => Reference::new(text, file_name).collect_vec(),
+            _ => references.collect_vec(),
         };
         let headings = MDHeading::new(text)
             .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
@@ -734,6 +736,40 @@ impl MDFile {
     pub fn file_name(&self) -> Option<&str> {
         self.path.file_stem()?.to_str()
     }
+}
+
+fn reference_crosses_codeblock_boundary(
+    reference: &Reference,
+    code_blocks: &[MDCodeBlock],
+) -> bool {
+    let range = reference.range();
+    let start_codeblock = codeblock_index_at_position(code_blocks, range.start);
+    let end_codeblock = codeblock_index_at_position(code_blocks, range.end);
+
+    match (start_codeblock, end_codeblock) {
+        (Some(start), Some(end)) => start != end,
+        (Some(_), None) | (None, Some(_)) => true,
+        (None, None) => false,
+    }
+}
+
+fn codeblock_index_at_position(code_blocks: &[MDCodeBlock], position: Position) -> Option<usize> {
+    code_blocks
+        .iter()
+        .position(|codeblock| range_contains_position(codeblock.range(), position))
+}
+
+fn range_contains_position(range: &MyRange, position: Position) -> bool {
+    position_at_or_after(position, range.start) && position_before(position, range.end)
+}
+
+fn position_at_or_after(position: Position, start: Position) -> bool {
+    position.line > start.line
+        || (position.line == start.line && position.character >= start.character)
+}
+
+fn position_before(position: Position, end: Position) -> bool {
+    position.line < end.line || (position.line == end.line && position.character < end.character)
 }
 
 impl MDFile {
@@ -1798,11 +1834,61 @@ mod vault_tests {
     use itertools::Itertools;
     use tower_lsp::lsp_types::{Position, Range};
 
-    use crate::vault::{HeadingLevel, MyRange, ReferenceData};
+    use crate::config::{Case, EmbeddedBlockTransclusionLength, Settings};
+    use crate::vault::{HeadingLevel, ReferenceData};
     use crate::vault::{MDLinkReferenceDefinition, Refname};
 
     use super::Reference::*;
     use super::{MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference, Referenceable};
+
+    fn test_settings(references_in_codeblocks: bool) -> Settings {
+        Settings {
+            dailynote: "%Y-%m-%d".into(),
+            new_file_folder_path: String::new(),
+            daily_notes_folder: String::new(),
+            heading_completions: true,
+            title_headings: true,
+            unresolved_diagnostics: true,
+            semantic_tokens: true,
+            tags_in_codeblocks: false,
+            references_in_codeblocks,
+            include_md_extension_md_link: false,
+            include_md_extension_wikilink: false,
+            hover: true,
+            case_matching: Case::Smart,
+            inlay_hints: true,
+            block_transclusion: true,
+            block_transclusion_length: EmbeddedBlockTransclusionLength::Full,
+            link_filenames_only: false,
+            excluded_folders: Vec::new(),
+            heading_slug: false,
+            callout_completions: true,
+        }
+    }
+
+    fn reference_texts(file: &MDFile) -> Vec<&str> {
+        file.references
+            .iter()
+            .map(|reference| reference.data().reference_text.as_str())
+            .collect_vec()
+    }
+
+    #[test]
+    fn wiki_link_markers_in_separate_inline_code_spans_are_ignored() {
+        let text =
+            "* DO NOT use the square bracket `[[` and `]]` markers, but [[target]] still works";
+        let file = MDFile::new(&test_settings(false), text, "test.md".into());
+
+        assert_eq!(reference_texts(&file), vec!["target"]);
+    }
+
+    #[test]
+    fn references_in_codeblocks_keeps_single_span_link_but_ignores_spanning_markers() {
+        let text = "`[[code link]]` and `[[` not a `]]`, then [[target]]";
+        let file = MDFile::new(&test_settings(true), text, "test.md".into());
+
+        assert_eq!(reference_texts(&file), vec!["code link", "target"]);
+    }
 
     #[test]
     fn wiki_link_parsing() {
