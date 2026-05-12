@@ -27,6 +27,7 @@ fn date_to_file(date: NaiveDate, dailynote_format: &str, root_dir: &Path) -> Opt
     Url::from_file_path(path.with_extension("md")).ok()
 }
 
+#[cfg(test)]
 fn extract_date_from_filename(filename: &str, dailynote_format: &str) -> Option<NaiveDate> {
     let filename = filename.strip_suffix(".md").unwrap_or(filename);
     NaiveDate::parse_from_str(filename, dailynote_format).ok()

@@ -19,13 +19,12 @@ fn compute_match_score(
 ) -> (u32, SymbolInformation) {
     let mut buf = Vec::new();
     (
-        match pattern.score(
-            nucleo_matcher::Utf32Str::new(symbol.name.as_str(), &mut buf),
-            matcher,
-        ) {
-            None => 0,
-            Some(score) => score,
-        },
+        pattern
+            .score(
+                nucleo_matcher::Utf32Str::new(symbol.name.as_str(), &mut buf),
+                matcher,
+            )
+            .unwrap_or_default(),
         symbol,
     )
 }
@@ -148,10 +147,87 @@ fn map_to_lsp_tree(tree: Vec<Node>) -> Vec<DocumentSymbol> {
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        symbol,
-        vault::{HeadingLevel, MDHeading},
+    use std::{
+        fs,
+        path::PathBuf,
+        time::{SystemTime, UNIX_EPOCH},
     };
+
+    use tower_lsp::lsp_types::{SymbolKind, WorkDoneProgressParams, WorkspaceSymbolParams};
+
+    use crate::{
+        config::{Case, EmbeddedBlockTransclusionLength, Settings},
+        symbol,
+        vault::{HeadingLevel, MDHeading, Vault},
+    };
+
+    fn test_settings() -> Settings {
+        Settings {
+            dailynote: "%Y-%m-%d".into(),
+            new_file_folder_path: "".into(),
+            daily_notes_folder: "".into(),
+            heading_completions: true,
+            title_headings: true,
+            unresolved_diagnostics: true,
+            semantic_tokens: true,
+            tags_in_codeblocks: false,
+            references_in_codeblocks: false,
+            include_md_extension_md_link: false,
+            include_md_extension_wikilink: false,
+            hover: true,
+            case_matching: Case::Smart,
+            inlay_hints: true,
+            block_transclusion: true,
+            block_transclusion_length: EmbeddedBlockTransclusionLength::Full,
+            link_filenames_only: false,
+            excluded_folders: Vec::new(),
+            heading_slug: false,
+            callout_completions: true,
+        }
+    }
+
+    fn temp_vault_path(name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be after epoch")
+            .as_nanos();
+
+        std::env::temp_dir().join(format!("{name}-{}-{nanos}", std::process::id()))
+    }
+
+    #[test]
+    fn workspace_symbols_include_frontmatter_aliases() {
+        let root_dir = temp_vault_path("moxide-workspace-symbol-aliases");
+        fs::create_dir_all(&root_dir).unwrap();
+        fs::write(
+            root_dir.join("Project Note.md"),
+            r#"---
+aliases: ["Friendly Alias", "Backup Name"]
+---
+
+# Body
+"#,
+        )
+        .unwrap();
+
+        let vault = Vault::construct_vault(&test_settings(), &root_dir).unwrap();
+        let params = WorkspaceSymbolParams {
+            query: "friendly".into(),
+            partial_result_params: Default::default(),
+            work_done_progress_params: WorkDoneProgressParams::default(),
+        };
+
+        let symbols = super::workspace_symbol(&vault, &params).unwrap();
+        let alias_symbol = symbols
+            .iter()
+            .find(|symbol| symbol.name == "Friendly Alias")
+            .expect("frontmatter alias should be returned as a workspace symbol");
+
+        assert_eq!(alias_symbol.kind, SymbolKind::FILE);
+        assert!(symbols.iter().all(|symbol| symbol.name != "Backup Name"));
+
+        fs::remove_dir_all(root_dir).unwrap();
+    }
 
     #[test]
     fn test_simple_tree() {

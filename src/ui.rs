@@ -54,7 +54,7 @@ pub fn preview_referenceable(
     vault: &Vault,
     referenceable: &Referenceable,
 ) -> Option<MarkupContent> {
-    let display = referenceable_string(vault, &[referenceable.clone()])?;
+    let display = referenceable_string(vault, std::slice::from_ref(referenceable))?;
 
     Some(MarkupContent {
         kind: MarkupKind::Markdown,

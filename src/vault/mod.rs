@@ -1798,7 +1798,7 @@ mod vault_tests {
     use itertools::Itertools;
     use tower_lsp::lsp_types::{Position, Range};
 
-    use crate::vault::{HeadingLevel, MyRange, ReferenceData};
+    use crate::vault::{HeadingLevel, ReferenceData};
     use crate::vault::{MDLinkReferenceDefinition, Refname};
 
     use super::Reference::*;
@@ -3325,7 +3325,7 @@ Some content here";
 
     #[test]
     fn parse_weird_url_encoded_file_link() {
-        let text = "[f](%D1%84%D0%B0%D0%B9%D0%BB%20with%20%C3%A9mojis%20%F0%9F%9A%80%20%26%20symbols%20%21%23%40%24%25%26%2A%28%29%2B%3D%7B%7D%7C%5C%22%5C%5C%3A%3B%3F)".into();
+        let text = "[f](%D1%84%D0%B0%D0%B9%D0%BB%20with%20%C3%A9mojis%20%F0%9F%9A%80%20%26%20symbols%20%21%23%40%24%25%26%2A%28%29%2B%3D%7B%7D%7C%5C%22%5C%5C%3A%3B%3F)";
 
         let parsed = Reference::new(text, "test.md").collect_vec();
 
