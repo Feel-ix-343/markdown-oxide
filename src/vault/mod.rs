@@ -601,6 +601,20 @@ pub trait Rangeable {
                     && self_range.end.character >= other_range.end.character))
     }
 
+    fn overlaps(&self, other: &impl Rangeable) -> bool {
+        let self_range = self.range();
+        let other_range = other.range();
+
+        let self_starts_before_other_ends = self_range.start.line < other_range.end.line
+            || (self_range.start.line == other_range.end.line
+                && self_range.start.character < other_range.end.character);
+        let other_starts_before_self_ends = other_range.start.line < self_range.end.line
+            || (other_range.start.line == self_range.end.line
+                && other_range.start.character < self_range.end.character);
+
+        self_starts_before_other_ends && other_starts_before_self_ends
+    }
+
     fn includes_position(&self, position: Position) -> bool {
         let range = self.range();
         (range.start.line < position.line
@@ -672,7 +686,7 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -1793,16 +1807,44 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
 // tests
 #[cfg(test)]
 mod vault_tests {
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use itertools::Itertools;
-    use tower_lsp::lsp_types::{Position, Range};
+    use tower_lsp::lsp_types::{ClientCapabilities, Position, Range};
 
-    use crate::vault::{HeadingLevel, MyRange, ReferenceData};
+    use crate::config::Settings;
+    use crate::vault::{HeadingLevel, ReferenceData};
     use crate::vault::{MDLinkReferenceDefinition, Refname};
 
     use super::Reference::*;
     use super::{MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference, Referenceable};
+
+    #[test]
+    fn references_overlapping_inline_code_are_ignored_when_disabled() {
+        let settings = Settings::new(Path::new("."), &ClientCapabilities::default()).unwrap();
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers\nNormal [[link]]";
+
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md"));
+
+        assert_eq!(
+            parsed.references,
+            vec![WikiFileLink(ReferenceData {
+                reference_text: "link".into(),
+                range: Range {
+                    start: Position {
+                        line: 1,
+                        character: 7,
+                    },
+                    end: Position {
+                        line: 1,
+                        character: 15,
+                    },
+                }
+                .into(),
+                ..ReferenceData::default()
+            })]
+        );
+    }
 
     #[test]
     fn wiki_link_parsing() {
