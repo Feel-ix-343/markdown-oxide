@@ -1012,7 +1012,12 @@ impl Reference {
                 | WikiFileLink(ReferenceData {
                     reference_text: file_ref_text,
                     ..
-                }) => matches_path_or_file(file_ref_text, root_dir, Some(file_path), referenceable.get_refname(root_dir)),
+                }) => matches_path_or_file(
+                    file_ref_text,
+                    root_dir,
+                    Some(file_path),
+                    referenceable.get_refname(root_dir),
+                ),
                 Tag(_) => false,
                 WikiHeadingLink(_, _, _) => false,
                 WikiIndexedBlockLink(_, _, _) => false,
@@ -1040,8 +1045,12 @@ impl Reference {
                 | WikiIndexedBlockLink(.., file_ref_text, link_infile_ref)
                 | MDHeadingLink(.., file_ref_text, link_infile_ref)
                 | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => {
-                    matches_path_or_file(file_ref_text, root_dir, Some(file_path), referenceable.get_refname(root_dir))
-                        && heading_to_slug(&link_infile_ref.to_lowercase())
+                    matches_path_or_file(
+                        file_ref_text,
+                        root_dir,
+                        Some(file_path),
+                        referenceable.get_refname(root_dir),
+                    ) && heading_to_slug(&link_infile_ref.to_lowercase())
                             == heading_to_slug(&infile_ref.to_lowercase())
                 }
                 Tag(_) => false,
@@ -1716,7 +1725,12 @@ impl Referenceable<'_> {
                 })
                 | MDHeadingLink(.., file_ref_text, _)
                 | MDIndexedBlockLink(.., file_ref_text, _) => {
-                    matches_path_or_file(file_ref_text, root_dir, Some(reference_path), self.get_refname(root_dir))
+                    matches_path_or_file(
+                        file_ref_text,
+                        root_dir,
+                        Some(reference_path),
+                        self.get_refname(root_dir),
+                    )
                 }
                 Tag(_) => false,
                 Footnote(_) => false,
@@ -1799,7 +1813,9 @@ fn normalize_reference_path(
         && file_ref_path
             .components()
             .next()
-            .is_some_and(|component| matches!(component, Component::CurDir | Component::ParentDir));
+            .is_some_and(|component| {
+                matches!(component, Component::CurDir | Component::ParentDir)
+            });
 
     let path = if is_relative_reference {
         reference_path
@@ -1833,7 +1849,9 @@ fn matches_path_or_file(
 ) -> bool {
     (|| {
         let refname = refname?;
-        let refname_path = refname.path.clone()?.replace('\\', "/"); // this function should not be used for tags, ... only for heading, files, indexed blocks
+        // This function should not be used for tags, only for files,
+        // headings, and indexed blocks.
+        let refname_path = refname.path.clone()?.replace('\\', "/");
 
         if file_ref_text.contains('/') || file_ref_text.contains('\\') {
             Some(normalize_reference_path(file_ref_text, root_dir, reference_path) == refname_path)
