@@ -869,7 +869,7 @@ impl Reference {
                     Some(".md") | None
                 )
             })
-            .filter(|captures| !capture_overlaps_inline_code(text, captures))
+            .filter(|captures| !capture_markers_overlap_inline_code(text, captures))
             .flat_map(RegexTuple::new)
             .flat_map(|regextuple| {
                 generic_link_constructor::<WikiReferenceConstructor>(text, file_name, regextuple)
@@ -1102,16 +1102,23 @@ impl RegexTuple<'_> {
     }
 }
 
-fn capture_overlaps_inline_code(text: &str, captures: &Captures) -> bool {
-    captures
-        .get(0)
-        .is_some_and(|full_match| range_overlaps_inline_code(text, full_match.range()))
+fn capture_markers_overlap_inline_code(text: &str, captures: &Captures) -> bool {
+    captures.get(0).is_some_and(|full_match| {
+        let full_range = full_match.range();
+        let opening_marker = full_range.start..full_range.start + 2;
+        let closing_marker = full_range.end.saturating_sub(2)..full_range.end;
+        let inline_ranges = inline_code_ranges(text);
+
+        [opening_marker, closing_marker].iter().any(|marker_range| {
+            inline_ranges
+                .iter()
+                .any(|inline_range| ranges_overlap(marker_range, inline_range))
+        })
+    })
 }
 
-fn range_overlaps_inline_code(text: &str, target: Range<usize>) -> bool {
-    inline_code_ranges(text)
-        .into_iter()
-        .any(|range| target.start < range.end && range.start < target.end)
+fn ranges_overlap(left: &Range<usize>, right: &Range<usize>) -> bool {
+    left.start < right.end && right.start < left.end
 }
 
 fn inline_code_ranges(text: &str) -> Vec<Range<usize>> {
@@ -1937,6 +1944,16 @@ mod vault_tests {
         assert_eq!(parsed.len(), 1);
         assert!(matches!(parsed[0], WikiFileLink(_)));
         assert_eq!(parsed[0].data().reference_text, "real link");
+    }
+
+    #[test]
+    fn wiki_link_with_inline_code_in_text_still_parses() {
+        let text = "Keep [[page with `code` in name]] as a real link";
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        assert_eq!(parsed.len(), 1);
+        assert!(matches!(parsed[0], WikiFileLink(_)));
+        assert_eq!(parsed[0].data().reference_text, "page with `code` in name");
     }
 
     #[test]
