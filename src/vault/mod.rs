@@ -589,6 +589,18 @@ impl AsRef<str> for Block<'_> {
 
 pub trait Rangeable {
     fn range(&self) -> &MyRange;
+    fn overlaps(&self, other: &impl Rangeable) -> bool {
+        let self_range = self.range();
+        let other_range = other.range();
+
+        (self_range.start.line < other_range.end.line
+            || (self_range.start.line == other_range.end.line
+                && self_range.start.character < other_range.end.character))
+            && (other_range.start.line < self_range.end.line
+                || (other_range.start.line == self_range.end.line
+                    && other_range.start.character < self_range.end.character))
+    }
+
     fn includes(&self, other: &impl Rangeable) -> bool {
         let self_range = self.range();
         let other_range = other.range();
@@ -672,7 +684,7 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -1798,7 +1810,8 @@ mod vault_tests {
     use itertools::Itertools;
     use tower_lsp::lsp_types::{Position, Range};
 
-    use crate::vault::{HeadingLevel, MyRange, ReferenceData};
+    use crate::config::Settings;
+    use crate::vault::{HeadingLevel, ReferenceData};
     use crate::vault::{MDLinkReferenceDefinition, Refname};
 
     use super::Reference::*;
@@ -1858,6 +1871,43 @@ mod vault_tests {
         ];
 
         assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn wiki_link_markers_in_inline_code_are_not_references() {
+        let settings = Settings::new(Path::new("."), &Default::default()).unwrap();
+        let text = "Use `[[` and `]]` to create a wikilink.";
+
+        let parsed = MDFile::new(&settings, text, "test.md".into());
+
+        assert!(parsed.references.is_empty());
+    }
+
+    #[test]
+    fn wiki_links_next_to_inline_code_are_still_references() {
+        let settings = Settings::new(Path::new("."), &Default::default()).unwrap();
+        let text = "Use `code` then [[real link]].";
+
+        let parsed = MDFile::new(&settings, text, "test.md".into());
+
+        assert_eq!(
+            parsed.references,
+            vec![WikiFileLink(ReferenceData {
+                reference_text: "real link".into(),
+                range: Range {
+                    start: Position {
+                        line: 0,
+                        character: 16,
+                    },
+                    end: Position {
+                        line: 0,
+                        character: 29,
+                    },
+                }
+                .into(),
+                ..ReferenceData::default()
+            })]
+        );
     }
 
     #[test]
