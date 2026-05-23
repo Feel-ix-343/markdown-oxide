@@ -601,6 +601,18 @@ pub trait Rangeable {
                     && self_range.end.character >= other_range.end.character))
     }
 
+    fn overlaps(&self, other: &impl Rangeable) -> bool {
+        let self_range = self.range();
+        let other_range = other.range();
+
+        (self_range.start.line < other_range.end.line
+            || (self_range.start.line == other_range.end.line
+                && self_range.start.character < other_range.end.character))
+            && (other_range.start.line < self_range.end.line
+                || (other_range.start.line == self_range.end.line
+                    && other_range.start.character < self_range.end.character))
+    }
+
     fn includes_position(&self, position: Position) -> bool {
         let range = self.range();
         (range.start.line < position.line
@@ -672,24 +684,24 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
         let headings = MDHeading::new(text)
-            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
+            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)));
         let footnotes = MDFootnote::new(text)
-            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
+            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)));
         let link_refs = MDLinkReferenceDefinition::new(text)
-            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
+            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)));
         let indexed_blocks = MDIndexedBlock::new(text)
-            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
+            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)));
         let tags = match context {
             Settings {
                 tags_in_codeblocks: false,
                 ..
             } => MDTag::new(text)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
                 .collect_vec(),
             _ => MDTag::new(text).collect_vec(),
         };
@@ -1793,11 +1805,12 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
 // tests
 #[cfg(test)]
 mod vault_tests {
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use itertools::Itertools;
-    use tower_lsp::lsp_types::{Position, Range};
+    use tower_lsp::lsp_types::{ClientCapabilities, Position, Range};
 
+    use crate::config::Settings;
     use crate::vault::{HeadingLevel, MyRange, ReferenceData};
     use crate::vault::{MDLinkReferenceDefinition, Refname};
 
@@ -1858,6 +1871,30 @@ mod vault_tests {
         ];
 
         assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn inline_code_markers_do_not_produce_unresolved_wikilinks() {
+        let settings = Settings::new(Path::new("."), &ClientCapabilities::default()).unwrap();
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers";
+
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md"));
+
+        assert!(parsed.references.is_empty());
+    }
+
+    #[test]
+    fn real_wikilinks_outside_inline_code_still_parse() {
+        let settings = Settings::new(Path::new("."), &ClientCapabilities::default()).unwrap();
+        let text = "* Use `[[` literally, but keep [[real-link]] working";
+
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md"));
+
+        assert_eq!(parsed.references.len(), 1);
+        assert!(matches!(
+            &parsed.references[0],
+            WikiFileLink(ReferenceData { reference_text, .. }) if reference_text == "real-link"
+        ));
     }
 
     #[test]
