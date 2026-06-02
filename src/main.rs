@@ -1,7 +1,9 @@
 use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use completion::get_completions;
 use config::{EmbeddedBlockTransclusionLength, Settings};
@@ -38,12 +40,34 @@ mod tokens;
 mod ui;
 mod vault;
 
-#[derive(Debug)]
+/// Maximum number of LSP requests processed concurrently by the server.
+///
+/// The forked `tower-lsp` defaults this to 4. That is far too low: a few slow
+/// requests saturate every slot, the server's bounded message queue fills, and
+/// the stdin reader blocks — at which point `shutdown` and `$/cancelRequest` are
+/// never read and the server appears to hang. A higher limit keeps the server
+/// responsive under load (and keeps `$/cancelRequest` enabled).
+const MAX_REQUEST_CONCURRENCY: usize = 256;
+
+/// Debounce window for diagnostics.
+///
+/// Diagnostics are O(open_files × references × referenceables) and were
+/// previously recomputed synchronously on every keystroke. In a long session
+/// with many open buffers, each pass grows until it takes longer than the gap
+/// between edits; the passes then pile up faster than they complete, the
+/// server's bounded message queue fills, the stdin reader blocks, and the
+/// server goes silent (the reported crash loop). Coalescing edits so only the
+/// latest change in a quiet window is computed keeps the load bounded.
+const DIAGNOSTICS_DEBOUNCE_MS: u64 = 300;
+
+#[derive(Debug, Clone)]
 struct Backend {
     client: Client,
     vault: Arc<RwLock<Option<Vault>>>,
     opened_files: Arc<RwLock<HashSet<PathBuf>>>,
     settings: Arc<RwLock<Option<Settings>>>,
+    /// Monotonic counter bumped on every change, used to debounce diagnostics.
+    diag_gen: Arc<AtomicU64>,
 }
 
 struct TextDocumentItem {
@@ -52,6 +76,34 @@ struct TextDocumentItem {
 }
 
 impl Backend {
+    /// Schedule a debounced diagnostics pass.
+    ///
+    /// Each edit bumps the generation counter and spawns a task that waits for a
+    /// short quiet window; only the task whose generation is still current then
+    /// computes diagnostics. Bursts of keystrokes therefore collapse into a
+    /// single diagnostics run instead of one (expensive, lock-holding) run per
+    /// keystroke, which is what previously wedged the server.
+    fn schedule_diagnostics(&self) {
+        let generation = self.diag_gen.fetch_add(1, Ordering::SeqCst) + 1;
+        let backend = self.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(DIAGNOSTICS_DEBOUNCE_MS)).await;
+            // A newer edit arrived during the debounce window; let its task run.
+            if backend.diag_gen.load(Ordering::SeqCst) != generation {
+                return;
+            }
+            if let Err(e) = backend.publish_diagnostics().await {
+                backend
+                    .client
+                    .log_message(
+                        MessageType::ERROR,
+                        format!("Failed calculating diagnostics {:?}", e),
+                    )
+                    .await;
+            }
+        });
+    }
+
     async fn update_vault(&self, params: TextDocumentItem) {
         self.client
             .log_message(MessageType::LOG, "Update Vault Started")
@@ -82,17 +134,7 @@ impl Backend {
             .log_message(MessageType::LOG, "Update Vault Done")
             .await;
 
-        match self.publish_diagnostics().await {
-            Ok(_) => (),
-            Err(e) => {
-                self.client
-                    .log_message(
-                        MessageType::ERROR,
-                        format!("Failed calculating diagnostics on vault update {:?}", e),
-                    )
-                    .await
-            }
-        }
+        self.schedule_diagnostics();
 
         if settings.semantic_tokens {
             let _ = self.client.semantic_tokens_refresh().await;
@@ -141,20 +183,7 @@ impl Backend {
                 .await;
         }
 
-        match self.publish_diagnostics().await {
-            Ok(_) => (),
-            Err(e) => {
-                self.client
-                    .log_message(
-                        MessageType::ERROR,
-                        format!(
-                            "Failed calculating diagnostics on vault construction {:?}",
-                            e
-                        ),
-                    )
-                    .await
-            }
-        };
+        self.schedule_diagnostics();
 
         if settings.semantic_tokens {
             let _ = self.client.semantic_tokens_refresh().await;
@@ -228,7 +257,13 @@ impl Backend {
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
 
-        callback(vault)
+        // Vault queries (go-to-definition, code actions, diagnostics, ...) are
+        // synchronous and CPU-bound. Running them directly on a Tokio worker
+        // thread blocks the async runtime, so under sustained load the stdin
+        // reader and the `shutdown`/`$/cancelRequest` handlers can no longer be
+        // scheduled and the server goes silent. `block_in_place` moves the work
+        // off the runtime's core threads so I/O and control messages keep flowing.
+        tokio::task::block_in_place(|| callback(vault))
     }
 
     async fn bind_vault_mut<T>(&self, callback: impl Fn(&mut Vault) -> Result<T>) -> Result<T> {
@@ -250,7 +285,10 @@ impl Backend {
             return Err(Error::new(ErrorCode::ServerError(0)));
         };
 
-        callback(vault)
+        // See `bind_vault`: vault construction/update is synchronous, and
+        // `reconstruct_vault` performs blocking disk I/O across the whole vault.
+        // Offload it from the async worker thread so the runtime stays responsive.
+        tokio::task::block_in_place(|| callback(vault))
     }
 
     async fn bind_settings<T>(&self, callback: impl FnOnce(&Settings) -> Result<T>) -> Result<T> {
@@ -569,17 +607,7 @@ impl LanguageServer for Backend {
             .await; // usually, this is not necesary; however some may start the LS without saving a changed file, so it is necessary
         } // drop the lock
 
-        match self.publish_diagnostics().await {
-            Ok(_) => (),
-            Err(e) => {
-                self.client
-                    .log_message(
-                        MessageType::ERROR,
-                        format!("Failed calculating diagnostics on file open {:?}", e),
-                    )
-                    .await
-            }
-        }
+        // `update_vault` already scheduled a (debounced) diagnostics pass.
     }
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
@@ -978,8 +1006,17 @@ async fn main() {
                 vault: Arc::new(None.into()),
                 opened_files: Arc::new(HashSet::new().into()),
                 settings: Arc::new(None.into()),
+                diag_gen: Arc::new(AtomicU64::new(0)),
             });
-            Server::new(stdin, stdout, socket).serve(service).await;
+            // The default request concurrency limit is 4. With only 4 slots, a
+            // few slow requests fill the server's bounded message queue, which
+            // blocks the stdin reader and prevents `shutdown`/`$/cancelRequest`
+            // from being processed (the server appears to hang). A higher limit
+            // keeps the server responsive and keeps `$/cancelRequest` enabled.
+            Server::new(stdin, stdout, socket)
+                .concurrency_level(MAX_REQUEST_CONCURRENCY)
+                .serve(service)
+                .await;
         }
     }
 }
