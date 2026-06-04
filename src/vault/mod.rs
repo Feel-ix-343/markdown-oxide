@@ -602,14 +602,15 @@ pub trait Rangeable {
     }
 
     fn overlaps(&self, other: &impl Rangeable) -> bool {
-        fn before(left: Position, right: Position) -> bool {
-            left.line < right.line || (left.line == right.line && left.character < right.character)
+        fn before_or_equal(left: Position, right: Position) -> bool {
+            left.line < right.line || (left.line == right.line && left.character <= right.character)
         }
 
         let self_range = self.range();
         let other_range = other.range();
 
-        before(self_range.start, other_range.end) && before(other_range.start, self_range.end)
+        before_or_equal(self_range.start, other_range.end)
+            && before_or_equal(other_range.start, self_range.end)
     }
 
     fn includes_position(&self, position: Position) -> bool {
@@ -1809,8 +1810,8 @@ mod vault_tests {
     use itertools::Itertools;
     use tower_lsp::lsp_types::{Position, Range};
 
-    use crate::config::{Case, EmbeddedBlockTransclusionLength, Settings};
-    use crate::vault::{HeadingLevel, MyRange, ReferenceData};
+    use crate::config::Settings;
+    use crate::vault::{HeadingLevel, ReferenceData};
     use crate::vault::{MDLinkReferenceDefinition, Refname};
 
     use super::Reference::*;
@@ -1818,26 +1819,8 @@ mod vault_tests {
 
     fn test_settings() -> Settings {
         Settings {
-            dailynote: "%Y-%m-%d".into(),
-            new_file_folder_path: "".into(),
-            daily_notes_folder: "".into(),
-            heading_completions: true,
-            title_headings: true,
-            unresolved_diagnostics: true,
-            semantic_tokens: true,
-            tags_in_codeblocks: false,
             references_in_codeblocks: false,
-            include_md_extension_md_link: false,
-            include_md_extension_wikilink: false,
-            hover: true,
-            case_matching: Case::Smart,
-            inlay_hints: true,
-            block_transclusion: true,
-            block_transclusion_length: EmbeddedBlockTransclusionLength::Full,
-            link_filenames_only: false,
-            excluded_folders: vec![],
-            heading_slug: false,
-            callout_completions: true,
+            ..Settings::default()
         }
     }
 

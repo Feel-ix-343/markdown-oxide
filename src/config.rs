@@ -41,10 +41,49 @@ pub enum Case {
     Respect,
 }
 
+impl Default for Case {
+    fn default() -> Self {
+        Case::Smart
+    }
+}
+
 #[derive(Clone, Debug, Deserialize)]
 pub enum EmbeddedBlockTransclusionLength {
     Partial(usize),
     Full,
+}
+
+impl Default for EmbeddedBlockTransclusionLength {
+    fn default() -> Self {
+        EmbeddedBlockTransclusionLength::Full
+    }
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Settings {
+            dailynote: "%Y-%m-%d".into(),
+            new_file_folder_path: "".into(),
+            daily_notes_folder: "".into(),
+            heading_completions: true,
+            title_headings: true,
+            unresolved_diagnostics: true,
+            semantic_tokens: true,
+            tags_in_codeblocks: false,
+            references_in_codeblocks: false,
+            include_md_extension_md_link: false,
+            include_md_extension_wikilink: false,
+            hover: true,
+            case_matching: Case::default(),
+            inlay_hints: true,
+            block_transclusion: true,
+            block_transclusion_length: EmbeddedBlockTransclusionLength::default(),
+            link_filenames_only: false,
+            excluded_folders: vec![],
+            heading_slug: false,
+            callout_completions: true,
+        }
+    }
 }
 
 impl Settings {
