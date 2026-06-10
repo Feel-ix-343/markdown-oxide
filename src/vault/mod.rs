@@ -601,6 +601,31 @@ pub trait Rangeable {
                     && self_range.end.character >= other_range.end.character))
     }
 
+    /// Returns true if the two ranges overlap (share at least one character).
+    ///
+    /// Ranges are treated as **half-open** `[start, end)`, so two ranges that
+    /// merely touch at a boundary (i.e. one's `end` == other's `start`) are
+    /// considered *adjacent*, not overlapping.  This matches the LSP / tree-sitter
+    /// convention used throughout the rest of the codebase and prevents valid
+    /// wiki-links that are immediately adjacent to an inline code span from being
+    /// incorrectly suppressed.
+    fn overlaps(&self, other: &impl Rangeable) -> bool {
+        let a = self.range();
+        let b = other.range();
+
+        // Helper: compare two (line, character) positions; returns true if lhs <= rhs
+        fn pos_le(l1: u32, c1: u32, l2: u32, c2: u32) -> bool {
+            l1 < l2 || (l1 == l2 && c1 <= c2)
+        }
+
+        // For half-open ranges [start, end):
+        //   non-overlapping iff  a.end <= b.start  OR  b.end <= a.start
+        let a_before_b = pos_le(a.end.line, a.end.character, b.start.line, b.start.character);
+        let b_before_a = pos_le(b.end.line, b.end.character, a.start.line, a.start.character);
+
+        !a_before_b && !b_before_a
+    }
+
     fn includes_position(&self, position: Position) -> bool {
         let range = self.range();
         (range.start.line < position.line
@@ -672,7 +697,7 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -3346,5 +3371,102 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    /// Regression test for <https://github.com/Feel-ix-343/markdown-oxide/issues/269>
+    ///
+    /// When `[[` and `]]` appear inside separate inline code spans (e.g. `` `[[` and `]]` ``),
+    /// the wiki-link regex can match across the two spans, producing a spurious
+    /// "unresolved reference" diagnostic.  The fix uses `overlaps` instead of `includes`
+    /// when filtering references against code blocks so that any reference whose range
+    /// intersects a code span is suppressed.
+    #[test]
+    fn split_inline_code_spans_not_a_wiki_link() {
+        use crate::vault::parsing::MDCodeBlock;
+        use crate::vault::Rangeable;
+
+        let text = r"* DO NOT use the square bracket `[[` and `]]` markers";
+
+        // Step 1: the regex parser DOES currently see a wiki-link match spanning
+        // from `[[` to `]]`.  Confirm that without filtering there is at least
+        // one such match.
+        let raw_refs = Reference::new(text, "test.md").collect_vec();
+        let has_spurious = raw_refs.iter().any(|r| {
+            matches!(r, WikiFileLink(_) | WikiHeadingLink(..) | WikiIndexedBlockLink(..))
+        });
+        assert!(
+            has_spurious,
+            "expected the raw parser to produce a spurious wiki-link \
+             (so that the filtering fix can be verified)"
+        );
+
+        // Step 2: MDCodeBlock should detect both `` `[[` `` and `` `]]` `` as
+        // inline code spans.
+        let code_blocks = MDCodeBlock::new(text).collect_vec();
+        assert!(
+            code_blocks.len() >= 2,
+            "expected at least two inline code spans to be detected"
+        );
+
+        // Step 3: after applying the overlaps-based filter every spurious wiki
+        // link should be suppressed.
+        let filtered: Vec<_> = raw_refs
+            .iter()
+            .filter(|it| !code_blocks.iter().any(|cb| cb.overlaps(*it)))
+            .collect();
+
+        let has_spurious_after_filter = filtered.iter().any(|r| {
+            matches!(r, WikiFileLink(_) | WikiHeadingLink(..) | WikiIndexedBlockLink(..))
+        });
+        assert!(
+            !has_spurious_after_filter,
+            "expected no wiki-link references after overlaps-based filtering"
+        );
+    }
+
+    /// Regression test for the adjacent-link false-negative introduced by wrong
+    /// half-open range semantics in `Rangeable::overlaps`.
+    ///
+    /// A valid wiki-link that is immediately adjacent to (but not inside) an
+    /// inline code span must NOT be suppressed by the code-block filter.
+    /// E.g. `` `x`[[note]] `` — the code span ends at the character where
+    /// `[[note]]` starts, so the ranges only *touch* at one point and must be
+    /// treated as non-overlapping.
+    #[test]
+    fn adjacent_link_not_suppressed_by_code_block_filter() {
+        use crate::vault::parsing::MDCodeBlock;
+        use crate::vault::Rangeable;
+
+        // A valid wiki-link immediately following an inline code span.
+        let text = "`x`[[note]]";
+
+        let raw_refs = Reference::new(text, "test.md").collect_vec();
+        let has_wiki_link = raw_refs
+            .iter()
+            .any(|r| matches!(r, WikiFileLink(_) | WikiHeadingLink(..) | WikiIndexedBlockLink(..)));
+        assert!(
+            has_wiki_link,
+            "expected the parser to find a wiki-link in '`x`[[note]]'"
+        );
+
+        let code_blocks = MDCodeBlock::new(text).collect_vec();
+        assert!(
+            !code_blocks.is_empty(),
+            "expected at least one inline code span to be detected"
+        );
+
+        // After filtering, the valid wiki-link must still be present.
+        let filtered: Vec<_> = raw_refs
+            .iter()
+            .filter(|it| !code_blocks.iter().any(|cb| cb.overlaps(*it)))
+            .collect();
+
+        let has_wiki_link_after = filtered
+            .iter()
+            .any(|r| matches!(r, WikiFileLink(_) | WikiHeadingLink(..) | WikiIndexedBlockLink(..)));
+        assert!(
+            has_wiki_link_after,
+            "adjacent wiki-link was incorrectly suppressed by the code-block filter"
+        );
     }
 }
