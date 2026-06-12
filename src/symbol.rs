@@ -148,10 +148,56 @@ fn map_to_lsp_tree(tree: Vec<Node>) -> Vec<DocumentSymbol> {
 
 #[cfg(test)]
 mod test {
+    use std::{
+        fs,
+        path::PathBuf,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    use crate::config::{Case, EmbeddedBlockTransclusionLength, Settings};
     use crate::{
         symbol,
-        vault::{HeadingLevel, MDHeading},
+        vault::{HeadingLevel, MDHeading, Vault},
     };
+    use tower_lsp::lsp_types::WorkspaceSymbolParams;
+
+    fn test_settings() -> Settings {
+        Settings {
+            dailynote: "%Y-%m-%d".to_string(),
+            new_file_folder_path: String::new(),
+            daily_notes_folder: String::new(),
+            heading_completions: true,
+            title_headings: true,
+            unresolved_diagnostics: true,
+            semantic_tokens: true,
+            tags_in_codeblocks: false,
+            references_in_codeblocks: false,
+            include_md_extension_md_link: false,
+            include_md_extension_wikilink: false,
+            hover: true,
+            case_matching: Case::Smart,
+            inlay_hints: true,
+            block_transclusion: true,
+            block_transclusion_length: EmbeddedBlockTransclusionLength::Full,
+            link_filenames_only: false,
+            excluded_folders: Vec::new(),
+            heading_slug: false,
+            callout_completions: true,
+        }
+    }
+
+    fn temp_vault_dir() -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "markdown-oxide-workspace-symbol-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system clock before unix epoch")
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir).expect("create temp vault dir");
+        dir
+    }
 
     #[test]
     fn test_simple_tree() {
@@ -318,5 +364,30 @@ mod test {
         ];
 
         assert_eq!(tree, Some(expected))
+    }
+
+    #[test]
+    fn workspace_symbols_include_aliases() {
+        let root_dir = temp_vault_dir();
+        let note_path = root_dir.join("note.md");
+        fs::write(
+            &note_path,
+            "---\naliases: [alias-note]\n---\n\n# Heading\nBody text\n",
+        )
+        .expect("write test note");
+
+        let vault = Vault::construct_vault(&test_settings(), &root_dir)
+            .expect("construct test vault");
+
+        let params = WorkspaceSymbolParams {
+            query: String::new(),
+            ..Default::default()
+        };
+
+        let symbols = symbol::workspace_symbol(&vault, &params).expect("workspace symbols");
+        let names: Vec<_> = symbols.into_iter().map(|symbol| symbol.name).collect();
+
+        assert!(names.contains(&"note".to_string()));
+        assert!(names.contains(&"alias-note".to_string()));
     }
 }
