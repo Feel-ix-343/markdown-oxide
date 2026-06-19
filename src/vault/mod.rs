@@ -589,6 +589,7 @@ impl AsRef<str> for Block<'_> {
 
 pub trait Rangeable {
     fn range(&self) -> &MyRange;
+
     fn includes(&self, other: &impl Rangeable) -> bool {
         let self_range = self.range();
         let other_range = other.range();
@@ -599,6 +600,13 @@ pub trait Rangeable {
             && (self_range.end.line > other_range.end.line
                 || (self_range.end.line == other_range.end.line
                     && self_range.end.character >= other_range.end.character))
+    }
+
+    fn overlaps(&self, other: &impl Rangeable) -> bool {
+        let self_range = self.range();
+        let other_range = other.range();
+
+        self_range.start < other_range.end && other_range.start < self_range.end
     }
 
     fn includes_position(&self, position: Position) -> bool {
@@ -672,7 +680,7 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -1793,16 +1801,58 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
 // tests
 #[cfg(test)]
 mod vault_tests {
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use itertools::Itertools;
-    use tower_lsp::lsp_types::{Position, Range};
+    use tower_lsp::lsp_types::{ClientCapabilities, Position, Range};
 
-    use crate::vault::{HeadingLevel, MyRange, ReferenceData};
+    use crate::config::Settings;
+    use crate::vault::{HeadingLevel, ReferenceData};
     use crate::vault::{MDLinkReferenceDefinition, Refname};
 
     use super::Reference::*;
     use super::{MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference, Referenceable};
+
+    fn default_settings() -> Settings {
+        Settings::new(Path::new("."), &ClientCapabilities::default()).unwrap()
+    }
+
+    #[test]
+    fn wiki_link_markers_in_separate_inline_code_spans_are_ignored() {
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers";
+        let parsed = MDFile::new(&default_settings(), text, PathBuf::from("test.md"));
+
+        assert!(parsed.references.is_empty());
+    }
+
+    #[test]
+    fn wiki_link_inside_inline_code_is_ignored() {
+        let text = "Use `[[example]]` as literal syntax";
+        let parsed = MDFile::new(&default_settings(), text, PathBuf::from("test.md"));
+
+        assert!(parsed.references.is_empty());
+    }
+
+    #[test]
+    fn wiki_link_adjacent_to_inline_code_is_preserved() {
+        let text = "`example`[[note]]";
+        let parsed = MDFile::new(&default_settings(), text, PathBuf::from("test.md"));
+
+        assert_eq!(parsed.references.len(), 1);
+        assert_eq!(parsed.references[0].reference_text, "note");
+    }
+
+    #[test]
+    fn wiki_link_matches_spanning_inline_code_remain_when_enabled() {
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers";
+        let mut settings = default_settings();
+        settings.references_in_codeblocks = true;
+
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md"));
+
+        assert_eq!(parsed.references.len(), 1);
+        assert_eq!(parsed.references[0].reference_text, "` and `");
+    }
 
     #[test]
     fn wiki_link_parsing() {
