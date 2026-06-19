@@ -1826,6 +1826,14 @@ mod vault_tests {
     }
 
     #[test]
+    fn wiki_link_inside_inline_code_is_ignored() {
+        let text = "Use `[[example]]` as literal syntax";
+        let parsed = MDFile::new(&default_settings(), text, PathBuf::from("test.md"));
+
+        assert!(parsed.references.is_empty());
+    }
+
+    #[test]
     fn wiki_link_adjacent_to_inline_code_is_preserved() {
         let text = "`example`[[note]]";
         let parsed = MDFile::new(&default_settings(), text, PathBuf::from("test.md"));
