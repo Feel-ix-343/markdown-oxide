@@ -1798,7 +1798,7 @@ mod vault_tests {
     use itertools::Itertools;
     use tower_lsp::lsp_types::{Position, Range};
 
-    use crate::vault::{HeadingLevel, MyRange, ReferenceData};
+    use crate::vault::{HeadingLevel, ReferenceData};
     use crate::vault::{MDLinkReferenceDefinition, Refname};
 
     use super::Reference::*;
