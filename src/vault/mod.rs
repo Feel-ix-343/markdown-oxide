@@ -1835,6 +1835,18 @@ mod vault_tests {
     }
 
     #[test]
+    fn wiki_link_matches_spanning_inline_code_remain_when_enabled() {
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers";
+        let mut settings = default_settings();
+        settings.references_in_codeblocks = true;
+
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md"));
+
+        assert_eq!(parsed.references.len(), 1);
+        assert_eq!(parsed.references[0].reference_text, "` and `");
+    }
+
+    #[test]
     fn wiki_link_parsing() {
         let text = "This is a [[link]] [[link 2]]\n[[link 3]]";
         let parsed = Reference::new(text, "test").collect_vec();
