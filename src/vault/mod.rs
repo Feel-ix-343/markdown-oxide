@@ -672,7 +672,11 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| {
+                    !code_blocks
+                        .iter()
+                        .any(|codeblock| reference_endpoint_in_codeblock(it, codeblock))
+                })
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -734,6 +738,11 @@ impl MDFile {
     pub fn file_name(&self) -> Option<&str> {
         self.path.file_stem()?.to_str()
     }
+}
+
+fn reference_endpoint_in_codeblock(reference: &Reference, codeblock: &MDCodeBlock) -> bool {
+    let range = reference.range();
+    codeblock.includes_position(range.start) || codeblock.includes_position(range.end)
 }
 
 impl MDFile {
@@ -1798,11 +1807,37 @@ mod vault_tests {
     use itertools::Itertools;
     use tower_lsp::lsp_types::{Position, Range};
 
+    use crate::config::{Case, EmbeddedBlockTransclusionLength, Settings};
     use crate::vault::{HeadingLevel, MyRange, ReferenceData};
     use crate::vault::{MDLinkReferenceDefinition, Refname};
 
     use super::Reference::*;
     use super::{MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference, Referenceable};
+
+    fn settings_with_references_outside_codeblocks() -> Settings {
+        Settings {
+            dailynote: "%Y-%m-%d".into(),
+            new_file_folder_path: "".into(),
+            daily_notes_folder: "".into(),
+            heading_completions: true,
+            title_headings: true,
+            unresolved_diagnostics: true,
+            semantic_tokens: true,
+            tags_in_codeblocks: false,
+            references_in_codeblocks: false,
+            include_md_extension_md_link: false,
+            include_md_extension_wikilink: false,
+            hover: true,
+            case_matching: Case::Smart,
+            inlay_hints: true,
+            block_transclusion: true,
+            block_transclusion_length: EmbeddedBlockTransclusionLength::Full,
+            link_filenames_only: false,
+            excluded_folders: vec![],
+            heading_slug: false,
+            callout_completions: true,
+        }
+    }
 
     #[test]
     fn wiki_link_parsing() {
@@ -1858,6 +1893,29 @@ mod vault_tests {
         ];
 
         assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn wiki_link_markers_in_inline_code_do_not_create_cross_code_reference() {
+        let settings = settings_with_references_outside_codeblocks();
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers";
+        let file = MDFile::new(&settings, text, "test.md".into());
+
+        assert!(file.references.is_empty());
+    }
+
+    #[test]
+    fn wiki_links_outside_inline_code_still_parse() {
+        let settings = settings_with_references_outside_codeblocks();
+        let text = "Use `[[` and `]]` markers around [[real link]]";
+        let file = MDFile::new(&settings, text, "test.md".into());
+        let reference_texts = file
+            .references
+            .iter()
+            .map(|reference| reference.data().reference_text.as_str())
+            .collect_vec();
+
+        assert_eq!(reference_texts, vec!["real link"]);
     }
 
     #[test]
