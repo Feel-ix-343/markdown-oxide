@@ -589,6 +589,7 @@ impl AsRef<str> for Block<'_> {
 
 pub trait Rangeable {
     fn range(&self) -> &MyRange;
+
     fn includes(&self, other: &impl Rangeable) -> bool {
         let self_range = self.range();
         let other_range = other.range();
@@ -599,6 +600,21 @@ pub trait Rangeable {
             && (self_range.end.line > other_range.end.line
                 || (self_range.end.line == other_range.end.line
                     && self_range.end.character >= other_range.end.character))
+    }
+
+    fn overlaps(&self, other: &impl Rangeable) -> bool {
+        if self.includes(other) {
+            return true;
+        }
+
+        let self_range = self.range();
+        let other_range = other.range();
+        let self_start = (self_range.start.line, self_range.start.character);
+        let self_end = (self_range.end.line, self_range.end.character);
+        let other_start = (other_range.start.line, other_range.start.character);
+        let other_end = (other_range.end.line, other_range.end.character);
+
+        self_start < other_end && other_start < self_end
     }
 
     fn includes_position(&self, position: Position) -> bool {
@@ -672,24 +688,24 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
         let headings = MDHeading::new(text)
-            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
+            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)));
         let footnotes = MDFootnote::new(text)
-            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
+            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)));
         let link_refs = MDLinkReferenceDefinition::new(text)
-            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
+            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)));
         let indexed_blocks = MDIndexedBlock::new(text)
-            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
+            .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)));
         let tags = match context {
             Settings {
                 tags_in_codeblocks: false,
                 ..
             } => MDTag::new(text)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
                 .collect_vec(),
             _ => MDTag::new(text).collect_vec(),
         };
@@ -1798,11 +1814,37 @@ mod vault_tests {
     use itertools::Itertools;
     use tower_lsp::lsp_types::{Position, Range};
 
-    use crate::vault::{HeadingLevel, MyRange, ReferenceData};
+    use crate::config::{Case, EmbeddedBlockTransclusionLength, Settings};
+    use crate::vault::{HeadingLevel, ReferenceData};
     use crate::vault::{MDLinkReferenceDefinition, Refname};
 
     use super::Reference::*;
     use super::{MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference, Referenceable};
+
+    fn test_settings(references_in_codeblocks: bool) -> Settings {
+        Settings {
+            dailynote: "%Y-%m-%d".into(),
+            new_file_folder_path: String::new(),
+            daily_notes_folder: String::new(),
+            heading_completions: true,
+            title_headings: true,
+            unresolved_diagnostics: true,
+            semantic_tokens: true,
+            tags_in_codeblocks: false,
+            references_in_codeblocks,
+            include_md_extension_md_link: false,
+            include_md_extension_wikilink: false,
+            hover: true,
+            case_matching: Case::Smart,
+            inlay_hints: true,
+            block_transclusion: true,
+            block_transclusion_length: EmbeddedBlockTransclusionLength::Full,
+            link_filenames_only: false,
+            excluded_folders: Vec::new(),
+            heading_slug: false,
+            callout_completions: true,
+        }
+    }
 
     #[test]
     fn wiki_link_parsing() {
@@ -1858,6 +1900,21 @@ mod vault_tests {
         ];
 
         assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn wiki_link_spanning_inline_code_is_filtered_from_references() {
+        let text = "Literal brackets `[[` and `]]` should not become a reference, but [[Note]] should.";
+        let md_file = MDFile::new(&test_settings(false), text, Path::new("source.md").into());
+
+        assert_eq!(
+            md_file
+                .references
+                .iter()
+                .map(|reference| reference.data().reference_text.as_str())
+                .collect_vec(),
+            vec!["Note"]
+        );
     }
 
     #[test]
