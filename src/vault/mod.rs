@@ -7,7 +7,7 @@ use std::{
     hash::Hash,
     iter,
     ops::{Deref, DerefMut, Not, Range},
-    path::{Path, PathBuf, MAIN_SEPARATOR},
+    path::{Path, PathBuf},
     time::SystemTime,
 };
 
@@ -1550,7 +1550,11 @@ pub enum Referenceable<'a> {
 
 /// Utility function
 pub fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
-    diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(String::from))
+    diff_paths(path, root_dir).and_then(|diff| {
+        diff.with_extension("")
+            .to_str()
+            .map(normalize_obsidian_ref_path)
+    })
 }
 
 /// Converts heading text to its slug form for use in links.
@@ -1571,7 +1575,7 @@ impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
         let path = &self.path.clone()?;
 
-        let last = path.split(MAIN_SEPARATOR).next_back()?;
+        let last = path.split(['/', '\\']).next_back()?;
 
         Some(last.to_string())
     }
@@ -1768,12 +1772,11 @@ impl Referenceable<'_> {
 fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
     (|| {
         let refname = refname?;
-        let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
+        let refname_path = normalize_obsidian_ref_path(&refname.path.clone()?); // this function should not be used for tags, ... only for heading, files, indexed blocks
+
+        let file_ref_text = normalize_obsidian_ref_path(file_ref_text);
 
         if file_ref_text.contains('/') {
-            let file_ref_text = file_ref_text.replace(r"%20", " ");
-            let file_ref_text = file_ref_text.replace(r"\ ", " ");
-
             let chars: Vec<char> = file_ref_text.chars().collect();
             match chars.as_slice() {
                 &['.', '/', ref path @ ..] | &['/', ref path @ ..] => {
@@ -1790,6 +1793,12 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
     .is_some_and(|b| b)
 }
 
+fn normalize_obsidian_ref_path(path: &str) -> String {
+    path.replace(r"%20", " ")
+        .replace(r"\ ", " ")
+        .replace('\\', "/")
+}
+
 // tests
 #[cfg(test)]
 mod vault_tests {
@@ -1798,7 +1807,7 @@ mod vault_tests {
     use itertools::Itertools;
     use tower_lsp::lsp_types::{Position, Range};
 
-    use crate::vault::{HeadingLevel, MyRange, ReferenceData};
+    use crate::vault::{HeadingLevel, ReferenceData};
     use crate::vault::{MDLinkReferenceDefinition, Refname};
 
     use super::Reference::*;
@@ -2677,6 +2686,59 @@ Another paragraph.";
                 ..Default::default()
             })
         )
+    }
+
+    #[test]
+    fn test_linkable_reference_nested_path_uses_obsidian_separator() {
+        let path = Path::new("/home/vault/subdir/test.md");
+        let path_buf = path.to_path_buf();
+        let md_file = MDFile::default();
+        let linkable: Referenceable = Referenceable::File(&path_buf, &md_file);
+
+        let root_dir = Path::new("/home/vault");
+        let refname = linkable.get_refname(root_dir);
+
+        assert_eq!(
+            refname,
+            Some(Refname {
+                full_refname: "subdir/test".into(),
+                path: "subdir/test".to_string().into(),
+                ..Default::default()
+            })
+        )
+    }
+
+    #[test]
+    fn test_refname_link_file_key_accepts_windows_separators() {
+        let refname = Refname {
+            full_refname: "subdir\\test".into(),
+            path: "subdir\\test".to_string().into(),
+            ..Default::default()
+        };
+
+        assert_eq!(refname.link_file_key(), Some("test".into()))
+    }
+
+    #[test]
+    fn test_forward_slash_link_matches_windows_style_refname() {
+        let refname = Refname {
+            full_refname: "subdir\\test".into(),
+            path: "subdir\\test".to_string().into(),
+            ..Default::default()
+        };
+
+        assert!(super::matches_path_or_file("subdir/test", Some(refname)));
+    }
+
+    #[test]
+    fn test_dot_slash_link_matches_windows_style_refname() {
+        let refname = Refname {
+            full_refname: "subdir\\test".into(),
+            path: "subdir\\test".to_string().into(),
+            ..Default::default()
+        };
+
+        assert!(super::matches_path_or_file("./subdir/test", Some(refname)));
     }
 
     #[test]
