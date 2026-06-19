@@ -235,6 +235,23 @@ Set up the PKM for your text editor...
     * [Lspsaga](https://github.com/nvimdev/lspsaga.nvim): UI generally helpful for LSP commands
         + Allows you to edit linked markdown files in a popup window, for example. 
 
+- Troubleshooting visual tab or indent marks:
+    Markdown Oxide does not draw tab or indent guide marks, and there is no Markdown Oxide setting for these editor decorations. If vertical bars or tab glyphs appear after pressing Tab in Neovim, they come from Neovim's whitespace display (`list`/`listchars`) or an indent-guide plugin.
+
+    To hide Neovim's built-in whitespace markers immediately, run:
+
+    ```vim
+    :set nolist
+    ```
+
+    Or add this to your Neovim config:
+
+    ```lua
+    vim.opt.list = false
+    ```
+
+    If an indent-guide plugin still draws vertical lines, disable or configure that plugin instead.
+
 
 ## VSCode
 
