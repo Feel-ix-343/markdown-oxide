@@ -20,22 +20,87 @@ pub fn code_actions(
     path: &Path,
     settings: &Settings,
 ) -> Option<Vec<CodeActionOrCommand>> {
+    let mut actions = Vec::new();
+
+    let get_checkbox_action = || -> Option<CodeActionOrCommand> {
+        let line_chars = vault.select_line(path, params.range.start.line as isize)?;
+        let line_str: String = line_chars.into_iter().collect();
+        let trimmed = line_str.trim_start();
+        
+        let space_idx = trimmed.find(' ')?;
+        let (bullet, rest) = trimmed.split_at(space_idx);
+        let rest_trimmed = rest.trim_start();
+        
+        let is_valid_bullet = bullet == "-" 
+            || bullet == "*" 
+            || bullet == "+" 
+            || (bullet.ends_with('.') && bullet[..bullet.len() - 1].chars().all(|c| c.is_ascii_digit()));
+
+        if !is_valid_bullet { return None; }
+
+        // This doesn't check the actual checkbox type, so - [!] will also be toggled
+        let has_bracket = rest_trimmed.starts_with('[') 
+            && rest_trimmed.len() >= 4 
+            && rest_trimmed.chars().nth(2) == Some(']') 
+            && rest_trimmed.chars().nth(3) == Some(' ');
+
+        if !has_bracket { return None; }
+
+        let is_unchecked = rest_trimmed.chars().nth(1) == Some(' ');
+        let prefix_bytes = line_str.len() - rest_trimmed.len();
+        let char_index = line_str[..prefix_bytes].chars().count();
+        
+        let new_char = if is_unchecked { "x" } else { " " };
+        let title = if is_unchecked { "Toggle checkbox (Check)" } else { "Toggle checkbox (Uncheck)" };
+
+        let uri = Url::from_file_path(path).ok()?;
+
+        Some(CodeActionOrCommand::CodeAction(CodeAction {
+            title: title.to_string(),
+            kind: Some(tower_lsp::lsp_types::CodeActionKind::REFACTOR),
+            edit: Some(WorkspaceEdit {
+                document_changes: Some(DocumentChanges::Operations(vec![
+                    DocumentChangeOperation::Edit(TextDocumentEdit {
+                        text_document: OptionalVersionedTextDocumentIdentifier {
+                            uri,
+                            version: None,
+                        },
+                        edits: vec![OneOf::Left(TextEdit {
+                            new_text: new_char.to_string(),
+                            range: Range {
+                                start: Position {
+                                    line: params.range.start.line,
+                                    character: (char_index + 1) as u32,
+                                },
+                                end: Position {
+                                    line: params.range.start.line,
+                                    character: (char_index + 2) as u32,
+                                },
+                            },
+                        })],
+                    }),
+                ])),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }))
+    };
+
+    if let Some(action) = get_checkbox_action() {
+        actions.push(action);
+    }
+
     // Diagnostics
     // get all links for changed file
+    if let Some(unresolved_file_links) = path_unresolved_references(vault, path) {
+        let code_action_unresolved = unresolved_file_links.into_iter().filter(|(_, reference)| {
+            reference.data().range.start.line <= params.range.start.line
+                && reference.data().range.end.line >= params.range.end.line
+                && reference.data().range.start.character <= params.range.start.character
+                && reference.data().range.end.character >= params.range.end.character
+        });
 
-    let unresolved = path_unresolved_references(vault, path)?;
-
-    let unresolved_file_links = unresolved;
-
-    let code_action_unresolved = unresolved_file_links.into_iter().filter(|(_, reference)| {
-        reference.data().range.start.line <= params.range.start.line
-            && reference.data().range.end.line >= params.range.end.line
-            && reference.data().range.start.character <= params.range.start.character
-            && reference.data().range.end.character >= params.range.end.character
-    });
-
-    Some(
-        code_action_unresolved
+        let mut diagnostic_actions: Vec<CodeActionOrCommand> = code_action_unresolved
             .flat_map(|(_path, reference)| {
                 match reference {
                     Reference::WikiFileLink(_data) => {
@@ -144,6 +209,15 @@ pub fn code_actions(
                 }
 
             })
-            .collect(),
-    )
+            .collect();
+            
+        actions.append(&mut diagnostic_actions);
+    }
+
+    if actions.is_empty() {
+        None
+    } else {
+        Some(actions)
+    }
 }
+
