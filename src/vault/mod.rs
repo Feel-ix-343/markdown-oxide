@@ -7,7 +7,7 @@ use std::{
     hash::Hash,
     iter,
     ops::{Deref, DerefMut, Not, Range},
-    path::{Path, PathBuf, MAIN_SEPARATOR},
+    path::{Component, Path, PathBuf, MAIN_SEPARATOR},
     time::SystemTime,
 };
 
@@ -1012,7 +1012,12 @@ impl Reference {
                 | WikiFileLink(ReferenceData {
                     reference_text: file_ref_text,
                     ..
-                }) => matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir)),
+                }) => matches_path_or_file(
+                    file_ref_text,
+                    root_dir,
+                    Some(file_path),
+                    referenceable.get_refname(root_dir),
+                ),
                 Tag(_) => false,
                 WikiHeadingLink(_, _, _) => false,
                 WikiIndexedBlockLink(_, _, _) => false,
@@ -1040,8 +1045,12 @@ impl Reference {
                 | WikiIndexedBlockLink(.., file_ref_text, link_infile_ref)
                 | MDHeadingLink(.., file_ref_text, link_infile_ref)
                 | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => {
-                    matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir))
-                        && heading_to_slug(&link_infile_ref.to_lowercase())
+                    matches_path_or_file(
+                        file_ref_text,
+                        root_dir,
+                        Some(file_path),
+                        referenceable.get_refname(root_dir),
+                    ) && heading_to_slug(&link_infile_ref.to_lowercase())
                             == heading_to_slug(&infile_ref.to_lowercase())
                 }
                 Tag(_) => false,
@@ -1716,7 +1725,12 @@ impl Referenceable<'_> {
                 })
                 | MDHeadingLink(.., file_ref_text, _)
                 | MDIndexedBlockLink(.., file_ref_text, _) => {
-                    matches_path_or_file(file_ref_text, self.get_refname(root_dir))
+                    matches_path_or_file(
+                        file_ref_text,
+                        root_dir,
+                        Some(reference_path),
+                        self.get_refname(root_dir),
+                    )
                 }
                 Tag(_) => false,
                 Footnote(_) => false,
@@ -1765,22 +1779,82 @@ impl Referenceable<'_> {
     }
 }
 
-fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
+fn normalized_path(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            Component::Normal(part) => normalized.push(part),
+            Component::RootDir | Component::Prefix(_) => {}
+        }
+    }
+
+    normalized
+}
+
+fn slash_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
+fn normalize_reference_path(
+    file_ref_text: &str,
+    root_dir: &Path,
+    reference_path: Option<&Path>,
+) -> String {
+    let file_ref_text = file_ref_text.replace(r"%20", " ");
+    let file_ref_text = file_ref_text.replace(r"\ ", " ");
+    let file_ref_text = file_ref_text.replace('\\', "/");
+    let file_ref_path = Path::new(&file_ref_text);
+    let is_relative_reference = file_ref_path.is_relative()
+        && file_ref_path
+            .components()
+            .next()
+            .is_some_and(|component| {
+                matches!(component, Component::CurDir | Component::ParentDir)
+            });
+
+    let path = if is_relative_reference {
+        reference_path
+            .and_then(Path::parent)
+            .map(|parent| parent.join(file_ref_path))
+            .unwrap_or_else(|| file_ref_path.to_path_buf())
+    } else {
+        file_ref_path.to_path_buf()
+    };
+
+    let normalized = normalized_path(&path).with_extension("");
+
+    if is_relative_reference {
+        let root_dir = normalized_path(root_dir);
+        if let Ok(relative_path) = normalized.strip_prefix(root_dir) {
+            return slash_path(relative_path);
+        }
+    }
+
+    slash_path(&normalized)
+        .trim_start_matches('/')
+        .trim_start_matches("./")
+        .to_string()
+}
+
+fn matches_path_or_file(
+    file_ref_text: &str,
+    root_dir: &Path,
+    reference_path: Option<&Path>,
+    refname: Option<Refname>,
+) -> bool {
     (|| {
         let refname = refname?;
-        let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
+        // This function should not be used for tags, only for files,
+        // headings, and indexed blocks.
+        let refname_path = refname.path.clone()?.replace('\\', "/");
 
-        if file_ref_text.contains('/') {
-            let file_ref_text = file_ref_text.replace(r"%20", " ");
-            let file_ref_text = file_ref_text.replace(r"\ ", " ");
-
-            let chars: Vec<char> = file_ref_text.chars().collect();
-            match chars.as_slice() {
-                &['.', '/', ref path @ ..] | &['/', ref path @ ..] => {
-                    Some(String::from_iter(path) == refname_path)
-                }
-                path => Some(String::from_iter(path) == refname_path),
-            }
+        if file_ref_text.contains('/') || file_ref_text.contains('\\') {
+            Some(normalize_reference_path(file_ref_text, root_dir, reference_path) == refname_path)
         } else {
             let last_segment = refname.link_file_key()?;
 
@@ -1802,7 +1876,42 @@ mod vault_tests {
     use crate::vault::{MDLinkReferenceDefinition, Refname};
 
     use super::Reference::*;
-    use super::{MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference, Referenceable};
+    use super::{
+        matches_path_or_file, MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference,
+        Referenceable,
+    };
+
+    #[test]
+    fn relative_paths_match_from_the_referencing_file() {
+        let refname = Refname {
+            full_refname: "folder/target".into(),
+            path: Some("folder/target".into()),
+            infile_ref: None,
+        };
+
+        assert!(matches_path_or_file(
+            "./target",
+            Path::new("vault"),
+            Some(Path::new("vault/folder/source.md")),
+            Some(refname)
+        ));
+    }
+
+    #[test]
+    fn parent_relative_paths_match_from_the_referencing_file() {
+        let refname = Refname {
+            full_refname: "target".into(),
+            path: Some("target".into()),
+            infile_ref: None,
+        };
+
+        assert!(matches_path_or_file(
+            "../target",
+            Path::new("vault"),
+            Some(Path::new("vault/folder/source.md")),
+            Some(refname)
+        ));
+    }
 
     #[test]
     fn wiki_link_parsing() {
