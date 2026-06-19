@@ -4,3 +4,4 @@ Session.vim
 .aider*
 .env
 /.devenv
+.DS_Store
