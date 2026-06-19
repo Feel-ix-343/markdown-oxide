@@ -1012,7 +1012,12 @@ impl Reference {
                 | WikiFileLink(ReferenceData {
                     reference_text: file_ref_text,
                     ..
-                }) => matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir)),
+                }) => matches_path_or_file(
+                    file_ref_text,
+                    referenceable.get_refname(root_dir),
+                    root_dir,
+                    file_path,
+                ),
                 Tag(_) => false,
                 WikiHeadingLink(_, _, _) => false,
                 WikiIndexedBlockLink(_, _, _) => false,
@@ -1040,7 +1045,12 @@ impl Reference {
                 | WikiIndexedBlockLink(.., file_ref_text, link_infile_ref)
                 | MDHeadingLink(.., file_ref_text, link_infile_ref)
                 | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => {
-                    matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir))
+                    matches_path_or_file(
+                        file_ref_text,
+                        referenceable.get_refname(root_dir),
+                        root_dir,
+                        file_path,
+                    )
                         && heading_to_slug(&link_infile_ref.to_lowercase())
                             == heading_to_slug(&infile_ref.to_lowercase())
                 }
@@ -1716,7 +1726,12 @@ impl Referenceable<'_> {
                 })
                 | MDHeadingLink(.., file_ref_text, _)
                 | MDIndexedBlockLink(.., file_ref_text, _) => {
-                    matches_path_or_file(file_ref_text, self.get_refname(root_dir))
+                    matches_path_or_file(
+                        file_ref_text,
+                        self.get_refname(root_dir),
+                        root_dir,
+                        reference_path,
+                    )
                 }
                 Tag(_) => false,
                 Footnote(_) => false,
@@ -1765,7 +1780,12 @@ impl Referenceable<'_> {
     }
 }
 
-fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
+fn matches_path_or_file(
+    file_ref_text: &str,
+    refname: Option<Refname>,
+    root_dir: &Path,
+    reference_path: &Path,
+) -> bool {
     (|| {
         let refname = refname?;
         let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
@@ -1774,12 +1794,19 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
             let file_ref_text = file_ref_text.replace(r"%20", " ");
             let file_ref_text = file_ref_text.replace(r"\ ", " ");
 
-            let chars: Vec<char> = file_ref_text.chars().collect();
-            match chars.as_slice() {
-                &['.', '/', ref path @ ..] | &['/', ref path @ ..] => {
-                    Some(String::from_iter(path) == refname_path)
-                }
-                path => Some(String::from_iter(path) == refname_path),
+            let candidate = if file_ref_text.starts_with("./") || file_ref_text.starts_with("../") {
+                reference_path
+                    .parent()
+                    .and_then(|parent| diff_paths(parent.join(&file_ref_text), root_dir))
+                    .and_then(|path| path.with_extension("").to_str().map(String::from))?
+            } else {
+                file_ref_text.trim_start_matches('/').to_string()
+            };
+
+            if cfg!(windows) {
+                Some(candidate.replace('\\', "/") == refname_path.replace('\\', "/"))
+            } else {
+                Some(candidate == refname_path)
             }
         } else {
             let last_segment = refname.link_file_key()?;
@@ -1802,7 +1829,10 @@ mod vault_tests {
     use crate::vault::{MDLinkReferenceDefinition, Refname};
 
     use super::Reference::*;
-    use super::{MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference, Referenceable};
+    use super::{
+        matches_path_or_file, MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference,
+        Referenceable,
+    };
 
     #[test]
     fn wiki_link_parsing() {
@@ -1858,6 +1888,42 @@ mod vault_tests {
         ];
 
         assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn link_path_matching_resolves_dot_relative_paths_from_reference_file() {
+        let root = Path::new("/vault");
+        let reference_path = Path::new("/vault/notes/source.md");
+        let refname = Refname {
+            full_refname: "notes/target".into(),
+            path: Some("notes/target".into()),
+            ..Default::default()
+        };
+
+        assert!(matches_path_or_file(
+            "./target",
+            Some(refname),
+            root,
+            reference_path
+        ));
+    }
+
+    #[test]
+    fn link_path_matching_resolves_parent_relative_paths_from_reference_file() {
+        let root = Path::new("/vault");
+        let reference_path = Path::new("/vault/notes/deep/source.md");
+        let refname = Refname {
+            full_refname: "notes/target".into(),
+            path: Some("notes/target".into()),
+            ..Default::default()
+        };
+
+        assert!(matches_path_or_file(
+            "../target",
+            Some(refname),
+            root,
+            reference_path
+        ));
     }
 
     #[test]
