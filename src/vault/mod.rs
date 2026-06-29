@@ -682,7 +682,13 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| {
+                    !code_blocks.iter().any(|codeblock| {
+                        codeblock.includes(it)
+                            || codeblock.includes_position(it.range().start)
+                            || codeblock.includes_position(it.range().end)
+                    })
+                })
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
