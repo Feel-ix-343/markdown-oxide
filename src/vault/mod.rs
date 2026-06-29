@@ -21,6 +21,15 @@ use serde::{Deserialize, Serialize};
 use tower_lsp::lsp_types::{Location, Position, SymbolInformation, SymbolKind, Url};
 use walkdir::WalkDir;
 
+const MAX_INDEXED_LINES: usize = 10_000;
+
+fn indexed_text(text: &str) -> &str {
+    match text.match_indices('\n').nth(MAX_INDEXED_LINES - 1) {
+        Some((idx, _)) => &text[..idx + 1],
+        None => text,
+    }
+}
+
 impl Vault {
     pub fn construct_vault(context: &Settings, root_dir: &Path) -> Result<Vault, std::io::Error> {
         let excluded_folders = &context.excluded_folders;
@@ -661,6 +670,7 @@ pub struct MDFile {
 
 impl MDFile {
     fn new(context: &Settings, text: &str, path: PathBuf) -> MDFile {
+        let text = indexed_text(text);
         let code_blocks = MDCodeBlock::new(text).collect_vec();
         let file_name = path
             .file_stem()
@@ -1793,16 +1803,24 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
 // tests
 #[cfg(test)]
 mod vault_tests {
-    use std::path::Path;
+    use std::{collections::HashMap, path::Path, path::PathBuf};
 
     use itertools::Itertools;
-    use tower_lsp::lsp_types::{Position, Range};
+    use tower_lsp::lsp_types::{ClientCapabilities, Position, Range};
 
-    use crate::vault::{HeadingLevel, MyRange, ReferenceData};
+    use crate::config::Settings;
+    use crate::vault::{HeadingLevel, ReferenceData};
     use crate::vault::{MDLinkReferenceDefinition, Refname};
 
     use super::Reference::*;
-    use super::{MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference, Referenceable};
+    use super::{
+        MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference, Referenceable, Vault,
+        MAX_INDEXED_LINES,
+    };
+
+    fn test_settings() -> Settings {
+        Settings::new(Path::new("."), &ClientCapabilities::default()).unwrap()
+    }
 
     #[test]
     fn wiki_link_parsing() {
@@ -3321,6 +3339,74 @@ Some content here";
         let tags = MDTag::from_frontmatter(text, &metadata);
 
         assert!(tags.is_empty());
+    }
+
+    #[test]
+    fn mdfile_indexes_first_10k_lines() {
+        let text = format!(
+            "{}[[inside cap]]\n",
+            "plain line\n".repeat(MAX_INDEXED_LINES - 1)
+        );
+
+        let parsed = MDFile::new(&test_settings(), &text, PathBuf::from("long.md"));
+
+        assert!(parsed.references.iter().any(|reference| {
+            matches!(
+                reference,
+                WikiFileLink(data) if data.reference_text == "inside cap"
+            )
+        }));
+    }
+
+    #[test]
+    fn mdfile_ignores_lines_after_10k() {
+        let text = format!(
+            "{}[[inside cap]]\n[[outside cap]]\n",
+            "plain line\n".repeat(MAX_INDEXED_LINES - 1)
+        );
+
+        let parsed = MDFile::new(&test_settings(), &text, PathBuf::from("long.md"));
+
+        assert!(parsed.references.iter().any(|reference| {
+            matches!(
+                reference,
+                WikiFileLink(data) if data.reference_text == "inside cap"
+            )
+        }));
+        assert!(!parsed.references.iter().any(|reference| {
+            matches!(
+                reference,
+                WikiFileLink(data) if data.reference_text == "outside cap"
+            )
+        }));
+    }
+
+    #[test]
+    fn update_vault_keeps_full_text_in_rope() {
+        let path = PathBuf::from("long.md");
+        let text = format!(
+            "{}[[inside cap]]\n[[outside cap]]\n",
+            "plain line\n".repeat(MAX_INDEXED_LINES - 1)
+        );
+        let mut vault = Vault {
+            md_files: HashMap::new().into(),
+            ropes: HashMap::new().into(),
+            root_dir: PathBuf::from("."),
+        };
+
+        Vault::update_vault(&test_settings(), &mut vault, (&path, &text));
+
+        assert_eq!(vault.ropes.get(&path).unwrap().to_string(), text);
+        assert!(!vault
+            .md_files
+            .get(&path)
+            .unwrap()
+            .references
+            .iter()
+            .any(|reference| matches!(
+                reference,
+                WikiFileLink(data) if data.reference_text == "outside cap"
+            )));
     }
 
     #[test]
