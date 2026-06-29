@@ -879,6 +879,7 @@ impl Reference {
                     Some(".md") | None
                 )
             })
+            .filter(|captures| !capture_markers_overlap_inline_code(text, captures))
             .flat_map(RegexTuple::new)
             .flat_map(|regextuple| {
                 generic_link_constructor::<WikiReferenceConstructor>(text, file_name, regextuple)
@@ -1109,6 +1110,76 @@ impl RegexTuple<'_> {
             _ => None,
         }
     }
+}
+
+fn capture_markers_overlap_inline_code(text: &str, captures: &Captures) -> bool {
+    captures.get(0).is_some_and(|full_match| {
+        let full_range = full_match.range();
+        let opening_marker = full_range.start..full_range.start + 2;
+        let closing_marker = full_range.end.saturating_sub(2)..full_range.end;
+        let inline_ranges = inline_code_ranges(text);
+
+        [opening_marker, closing_marker].iter().any(|marker_range| {
+            inline_ranges
+                .iter()
+                .any(|inline_range| ranges_overlap(marker_range, inline_range))
+        })
+    })
+}
+
+fn ranges_overlap(left: &Range<usize>, right: &Range<usize>) -> bool {
+    left.start < right.end && right.start < left.end
+}
+
+fn inline_code_ranges(text: &str) -> Vec<Range<usize>> {
+    let bytes = text.as_bytes();
+    let mut ranges = vec![];
+    let mut index = 0;
+
+    while index < bytes.len() {
+        if bytes[index] != b'`' {
+            index += 1;
+            continue;
+        }
+
+        let start = index;
+        let tick_count = count_backticks(bytes, index);
+        index += tick_count;
+
+        let mut search = index;
+        let mut found_closing_tick = false;
+        while search < bytes.len() {
+            if bytes[search] != b'`' {
+                search += 1;
+                continue;
+            }
+
+            let closing_tick_count = count_backticks(bytes, search);
+            if closing_tick_count == tick_count {
+                let end = search + closing_tick_count;
+                if !text[start..end].contains('\n') {
+                    ranges.push(start..end);
+                }
+                index = end;
+                found_closing_tick = true;
+                break;
+            }
+            search += closing_tick_count;
+        }
+
+        if !found_closing_tick {
+            index = start + tick_count;
+        }
+    }
+
+    ranges
+}
+
+fn count_backticks(bytes: &[u8], start: usize) -> usize {
+    bytes[start..]
+        .iter()
+        .take_while(|byte| **byte == b'`')
+        .count()
 }
 
 trait ParseableReferenceConstructor {
@@ -1876,6 +1947,44 @@ mod vault_tests {
         ];
 
         assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn wiki_link_markers_in_inline_code_are_ignored() {
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers";
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        assert!(parsed.is_empty());
+
+        let text = "Ignore `[[not a link]]` but keep [[real link]]";
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        assert_eq!(parsed.len(), 1);
+        assert!(matches!(parsed[0], WikiFileLink(_)));
+        assert_eq!(parsed[0].data().reference_text, "real link");
+    }
+
+    #[test]
+    fn wiki_link_with_inline_code_in_text_still_parses() {
+        let text = "Keep [[page with `code` in name]] as a real link";
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        assert_eq!(parsed.len(), 1);
+        assert!(matches!(parsed[0], WikiFileLink(_)));
+        assert_eq!(parsed[0].data().reference_text, "page with `code` in name");
+    }
+
+    #[test]
+    fn wiki_link_inside_fenced_code_block_still_parses() {
+        let text = "```\n[[kept for references_in_codeblocks]]\n```";
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        assert_eq!(parsed.len(), 1);
+        assert!(matches!(parsed[0], WikiFileLink(_)));
+        assert_eq!(
+            parsed[0].data().reference_text,
+            "kept for references_in_codeblocks"
+        );
     }
 
     #[test]
