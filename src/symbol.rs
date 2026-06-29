@@ -148,10 +148,65 @@ fn map_to_lsp_tree(tree: Vec<Node>) -> Vec<DocumentSymbol> {
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        symbol,
-        vault::{HeadingLevel, MDHeading},
+    use std::{
+        fs,
+        time::{SystemTime, UNIX_EPOCH},
     };
+
+    use crate::{
+        config::Settings,
+        symbol,
+        vault::{HeadingLevel, MDHeading, Vault},
+    };
+    use itertools::Itertools;
+    use tower_lsp::lsp_types::WorkspaceSymbolParams;
+
+    fn workspace_symbol_params(query: &str) -> WorkspaceSymbolParams {
+        WorkspaceSymbolParams {
+            query: query.to_string(),
+            work_done_progress_params: Default::default(),
+            partial_result_params: Default::default(),
+        }
+    }
+
+    #[test]
+    fn test_workspace_symbols_include_frontmatter_aliases() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("moxide-workspace-symbol-alias-{unique}"));
+
+        fs::create_dir_all(&root).unwrap();
+        fs::write(
+            root.join("Canonical Note.md"),
+            "---\naliases:\n  - Moon Alias\n  - Another Alias\n---\n\n# Heading\n",
+        )
+        .unwrap();
+
+        let settings = Settings::new(&root, &Default::default()).unwrap();
+        let vault = Vault::construct_vault(&settings, &root).unwrap();
+
+        let all_symbols = super::workspace_symbol(&vault, &workspace_symbol_params(""))
+            .unwrap()
+            .into_iter()
+            .map(|symbol| symbol.name)
+            .collect_vec();
+
+        assert!(all_symbols.contains(&"Canonical Note".to_string()));
+        assert!(all_symbols.contains(&"Moon Alias".to_string()));
+        assert!(all_symbols.contains(&"Another Alias".to_string()));
+
+        let alias_matches = super::workspace_symbol(&vault, &workspace_symbol_params("moon"))
+            .unwrap()
+            .into_iter()
+            .map(|symbol| symbol.name)
+            .collect_vec();
+
+        assert!(alias_matches.contains(&"Moon Alias".to_string()));
+
+        fs::remove_dir_all(root).ok();
+    }
 
     #[test]
     fn test_simple_tree() {
