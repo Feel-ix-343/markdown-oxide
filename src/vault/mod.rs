@@ -617,6 +617,17 @@ pub trait Rangeable {
             && (range.end.line > position.line
                 || (range.end.line == position.line && range.end.character >= position.character))
     }
+    fn overlaps(&self, other: &impl Rangeable) -> bool {
+        let self_range = self.range();
+        let other_range = other.range();
+
+        (self_range.start.line < other_range.end.line
+            || (self_range.start.line == other_range.end.line
+                && self_range.start.character < other_range.end.character))
+            && (other_range.start.line < self_range.end.line
+                || (other_range.start.line == self_range.end.line
+                    && other_range.start.character < self_range.end.character))
+    }
 }
 
 impl Rangeable for MDHeading {
@@ -682,7 +693,7 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -1876,6 +1887,35 @@ mod vault_tests {
         ];
 
         assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn references_overlapping_inline_code_are_ignored() {
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers\n[[real link]]";
+        let settings = Settings::new(
+            Path::new("."),
+            &tower_lsp::lsp_types::ClientCapabilities::default(),
+        )
+        .unwrap();
+        let parsed = MDFile::new(&settings, text, "test.md".into());
+
+        let expected = vec![WikiFileLink(ReferenceData {
+            reference_text: "real link".into(),
+            range: tower_lsp::lsp_types::Range {
+                start: tower_lsp::lsp_types::Position {
+                    line: 1,
+                    character: 0,
+                },
+                end: tower_lsp::lsp_types::Position {
+                    line: 1,
+                    character: 13,
+                },
+            }
+            .into(),
+            ..ReferenceData::default()
+        })];
+
+        assert_eq!(parsed.references, expected)
     }
 
     #[test]
