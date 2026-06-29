@@ -617,6 +617,18 @@ pub trait Rangeable {
             && (range.end.line > position.line
                 || (range.end.line == position.line && range.end.character >= position.character))
     }
+
+    fn overlaps(&self, other: &impl Rangeable) -> bool {
+        let self_range = self.range();
+        let other_range = other.range();
+
+        (self_range.start.line < other_range.end.line
+            || (self_range.start.line == other_range.end.line
+                && self_range.start.character < other_range.end.character))
+            && (other_range.start.line < self_range.end.line
+                || (other_range.start.line == self_range.end.line
+                    && other_range.start.character < self_range.end.character))
+    }
 }
 
 impl Rangeable for MDHeading {
@@ -682,7 +694,7 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -1808,7 +1820,7 @@ mod vault_tests {
     use itertools::Itertools;
     use tower_lsp::lsp_types::{ClientCapabilities, Position, Range};
 
-    use crate::config::Settings;
+    use crate::config::{Case, EmbeddedBlockTransclusionLength, Settings};
     use crate::vault::{HeadingLevel, ReferenceData};
     use crate::vault::{MDLinkReferenceDefinition, Refname};
 
@@ -1820,6 +1832,31 @@ mod vault_tests {
 
     fn test_settings() -> Settings {
         Settings::new(Path::new("."), &ClientCapabilities::default()).unwrap()
+    }
+
+    fn test_settings_with_references_in_codeblocks(references_in_codeblocks: bool) -> Settings {
+        Settings {
+            dailynote: "%Y-%m-%d".into(),
+            new_file_folder_path: "".into(),
+            daily_notes_folder: "".into(),
+            heading_completions: true,
+            title_headings: true,
+            unresolved_diagnostics: true,
+            semantic_tokens: true,
+            tags_in_codeblocks: false,
+            references_in_codeblocks,
+            include_md_extension_md_link: false,
+            include_md_extension_wikilink: false,
+            hover: true,
+            case_matching: Case::Smart,
+            inlay_hints: true,
+            block_transclusion: true,
+            block_transclusion_length: EmbeddedBlockTransclusionLength::Full,
+            link_filenames_only: false,
+            excluded_folders: vec![],
+            heading_slug: false,
+            callout_completions: true,
+        }
     }
 
     #[test]
@@ -1876,6 +1913,47 @@ mod vault_tests {
         ];
 
         assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn mdfile_ignores_wikilink_markers_split_across_inline_code_spans() {
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers";
+        let parsed = MDFile::new(
+            &test_settings_with_references_in_codeblocks(false),
+            text,
+            PathBuf::from("test.md"),
+        );
+
+        assert_eq!(parsed.references, vec![]);
+    }
+
+    #[test]
+    fn mdfile_keeps_wikilinks_outside_inline_code_spans() {
+        let text = "This has `inline code` and [[real link]] after it";
+        let parsed = MDFile::new(
+            &test_settings_with_references_in_codeblocks(false),
+            text,
+            PathBuf::from("test.md"),
+        );
+
+        assert_eq!(
+            parsed.references,
+            vec![WikiFileLink(ReferenceData {
+                reference_text: "real link".into(),
+                range: Range {
+                    start: Position {
+                        line: 0,
+                        character: 27,
+                    },
+                    end: Position {
+                        line: 0,
+                        character: 40,
+                    },
+                }
+                .into(),
+                ..ReferenceData::default()
+            })]
+        );
     }
 
     #[test]
