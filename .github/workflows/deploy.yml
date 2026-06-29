@@ -5,6 +5,9 @@ on:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
 
+permissions:
+  contents: write
+
 jobs:
   build-and-upload:
     name: Build and Upload
@@ -40,6 +43,8 @@ jobs:
     steps:
       - name: Clone Repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -52,6 +57,10 @@ jobs:
       - name: Get the release version from the tag
         shell: bash
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+      - name: Generate release notes
+        shell: bash
+        run: bash .github/scripts/generate-release-notes.sh "${VERSION}" release-notes.md
 
       - name: Update Cargo.toml with version number
         shell: bash
@@ -103,6 +112,7 @@ jobs:
       - name: Upload the binaries
         uses: softprops/action-gh-release@v1
         with:
+          body_path: release-notes.md
           files: |
             ${{ env.ASSET }}
             ${{ env.BIN }}
