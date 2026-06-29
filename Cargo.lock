@@ -910,7 +910,7 @@ dependencies = [
 
 [[package]]
 name = "markdown-oxide"
-version = "0.25.11"
+version = "0.25.12"
 dependencies = [
  "anyhow",
  "chrono",
