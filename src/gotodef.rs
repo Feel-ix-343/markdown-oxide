@@ -42,3 +42,49 @@ pub fn goto_definition(
             .collect(),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{fs, path::PathBuf, time::SystemTime};
+
+    use tower_lsp::lsp_types::{ClientCapabilities, Position, Url};
+
+    use crate::{config::Settings, vault::Vault};
+
+    use super::goto_definition;
+
+    fn temp_vault_dir() -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("markdown-oxide-gotodef-{nanos}"))
+    }
+
+    #[test]
+    fn wiki_link_to_filename_with_spaces_resolves() {
+        let root = temp_vault_dir();
+        fs::create_dir_all(&root).unwrap();
+        let source = root.join("source.md");
+        let target = root.join("git command.md");
+        fs::write(&source, "See [[git command]]\n").unwrap();
+        fs::write(&target, "# Git Command\n").unwrap();
+
+        let settings = Settings::new(&root, &ClientCapabilities::default()).unwrap();
+        let vault = Vault::construct_vault(&settings, &root).unwrap();
+        let definitions = goto_definition(
+            &vault,
+            Position {
+                line: 0,
+                character: 8,
+            },
+            &source,
+        )
+        .unwrap();
+
+        assert_eq!(definitions.len(), 1);
+        assert_eq!(definitions[0].uri, Url::from_file_path(&target).unwrap());
+
+        fs::remove_dir_all(root).unwrap();
+    }
+}
