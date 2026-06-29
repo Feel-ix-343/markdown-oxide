@@ -80,6 +80,14 @@ When clicking on each drop-down, you will be presented with a demo of the featur
             
         </details>
 
+    -  ^checkboxCompletions
+        <details>
+            <summary>Checkbox Completions: Obsidian-style checkbox types on list items (disabled by default, enable with `checkbox_completions = true`)</summary>
+
+        Type `- [` on a list item to get completions for various checkbox types: `[ ]` Unchecked, `[x]` Checked, `[!]` Important, `[/]` In Progress, `[<]` Scheduled, `[>]` Rescheduled, `[-]` Cancelled, `[?]` Question, `[*]` Star, `[i]` Info, `["]` Quote. Works with `-`, `*`, `+`, and numbered list bullets.
+
+        </details>
+
 ## Unimplemented Completions Features
 
 - [ ] Subheading completions in the form `[[file#heading#subheading]]` from https://help.obsidian.md/Linking+notes+and+files/Internal+links#Link+to+a+heading+in+a+note (Note: right now you can link to subheadings through `[[file#subheading]]`)
@@ -180,6 +188,14 @@ When clicking on each drop-down, you will be presented with a demo of the featur
             <summary>Append heading to file and create the file if necessary</summary>
             
         ![codeactionsheading](https://github.com/Feel-ix-343/markdown-oxide/assets/88951499/02af43aa-5185-406c-adb3-4c2792902761)
+
+        </details>
+
+    -  ^checkboxToggleAction
+        <details>
+            <summary>Toggle Checkbox: toggle between checked and unchecked state (disabled by default, enable with `checkbox_actions = true`)</summary>
+
+        When the cursor is on a line with a markdown checkbox (e.g. `- [ ] task` or `- [x] task`), a code action is available to toggle between checked `[x]` and unchecked `[ ]`.
 
         </details>
 
