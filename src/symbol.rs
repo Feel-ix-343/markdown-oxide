@@ -376,8 +376,8 @@ mod test {
         )
         .expect("write test note");
 
-        let vault = Vault::construct_vault(&test_settings(), &root_dir)
-            .expect("construct test vault");
+        let vault =
+            Vault::construct_vault(&test_settings(), &root_dir).expect("construct test vault");
 
         let params = WorkspaceSymbolParams {
             query: String::new(),
