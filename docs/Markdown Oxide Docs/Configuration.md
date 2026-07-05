@@ -85,6 +85,11 @@ heading_slug = false
 # Files within excluded folders will not appear in completions, references, diagnostics, or other LSP features
 # Matching is by directory name, so excluding "Archive" will skip any directory named Archive at any depth
 excluded_folders = []
+
+# Complete paths as relative to vault
+# If disabled, vault/subdir/file.md completed as [[file]]
+# If enabled, it completes as [[subdir/file]]
+complete_paths_as_relative_to_vault = false
 ```
 
 # Daily Note Format Config Option
