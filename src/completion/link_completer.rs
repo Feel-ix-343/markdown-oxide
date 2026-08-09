@@ -19,7 +19,9 @@ use crate::{
     completion::util::check_in_code_block,
     config::Settings,
     ui::preview_referenceable,
-    vault::{heading_to_slug, MDFile, MDHeading, Reference, Referenceable, Vault},
+    vault::{
+        heading_to_slug, relative_link_ref_path, MDFile, MDHeading, Reference, Referenceable, Vault,
+    },
 };
 
 use super::{
@@ -57,6 +59,11 @@ pub trait LinkCompleter<'a>: Completer<'a> {
     where
         Self: Sync,
     {
+        let entered_refname = self.entered_refname();
+        if entered_refname.starts_with("./") || entered_refname.starts_with("../") {
+            return self.relative_link_completions();
+        }
+
         let referenceables = self.vault().select_referenceable_nodes(None);
 
         let position = self.position();
@@ -121,6 +128,33 @@ pub trait LinkCompleter<'a>: Completer<'a> {
             .map(LinkCompletion::DailyNote);
 
         completions.into_iter().chain(days).collect::<Vec<_>>()
+    }
+
+    fn relative_link_completions(&self) -> Vec<LinkCompletion<'a>>
+    where
+        Self: Sync,
+    {
+        let heading_completions = self.settings().heading_completions;
+        let root_dir = self.vault().root_dir();
+
+        self.vault()
+            .select_referenceable_nodes(None)
+            .into_par_iter()
+            .filter(|referenceable| referenceable.get_path() != self.path())
+            .filter(|referenceable| {
+                heading_completions
+                    || !matches!(
+                        referenceable,
+                        Referenceable::Heading(..) | Referenceable::UnresolvedHeading(..)
+                    )
+            })
+            .flat_map(|referenceable| {
+                LinkCompletion::new_relative(referenceable, self, root_dir)
+                    .into_iter()
+                    .par_bridge()
+            })
+            .flatten()
+            .collect()
     }
 }
 
@@ -691,6 +725,41 @@ impl LinkCompletion<'_> {
         }
     }
 
+    fn new_relative<'a>(
+        referenceable: Referenceable<'a>,
+        completer: &impl LinkCompleter<'a>,
+        root_dir: &Path,
+    ) -> Option<Vec<LinkCompletion<'a>>> {
+        let relative_ref =
+            relative_link_ref_path(root_dir, completer.path(), referenceable.get_path())?;
+
+        match referenceable {
+            Referenceable::File(_, mdfile) => Some(vec![File {
+                mdfile,
+                match_string: relative_ref,
+                referenceable: referenceable.clone(),
+            }]),
+            Referenceable::Heading(_, heading) => {
+                let heading_text = if completer.settings().heading_slug {
+                    heading_to_slug(&heading.heading_text)
+                } else {
+                    heading.heading_text.clone()
+                };
+
+                Some(vec![Heading {
+                    heading,
+                    match_string: format!("{}#{}", relative_ref, heading_text),
+                    referenceable,
+                }])
+            }
+            Referenceable::IndexedBlock(_, indexed) => Some(vec![Block {
+                match_string: format!("{}#^{}", relative_ref, indexed.index),
+                referenceable,
+            }]),
+            _ => None,
+        }
+    }
+
     fn default_completion<'a>(
         &self,
         text_edit: CompletionTextEdit,
@@ -974,5 +1043,77 @@ impl MDDailyNote<'_> {
         let unresolved_file = Referenceable::UnresovledFile(path.to_path_buf(), &self.ref_name);
 
         unresolved_file
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use tower_lsp::lsp_types::ClientCapabilities;
+
+    use crate::{
+        completion::{Completer, Context},
+        config::Settings,
+        vault::Vault,
+    };
+
+    use super::{LinkCompleter, MarkdownLinkCompleter, WikiLinkCompleter};
+
+    fn test_vault(source_text: &str) -> (Vault, Settings, PathBuf) {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("TestFiles");
+        let settings = Settings::new(&root, &ClientCapabilities::default()).unwrap();
+        let mut vault = Vault::construct_vault(&settings, &root).unwrap();
+        let source = root.join("folder/source.md");
+        Vault::update_vault(&settings, &mut vault, (&source, source_text));
+
+        (vault, settings, source)
+    }
+
+    #[test]
+    fn wikilink_relative_completions_use_parent_paths() {
+        let (vault, settings, source) = test_vault("[[../");
+        let opened_files = Vec::new();
+        let completer = WikiLinkCompleter::construct(
+            Context {
+                vault: &vault,
+                opened_files: &opened_files,
+                path: &source,
+                settings: &settings,
+            },
+            0,
+            5,
+        )
+        .unwrap();
+
+        let completions = completer.link_completions();
+        assert!(completions
+            .iter()
+            .any(|completion| completion.refname() == "../Test"));
+        assert!(!completions
+            .iter()
+            .any(|completion| completion.refname().contains("source")));
+    }
+
+    #[test]
+    fn markdown_relative_completions_use_same_directory_paths() {
+        let (vault, settings, source) = test_vault("[target](./");
+        let opened_files = Vec::new();
+        let completer = MarkdownLinkCompleter::construct(
+            Context {
+                vault: &vault,
+                opened_files: &opened_files,
+                path: &source,
+                settings: &settings,
+            },
+            0,
+            11,
+        )
+        .unwrap();
+
+        let completions = completer.link_completions();
+        assert!(completions
+            .iter()
+            .any(|completion| completion.refname() == "./Fiile"));
     }
 }
