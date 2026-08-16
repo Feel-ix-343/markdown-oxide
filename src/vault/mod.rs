@@ -7,7 +7,7 @@ use std::{
     hash::Hash,
     iter,
     ops::{Deref, DerefMut, Not, Range},
-    path::{Path, PathBuf, MAIN_SEPARATOR},
+    path::{Path, PathBuf},
     time::SystemTime,
 };
 
@@ -1560,7 +1560,13 @@ pub enum Referenceable<'a> {
 
 /// Utility function
 pub fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
-    diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(String::from))
+    diff_paths(path, root_dir)
+        .and_then(|diff| diff.with_extension("").to_str().map(String::from))
+        // Obsidian-style references always use '/' separators, regardless of
+        // platform. `diff_paths` yields native separators (e.g. '\' on
+        // Windows), which would make links like [[subfolder/file]] fail to
+        // resolve against their files.
+        .map(|s| s.replace('\\', "/"))
 }
 
 /// Converts heading text to its slug form for use in links.
@@ -1581,9 +1587,11 @@ impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
         let path = &self.path.clone()?;
 
-        let last = path.split(MAIN_SEPARATOR).next_back()?;
+        // Split on either separator: refnames are normalized to '/' but a
+        // stray '\' must not break the last-segment lookup on any platform.
+        let last = path.split(['/', '\\']).next_back().map(str::to_owned)?;
 
-        Some(last.to_string())
+        Some(last)
     }
 }
 
@@ -1778,11 +1786,16 @@ impl Referenceable<'_> {
 fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
     (|| {
         let refname = refname?;
-        let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
+        let refname_path = refname.path.clone()?;
+        // Normalize Windows backslashes to forward slashes so that links
+        // (which always use '/') match refname paths derived from
+        // `diff_paths` on Windows.
+        let refname_path = refname_path.replace('\\', "/");
 
         if file_ref_text.contains('/') {
             let file_ref_text = file_ref_text.replace(r"%20", " ");
             let file_ref_text = file_ref_text.replace(r"\ ", " ");
+            let file_ref_text = file_ref_text.replace('\\', "/");
 
             let chars: Vec<char> = file_ref_text.chars().collect();
             match chars.as_slice() {
@@ -1814,12 +1827,31 @@ mod vault_tests {
 
     use super::Reference::*;
     use super::{
-        MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference, Referenceable, Vault,
-        MAX_INDEXED_LINES,
+        get_obsidian_ref_path, MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference,
+        Referenceable, Vault, MAX_INDEXED_LINES,
     };
 
     fn test_settings() -> Settings {
         Settings::new(Path::new("."), &ClientCapabilities::default()).unwrap()
+    }
+
+    #[test]
+    fn subfolder_link_resolves_on_windows_separators() {
+        let root = Path::new(r"C:\vault");
+        let file = Path::new(r"C:\vault\subfolder\file.md");
+        let refname_path =
+            get_obsidian_ref_path(root, file).expect("refname path should be computed");
+        assert_eq!(refname_path, "subfolder/file");
+
+        let link = super::matches_path_or_file(
+            "subfolder/file",
+            Some(crate::vault::Refname {
+                full_refname: refname_path.clone(),
+                path: Some(refname_path),
+                infile_ref: None,
+            }),
+        );
+        assert!(link, "subfolder link should resolve")
     }
 
     #[test]
