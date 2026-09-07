@@ -617,6 +617,17 @@ pub trait Rangeable {
             && (range.end.line > position.line
                 || (range.end.line == position.line && range.end.character >= position.character))
     }
+
+    /// True when ranges intersect (half-open LSP ranges). Adjacent ranges do not overlap.
+    fn overlaps(&self, other: &impl Rangeable) -> bool {
+        fn pos_lt(a: Position, b: Position) -> bool {
+            a.line < b.line || (a.line == b.line && a.character < b.character)
+        }
+
+        let a = self.range();
+        let b = other.range();
+        pos_lt(a.start, b.end) && pos_lt(b.start, a.end)
+    }
 }
 
 impl Rangeable for MDHeading {
@@ -682,7 +693,9 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                // Use overlaps (not includes): wiki matches can span separate inline code
+                // spans, e.g. `[[` and `]]`, and must still be filtered (#269).
+                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -1820,6 +1833,55 @@ mod vault_tests {
 
     fn test_settings() -> Settings {
         Settings::new(Path::new("."), &ClientCapabilities::default()).unwrap()
+    }
+
+    #[test]
+    fn wiki_link_markers_in_separate_inline_code_spans_are_not_references() {
+        // Issue #269: `[[` and `]]` in separate inline code spans must not form a wiki link.
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers";
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("repro.md"));
+
+        assert!(
+            parsed.references.is_empty(),
+            "expected no references spanning inline code, got {:?}",
+            parsed.references
+        );
+    }
+
+    #[test]
+    fn wiki_link_outside_inline_code_still_works_with_nearby_code_markers() {
+        // Control: real wikilinks outside code still parse when bracket markers appear in code nearby.
+        let text = "See [[real-note]] and do not use `[[` or `]]` alone";
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("control.md"));
+
+        let wiki: Vec<_> = parsed
+            .references
+            .iter()
+            .filter(|r| matches!(r, WikiFileLink(_)))
+            .collect();
+
+        assert_eq!(wiki.len(), 1);
+        assert!(matches!(
+            &wiki[0],
+            WikiFileLink(data) if data.reference_text == "real-note"
+        ));
+    }
+
+    #[test]
+    fn wiki_link_fully_inside_inline_code_is_not_a_reference() {
+        let text = "code has `[[inside]]` in it";
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("inside.md"));
+        assert!(parsed.references.is_empty(), "got {:?}", parsed.references);
+    }
+
+    #[test]
+    fn wiki_link_adjacent_to_inline_code_is_still_a_reference() {
+        let text = "`code`[[adjacent]] more";
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("adj.md"));
+        assert!(parsed.references.iter().any(|r| matches!(
+            r,
+            WikiFileLink(data) if data.reference_text == "adjacent"
+        )));
     }
 
     #[test]
