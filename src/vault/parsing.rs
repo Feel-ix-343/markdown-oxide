@@ -12,7 +12,10 @@ pub struct MDCodeBlock {
 impl MDCodeBlock {
     pub fn new(text: &str) -> impl Iterator<Item = MDCodeBlock> + '_ {
         static RE: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r"(^|\n)(?<fullblock>``` *(?<lang>[^\n]+)?\n(?<code>(\n|.)*?)\n```)")
+            // Allow CommonMark / list-item indentation before opening and closing
+            // fences. `(^|\n)```...``` ` missed indented fences inside lists, so
+            // wiki-links in those blocks were treated as references (#471).
+            Regex::new(r"(^|\n)[ \t]*(?<fullblock>```[^\n]*\n(?<code>(\n|.)*?)\n[ \t]*```)")
                 .expect("Codeblock Regex Not Constructing")
         });
 
@@ -226,6 +229,30 @@ fj aklfjd
                 .into(),
             },
         ];
+
+        assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn test_indented_fenced_codeblock_in_list_item() {
+        // Fences inside list items are indented; they must still be code blocks.
+        let test = "1. List item\n\n   ```toml\n   [[not_a_wikilink]]\n   ```\n";
+
+        let parsed = MDCodeBlock::new(test).collect_vec();
+
+        let expected = vec![MDCodeBlock {
+            range: Range {
+                start: Position {
+                    line: 2,
+                    character: 3,
+                },
+                end: Position {
+                    line: 4,
+                    character: 6,
+                },
+            }
+            .into(),
+        }];
 
         assert_eq!(parsed, expected)
     }

@@ -3342,6 +3342,43 @@ Some content here";
     }
 
     #[test]
+    fn indented_fenced_codeblock_in_list_is_not_a_wikilink() {
+        // https://github.com/Feel-ix-343/markdown-oxide/issues/471
+        // `references_in_codeblocks` defaults to false. An indented fence that is
+        // part of a list item must still suppress wiki-link references inside it.
+        let text = "# Title\n\n1. List item\n\n   ```toml\n   [[not_actually_a_wikilink_but_gives_unresolved_reference]]\n   ```\n\n2. Another list item\n";
+
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("list.md"));
+
+        assert!(
+            !parsed.references.iter().any(|reference| {
+                matches!(
+                    reference,
+                    WikiFileLink(data)
+                        if data.reference_text == "not_actually_a_wikilink_but_gives_unresolved_reference"
+                )
+            }),
+            "indented list-item fence should hide wiki-link: {:?}",
+            parsed.references
+        );
+    }
+
+    #[test]
+    fn unindented_fenced_codeblock_is_not_a_wikilink() {
+        let text = "# Title\n\n1. List item\n\n```toml\n[[still_not_actually_a_wikilink_and_not_an_unresolved_reference]]\n```\n\n2. Another list item\n";
+
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("list.md"));
+
+        assert!(!parsed.references.iter().any(|reference| {
+            matches!(
+                reference,
+                WikiFileLink(data)
+                    if data.reference_text == "still_not_actually_a_wikilink_and_not_an_unresolved_reference"
+            )
+        }));
+    }
+
+    #[test]
     fn mdfile_indexes_first_10k_lines() {
         let text = format!(
             "{}[[inside cap]]\n",
