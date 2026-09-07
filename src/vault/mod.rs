@@ -1293,8 +1293,13 @@ impl From<tower_lsp::lsp_types::Range> for MyRange {
 
 impl MDHeading {
     fn new(text: &str) -> impl Iterator<Item = MDHeading> + '_ {
-        static HEADING_RE: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"(?<starter>#+) (?<heading_text>.+)").unwrap());
+        // CommonMark ATX headings are 1–6 `#` at the start of a line
+        // (up to three leading spaces). `#+` would treat `####### x` as a
+        // heading, and an unanchored `#{1,6}` would still match the last
+        // six hashes of a seven-hash line.
+        static HEADING_RE: Lazy<Regex> = Lazy::new(|| {
+            Regex::new(r"(?m)^ {0,3}(?<starter>#{1,6}) (?<heading_text>.+)").unwrap()
+        });
 
         // Compute the byte offset where frontmatter ends so we can skip
         // YAML comment lines (which start with `#`) that would otherwise
@@ -2602,6 +2607,25 @@ more text
         ];
 
         assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn seven_or_more_hashes_are_not_headings() {
+        // Issue #487: CommonMark caps ATX openings at six `#`.
+        let text = "####### Seven hashes\n# Real heading\n######## Eight hashes\n## Also real\n";
+        let parsed: Vec<_> = MDHeading::new(text).collect();
+        assert_eq!(
+            parsed
+                .iter()
+                .map(|h| (h.level.0, h.heading_text.as_str()))
+                .collect::<Vec<_>>(),
+            vec![(1, "Real heading"), (2, "Also real")]
+        );
+        assert!(
+            parsed.iter().all(|h| h.level.0 <= 6),
+            "ATX heading level must be 1–6: {:?}",
+            parsed
+        );
     }
 
     #[test]
