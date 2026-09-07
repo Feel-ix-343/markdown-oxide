@@ -617,6 +617,20 @@ pub trait Rangeable {
             && (range.end.line > position.line
                 || (range.end.line == position.line && range.end.character >= position.character))
     }
+
+    /// True when the two ranges share any character. Full containment
+    /// (`includes`) is not enough for split inline-code wiki markers:
+    /// `` `[[` and `]]` `` produces a match that *starts* in one span
+    /// and *ends* in another, so it is not contained in either.
+    fn overlaps(&self, other: &impl Rangeable) -> bool {
+        let a = self.range();
+        let b = other.range();
+        let a_before_b = a.end.line < b.start.line
+            || (a.end.line == b.start.line && a.end.character <= b.start.character);
+        let b_before_a = b.end.line < a.start.line
+            || (b.end.line == a.start.line && b.end.character <= a.start.character);
+        !a_before_b && !b_before_a
+    }
 }
 
 impl Rangeable for MDHeading {
@@ -682,7 +696,7 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -1560,7 +1574,13 @@ pub enum Referenceable<'a> {
 
 /// Utility function
 pub fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
-    diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(String::from))
+    // Wiki/markdown links always use `/`, even on Windows. `Path::to_str`
+    // would otherwise yield `folder\note` and fail to resolve `[[folder/note]]`.
+    diff_paths(path, root_dir).and_then(|diff| {
+        diff.with_extension("")
+            .to_str()
+            .map(|s| s.replace('\\', "/"))
+    })
 }
 
 /// Converts heading text to its slug form for use in links.
@@ -1814,8 +1834,8 @@ mod vault_tests {
 
     use super::Reference::*;
     use super::{
-        MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference, Referenceable, Vault,
-        MAX_INDEXED_LINES,
+        matches_path_or_file, MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference,
+        Referenceable, Vault, MAX_INDEXED_LINES,
     };
 
     fn test_settings() -> Settings {
@@ -1876,6 +1896,52 @@ mod vault_tests {
         ];
 
         assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn wiki_link_markers_split_across_inline_code_are_not_references() {
+        // Issue #269: `[[` and `]]` live in separate inline-code spans, but the
+        // wiki-link regex still matches across them. Containment filtering
+        // misses that match because it is not fully inside either span.
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers";
+        let unfiltered = Reference::new(text, "test.md").collect_vec();
+        let md = MDFile::new(&test_settings(), text, PathBuf::from("test.md"));
+        assert!(
+            md.references
+                .iter()
+                .all(|r| !matches!(r, WikiFileLink(_) | WikiHeadingLink(_, _, _))),
+            "split inline-code wiki markers must not become unresolved references: {:?}",
+            md.references
+        );
+        if unfiltered.iter().any(|r| matches!(r, WikiFileLink(_))) {
+            assert!(
+                md.references.len() < unfiltered.len(),
+                "overlap filter must drop the false-positive the raw parser still emits"
+            );
+        }
+    }
+
+    #[test]
+    fn obsidian_ref_path_uses_forward_slashes_for_subfolders() {
+        // Issue #274: vault-relative refnames must match `[[folder/note]]`
+        // even when the OS path separator is `\`.
+        let root = PathBuf::from("vault");
+        let file = PathBuf::from("vault").join("folder").join("note.md");
+        let refpath = super::get_obsidian_ref_path(&root, &file).expect("relative path");
+        assert_eq!(refpath, "folder/note");
+        assert!(
+            !refpath.contains('\\'),
+            "refnames must not contain Windows separators: {refpath}"
+        );
+        let refname = Refname {
+            full_refname: refpath.clone(),
+            path: Some(refpath.clone()),
+            infile_ref: None,
+        };
+        assert!(
+            matches_path_or_file("folder/note", Some(refname)),
+            "[[folder/note]] from the vault root must resolve the subfolder file"
+        );
     }
 
     #[test]
