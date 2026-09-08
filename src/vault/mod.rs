@@ -1560,7 +1560,12 @@ pub enum Referenceable<'a> {
 
 /// Utility function
 pub fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
-    diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(String::from))
+    // Links always use `/` separators, so normalize OS separators (Windows `\`)
+    diff_paths(path, root_dir).and_then(|diff| {
+        diff.with_extension("")
+            .to_str()
+            .map(|refname| refname.replace(MAIN_SEPARATOR, "/"))
+    })
 }
 
 /// Converts heading text to its slug form for use in links.
@@ -1581,7 +1586,8 @@ impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
         let path = &self.path.clone()?;
 
-        let last = path.split(MAIN_SEPARATOR).next_back()?;
+        // Refnames use normalized `/` separators, see get_obsidian_ref_path
+        let last = path.split('/').next_back()?;
 
         Some(last.to_string())
     }
@@ -3432,5 +3438,25 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn test_get_obsidian_ref_path_normalizes_separators() {
+        let root = Path::new("/root");
+        let path = Path::new("/root/sub/dir/file.md");
+        let refname = super::get_obsidian_ref_path(root, path).unwrap();
+
+        assert_eq!(refname, "sub/dir/file");
+        assert!(!refname.contains('\\'));
+    }
+
+    #[test]
+    fn test_link_file_key_splits_normalized_separator() {
+        let refname = Refname {
+            path: Some("sub/dir/file".into()),
+            ..Default::default()
+        };
+
+        assert_eq!(refname.link_file_key().as_deref(), Some("file"));
     }
 }
