@@ -610,6 +610,20 @@ pub trait Rangeable {
                     && self_range.end.character >= other_range.end.character))
     }
 
+    /// Partial overlap: either range touches the other. Used to drop references
+    /// that span separate inline code spans without being fully contained in one
+    fn overlaps(&self, other: &impl Rangeable) -> bool {
+        let self_range = self.range();
+        let other_range = other.range();
+
+        (self_range.start.line < other_range.end.line
+            || (self_range.start.line == other_range.end.line
+                && self_range.start.character <= other_range.end.character))
+            && (other_range.start.line < self_range.end.line
+                || (other_range.start.line == self_range.end.line
+                    && other_range.start.character <= self_range.end.character))
+    }
+
     fn includes_position(&self, position: Position) -> bool {
         let range = self.range();
         (range.start.line < position.line
@@ -678,11 +692,12 @@ impl MDFile {
             .to_str()
             .unwrap_or_default();
         let links = match context {
+            // overlap (not containment) so matches spanning separate inline code spans drop too
             Settings {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -3432,5 +3447,31 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn test_wikilink_markers_split_across_inline_code_filtered() {
+        let settings = test_settings();
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers\n\n[[real link]]";
+        let file = MDFile::new(&settings, text, PathBuf::from("test.md"));
+
+        // The regex match spanning the two code spans is dropped; the real link stays
+        let expected = vec![WikiFileLink(ReferenceData {
+            reference_text: "real link".into(),
+            range: Range {
+                start: Position {
+                    line: 2,
+                    character: 0,
+                },
+                end: Position {
+                    line: 2,
+                    character: 13,
+                },
+            }
+            .into(),
+            ..ReferenceData::default()
+        })];
+
+        assert_eq!(file.references, expected);
     }
 }
