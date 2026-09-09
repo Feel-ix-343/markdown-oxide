@@ -682,7 +682,16 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|reference| {
+                    !code_blocks.iter().any(|codeblock| {
+                        let code = codeblock.range();
+                        let link = reference.range();
+                        // Delimiters inside separate code spans can form one regex match.
+                        // Keep links with code only in their labels and treat ends as exclusive.
+                        (code.start <= link.start && link.start < code.end)
+                            || (code.start < link.end && link.end <= code.end)
+                    })
+                })
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -1820,6 +1829,65 @@ mod vault_tests {
 
     fn test_settings() -> Settings {
         Settings::new(Path::new("."), &ClientCapabilities::default()).unwrap()
+    }
+
+    #[test]
+    fn reference_boundaries_inside_code_are_ignored() {
+        for text in [
+            "* DO NOT use the square bracket `[[` and `]]` markers",
+            "`[[literal]]`",
+            "`[[` literal ]]",
+            "[[ literal `]]`",
+            "```md\n[[literal]]\n```",
+            "```md\n[[literal\n```\n]]",
+            "[[literal\n```md\n]]\n```",
+        ] {
+            let mut settings = test_settings();
+            settings.references_in_codeblocks = false;
+            let parsed = MDFile::new(&settings, text, PathBuf::from("test.md"));
+            assert!(
+                parsed.references.is_empty(),
+                "{text:?}: {:?}",
+                parsed.references
+            );
+        }
+    }
+
+    #[test]
+    fn reference_boundaries_outside_code_are_preserved() {
+        for text in [
+            "`example`[[target]]",
+            "[[target]]`example`",
+            "`before`[[target]]`after`",
+            "[[target|`code label`]]",
+            "[a `code` label](target.md)",
+            "```md\nexample\n```\n[[target]]",
+        ] {
+            let mut settings = test_settings();
+            settings.references_in_codeblocks = false;
+            let parsed = MDFile::new(&settings, text, PathBuf::from("test.md"));
+            assert_eq!(
+                parsed.references.len(),
+                1,
+                "{text:?}: {:?}",
+                parsed.references
+            );
+            assert_eq!(parsed.references[0].reference_text, "target", "{text:?}");
+        }
+    }
+
+    #[test]
+    fn reference_boundaries_in_code_respect_opt_in() {
+        let text = "`[[inline]]`\n```md\n[[fenced]]\n```";
+        let mut settings = test_settings();
+        settings.references_in_codeblocks = true;
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md"));
+        let references: Vec<_> = parsed
+            .references
+            .iter()
+            .map(|reference| reference.reference_text.as_str())
+            .collect();
+        assert_eq!(references, vec!["inline", "fenced"]);
     }
 
     #[test]
