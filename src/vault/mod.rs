@@ -7,7 +7,7 @@ use std::{
     hash::Hash,
     iter,
     ops::{Deref, DerefMut, Not, Range},
-    path::{Path, PathBuf, MAIN_SEPARATOR},
+    path::{Path, PathBuf},
     time::SystemTime,
 };
 
@@ -273,70 +273,54 @@ impl Vault {
                     .flat_map(|file| file.get_referenceables())
                     .collect::<Vec<_>>();
 
-                let resolved_referenceables_refnames: HashSet<String> = resolved_referenceables
-                    .par_iter()
-                    .flat_map(|resolved| {
-                        resolved.get_refname(self.root_dir()).and_then(|refname| {
-                            let full = refname.to_string();
-                            let short = format!(
-                                "{}{}",
-                                refname.link_file_key()?,
-                                refname
-                                    .infile_ref
-                                    .as_ref()
-                                    .map(|refe| format!("#{}", refe))
-                                    .unwrap_or("".to_string())
-                            );
-                            // For heading refnames, also add the slugified
-                            // (spaces→dashes) form so that both
-                            // "file#Some Heading" and "file#Some-Heading"
-                            // are recognised as resolved.
-                            let mut entries = vec![full.clone(), short.clone()];
-                            if let Some((file_part, heading_part)) = full.split_once('#') {
-                                let slugged =
-                                    format!("{}#{}", file_part, heading_to_slug(heading_part));
-                                if slugged != full {
-                                    entries.push(slugged);
-                                }
+                let mut full_refnames = HashSet::new();
+                let mut short_refnames = HashSet::new();
+                for resolved in &resolved_referenceables {
+                    if !matches!(
+                        resolved,
+                        Referenceable::File(..)
+                            | Referenceable::Heading(..)
+                            | Referenceable::IndexedBlock(..)
+                    ) {
+                        continue;
+                    }
+                    if let Some(refname) = resolved.get_refname(self.root_dir()) {
+                        if let Some(full) =
+                            normalized_refname(&refname.path, refname.infile_ref.as_deref())
+                        {
+                            full_refnames.insert(full);
+                        }
+                        if let Some(file) = refname.link_file_key() {
+                            if let Some(short) =
+                                normalized_refname(&Some(file), refname.infile_ref.as_deref())
+                            {
+                                short_refnames.insert(short);
                             }
-                            if let Some((file_part, heading_part)) = short.split_once('#') {
-                                let slugged =
-                                    format!("{}#{}", file_part, heading_to_slug(heading_part));
-                                if slugged != short {
-                                    entries.push(slugged);
-                                }
-                            }
-                            Some(entries)
-                        })
-                    })
-                    .flatten()
-                    .collect();
+                        }
+                    }
+                }
 
                 let unresolved = self.select_references(None).map(|references| {
                     references
                         .iter()
-                        .unique_by(|(_, reference)| &reference.data().reference_text)
                         .par_bridge()
                         .into_par_iter()
-                        .filter(|(_, reference)| {
-                            let ref_text = &reference.data().reference_text;
-                            // Normalize only the heading portion (after #) of the
-                            // reference text so that e.g. "file#Some Heading" matches
-                            // the slugified refname "file#Some-Heading" in the resolved
-                            // set, without corrupting spaces in file paths.
-                            let normalized =
-                                if let Some((file_part, heading_part)) = ref_text.split_once('#') {
-                                    format!("{}#{}", file_part, heading_to_slug(heading_part))
-                                } else {
-                                    ref_text.clone()
-                                };
-                            !resolved_referenceables_refnames.contains(ref_text)
-                                && !resolved_referenceables_refnames.contains(&normalized)
+                        .filter(|(reference_path, reference)| {
+                            !reference_is_resolved(
+                                self.root_dir(),
+                                reference_path,
+                                reference,
+                                &full_refnames,
+                                &short_refnames,
+                            )
                         })
-                        .flat_map(|(_, reference)| match reference {
+                        .flat_map(|(reference_path, reference)| match reference {
                             Reference::WikiFileLink(data) | Reference::MDFileLink(data) => {
-                                let mut path = self.root_dir().clone();
-                                path.push(&reference.data().reference_text);
+                                let path = unresolved_reference_path(
+                                    self.root_dir(),
+                                    reference_path,
+                                    &reference.data().reference_text,
+                                )?;
 
                                 Some(Referenceable::UnresovledFile(path, &data.reference_text))
 
@@ -351,15 +335,21 @@ impl Vault {
                             }
                             Reference::WikiHeadingLink(_data, end_path, heading)
                             | Reference::MDHeadingLink(_data, end_path, heading) => {
-                                let mut path = self.root_dir().clone();
-                                path.push(end_path);
+                                let path = unresolved_reference_path(
+                                    self.root_dir(),
+                                    reference_path,
+                                    end_path,
+                                )?;
 
                                 Some(Referenceable::UnresolvedHeading(path, end_path, heading))
                             }
                             Reference::WikiIndexedBlockLink(_data, end_path, index)
                             | Reference::MDIndexedBlockLink(_data, end_path, index) => {
-                                let mut path = self.root_dir().clone();
-                                path.push(end_path);
+                                let path = unresolved_reference_path(
+                                    self.root_dir(),
+                                    reference_path,
+                                    end_path,
+                                )?;
 
                                 Some(Referenceable::UnresovledIndexedBlock(path, end_path, index))
                             }
@@ -1022,7 +1012,12 @@ impl Reference {
                 | WikiFileLink(ReferenceData {
                     reference_text: file_ref_text,
                     ..
-                }) => matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir)),
+                }) => matches_path_or_file(
+                    file_ref_text,
+                    file_path,
+                    root_dir,
+                    referenceable.get_refname(root_dir),
+                ),
                 Tag(_) => false,
                 WikiHeadingLink(_, _, _) => false,
                 WikiIndexedBlockLink(_, _, _) => false,
@@ -1050,9 +1045,13 @@ impl Reference {
                 | WikiIndexedBlockLink(.., file_ref_text, link_infile_ref)
                 | MDHeadingLink(.., file_ref_text, link_infile_ref)
                 | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => {
-                    matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir))
-                        && heading_to_slug(&link_infile_ref.to_lowercase())
-                            == heading_to_slug(&infile_ref.to_lowercase())
+                    matches_path_or_file(
+                        file_ref_text,
+                        file_path,
+                        root_dir,
+                        referenceable.get_refname(root_dir),
+                    ) && heading_to_slug(&link_infile_ref.to_lowercase())
+                        == heading_to_slug(&infile_ref.to_lowercase())
                 }
                 Tag(_) => false,
                 WikiFileLink(_) => false,
@@ -1560,7 +1559,15 @@ pub enum Referenceable<'a> {
 
 /// Utility function
 pub fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
-    diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(String::from))
+    diff_paths(path, root_dir).and_then(|diff| {
+        diff.with_extension("")
+            .to_str()
+            .map(|path| path.replace('\\', "/"))
+    })
+}
+
+fn get_vault_relative_path(root_dir: &Path, path: &Path) -> Option<String> {
+    diff_paths(path, root_dir).and_then(|diff| diff.to_str().map(|path| path.replace('\\', "/")))
 }
 
 /// Converts heading text to its slug form for use in links.
@@ -1581,7 +1588,7 @@ impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
         let path = &self.path.clone()?;
 
-        let last = path.split(MAIN_SEPARATOR).next_back()?;
+        let last = path.rsplit('/').next()?;
 
         Some(last.to_string())
     }
@@ -1653,24 +1660,26 @@ impl Referenceable<'_> {
 
             Referenceable::Footnote(_, footnote) => Some(footnote.index.clone().into()),
 
-            Referenceable::UnresolvedHeading(_, path, heading) => {
-                Some(format!("{}#{}", path, heading)).map(|full_ref| Refname {
-                    full_refname: full_ref,
-                    path: path.to_string().into(),
+            Referenceable::UnresolvedHeading(full_path, _path, heading) => {
+                get_vault_relative_path(root_dir, full_path).map(|resolved_path| Refname {
+                    full_refname: format!("{}#{}", resolved_path, heading),
+                    path: Some(resolved_path),
                     infile_ref: heading.to_string().into(),
                 })
             }
 
-            Referenceable::UnresovledFile(_, path) => Some(Refname {
-                full_refname: path.to_string(),
-                path: Some(path.to_string()),
-                ..Default::default()
-            }),
+            Referenceable::UnresovledFile(full_path, _path) => {
+                get_vault_relative_path(root_dir, full_path).map(|resolved_path| Refname {
+                    full_refname: resolved_path.clone(),
+                    path: Some(resolved_path),
+                    ..Default::default()
+                })
+            }
 
-            Referenceable::UnresovledIndexedBlock(_, path, index) => {
-                Some(format!("{}#^{}", path, index)).map(|full_ref| Refname {
-                    full_refname: full_ref,
-                    path: path.to_string().into(),
+            Referenceable::UnresovledIndexedBlock(full_path, _path, index) => {
+                get_vault_relative_path(root_dir, full_path).map(|resolved_path| Refname {
+                    full_refname: format!("{}#^{}", resolved_path, index),
+                    path: Some(resolved_path),
                     infile_ref: format!("^{}", index).into(),
                 })
             }
@@ -1725,9 +1734,12 @@ impl Referenceable<'_> {
                     ..
                 })
                 | MDHeadingLink(.., file_ref_text, _)
-                | MDIndexedBlockLink(.., file_ref_text, _) => {
-                    matches_path_or_file(file_ref_text, self.get_refname(root_dir))
-                }
+                | MDIndexedBlockLink(.., file_ref_text, _) => matches_path_or_file(
+                    file_ref_text,
+                    reference_path,
+                    root_dir,
+                    self.get_refname(root_dir),
+                ),
                 Tag(_) => false,
                 Footnote(_) => false,
                 LinkRef(_) => false,
@@ -1775,22 +1787,26 @@ impl Referenceable<'_> {
     }
 }
 
-fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
+fn matches_path_or_file(
+    file_ref_text: &str,
+    reference_path: &Path,
+    root_dir: &Path,
+    refname: Option<Refname>,
+) -> bool {
     (|| {
         let refname = refname?;
         let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
 
+        let file_ref_text = normalize_link_path(file_ref_text);
         if file_ref_text.contains('/') {
-            let file_ref_text = file_ref_text.replace(r"%20", " ");
-            let file_ref_text = file_ref_text.replace(r"\ ", " ");
+            let resolved_path =
+                if file_ref_text.starts_with("./") || file_ref_text.starts_with("../") {
+                    resolve_relative_link_path(root_dir, reference_path, &file_ref_text)?
+                } else {
+                    normalize_vault_path(&file_ref_text)?
+                };
 
-            let chars: Vec<char> = file_ref_text.chars().collect();
-            match chars.as_slice() {
-                &['.', '/', ref path @ ..] | &['/', ref path @ ..] => {
-                    Some(String::from_iter(path) == refname_path)
-                }
-                path => Some(String::from_iter(path) == refname_path),
-            }
+            Some(resolved_path == normalize_vault_path(&refname_path)?)
         } else {
             let last_segment = refname.link_file_key()?;
 
@@ -1800,12 +1816,115 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
     .is_some_and(|b| b)
 }
 
+fn normalize_link_path(path: &str) -> String {
+    path.replace(r"%20", " ")
+        .replace(r"\ ", " ")
+        .replace('\\', "/")
+}
+
+fn normalized_refname(path: &Option<String>, infile_ref: Option<&str>) -> Option<String> {
+    let path = normalize_vault_path(&normalize_link_path(path.as_deref()?))?;
+    Some(match infile_ref {
+        Some(infile_ref) => format!("{path}#{}", heading_to_slug(infile_ref)),
+        None => path,
+    })
+}
+
+fn reference_is_resolved(
+    root_dir: &Path,
+    reference_path: &Path,
+    reference: &Reference,
+    full_refnames: &HashSet<String>,
+    short_refnames: &HashSet<String>,
+) -> bool {
+    let text = match reference {
+        Reference::WikiFileLink(data)
+        | Reference::WikiHeadingLink(data, ..)
+        | Reference::WikiIndexedBlockLink(data, ..)
+        | Reference::MDFileLink(data)
+        | Reference::MDHeadingLink(data, ..)
+        | Reference::MDIndexedBlockLink(data, ..) => &data.reference_text,
+        Reference::Tag(_) | Reference::Footnote(_) | Reference::LinkRef(_) => return true,
+    };
+    let (file_path, infile_ref) = text.split_once('#').unwrap_or((text, ""));
+    let file_path = normalize_link_path(file_path);
+    let is_relative = file_path.starts_with("./") || file_path.starts_with("../");
+    let path = if is_relative {
+        resolve_relative_link_path(root_dir, reference_path, &file_path)
+    } else {
+        normalize_vault_path(&file_path)
+    };
+    let Some(path) = path else {
+        return false;
+    };
+    let reference_name = if infile_ref.is_empty() {
+        path
+    } else {
+        format!("{path}#{}", heading_to_slug(infile_ref))
+    };
+
+    if is_relative || file_path.contains('/') || file_path.starts_with('/') {
+        full_refnames.contains(&reference_name)
+    } else {
+        full_refnames.contains(&reference_name) || short_refnames.contains(&reference_name)
+    }
+}
+
+fn unresolved_reference_path(
+    root_dir: &Path,
+    reference_path: &Path,
+    file_path: &str,
+) -> Option<PathBuf> {
+    let file_path = normalize_link_path(file_path);
+    let path = if file_path.starts_with("./") || file_path.starts_with("../") {
+        resolve_relative_link_path(root_dir, reference_path, &file_path)?
+    } else {
+        normalize_vault_path(&file_path)?
+    };
+
+    Some(root_dir.join(path))
+}
+
+fn normalize_vault_path(path: &str) -> Option<String> {
+    let mut segments = Vec::new();
+    for segment in path.trim_start_matches('/').split('/') {
+        match segment {
+            "" | "." => {}
+            ".." => {
+                segments.pop()?;
+            }
+            segment => segments.push(segment),
+        }
+    }
+    Some(segments.join("/"))
+}
+
+fn resolve_relative_link_path(
+    root_dir: &Path,
+    reference_path: &Path,
+    link_path: &str,
+) -> Option<String> {
+    let source_path = get_obsidian_ref_path(root_dir, reference_path)?;
+    let source_dir = source_path
+        .rsplit_once('/')
+        .map(|(dir, _)| dir)
+        .unwrap_or("");
+    let path = if source_dir.is_empty() {
+        link_path.to_string()
+    } else {
+        format!("{source_dir}/{link_path}")
+    };
+
+    normalize_vault_path(&path)
+}
+
 // tests
 #[cfg(test)]
 mod vault_tests {
     use std::{collections::HashMap, path::Path, path::PathBuf};
 
     use itertools::Itertools;
+    use ropey::Rope;
     use tower_lsp::lsp_types::{ClientCapabilities, Position, Range};
 
     use crate::config::Settings;
@@ -1820,6 +1939,131 @@ mod vault_tests {
 
     fn test_settings() -> Settings {
         Settings::new(Path::new("."), &ClientCapabilities::default()).unwrap()
+    }
+
+    fn test_vault(files: &[(&str, &str)]) -> Vault {
+        let root_dir = PathBuf::from("/vault");
+        let mut md_files = HashMap::new();
+        let mut ropes = HashMap::new();
+
+        for (relative_path, text) in files {
+            let path = root_dir.join(relative_path);
+            md_files.insert(
+                path.clone(),
+                MDFile::new(&test_settings(), text, path.clone()),
+            );
+            ropes.insert(path, Rope::from_str(text));
+        }
+
+        Vault {
+            md_files: md_files.into(),
+            ropes: ropes.into(),
+            root_dir,
+        }
+    }
+
+    #[test]
+    fn relative_links_do_not_create_unresolved_index_entries() {
+        let vault = test_vault(&[
+            (
+                "notes/source.md",
+                "[[./nested/file]]\n[[./nested/file#A heading]]\n[[./nested/file#^block]]\n[[.\\nested\\file]]\n[[../other]]\n[file](./nested/file)\n[heading](./nested/file#A-heading)\n[block](./nested/file#^block)",
+            ),
+            ("notes/nested/file.md", "# A heading\ncontent ^block"),
+            ("other.md", "# Other"),
+        ]);
+
+        let source = vault.root_dir().join("notes/source.md");
+        let references = vault.select_references(Some(&source)).unwrap();
+
+        for (_, reference) in references {
+            let targets = vault.select_referenceables_for_reference(reference, &source);
+            assert!(targets.iter().any(|target| !target.is_unresolved()));
+            assert!(targets.iter().all(|target| !target.is_unresolved()));
+        }
+
+        assert!(vault
+            .select_referenceable_nodes(None)
+            .iter()
+            .all(|target| !target.is_unresolved()));
+    }
+
+    #[test]
+    fn relative_links_cannot_resolve_outside_the_vault() {
+        let vault = test_vault(&[("source.md", "[[../outside]]")]);
+        let source = vault.root_dir().join("source.md");
+        let reference = vault.select_references(Some(&source)).unwrap()[0].1;
+        let outside_path = vault.root_dir().parent().unwrap().join("outside.md");
+        let outside_file = MDFile::new(&test_settings(), "# outside", outside_path.clone());
+        let outside = Referenceable::File(&outside_path, &outside_file);
+
+        assert!(!reference.references(vault.root_dir(), &source, &outside));
+    }
+
+    #[test]
+    fn identical_relative_links_keep_their_source_context() {
+        let vault = test_vault(&[
+            ("resolved/source.md", "[[./target]]"),
+            ("missing/source.md", "[[./target]]"),
+            ("resolved/target.md", "# Target"),
+        ]);
+
+        let unresolved = vault
+            .select_referenceable_nodes(None)
+            .into_iter()
+            .filter(Referenceable::is_unresolved)
+            .collect_vec();
+
+        assert_eq!(unresolved.len(), 1);
+    }
+
+    #[test]
+    fn missing_relative_heading_uses_the_source_relative_path() {
+        let vault = test_vault(&[(
+            "notes/source.md",
+            "[[./nested/missing#Missing heading]]\n[missing](./nested/missing#Missing-heading)",
+        )]);
+        let source = vault.root_dir().join("notes/source.md");
+        let references = vault.select_references(Some(&source)).unwrap();
+        let expected_path = vault.root_dir().join("notes/nested/missing");
+
+        for (_, reference) in references {
+            let targets = vault.select_referenceables_for_reference(reference, &source);
+            assert!(targets
+                .iter()
+                .any(|target| { target.is_unresolved() && target.get_path() == expected_path }));
+        }
+    }
+
+    #[test]
+    fn unresolved_refnames_keep_non_markdown_extensions() {
+        let vault = test_vault(&[(
+            "notes/source.md",
+            "[[./report.v1#Missing heading]]\n[missing](./report.v1#^missing-block)",
+        )]);
+        let source = vault.root_dir().join("notes/source.md");
+        let references = vault.select_references(Some(&source)).unwrap();
+
+        for (_, reference) in references {
+            let targets = vault.select_referenceables_for_reference(reference, &source);
+            assert!(targets.iter().any(|target| {
+                target.is_unresolved()
+                    && target
+                        .get_refname(vault.root_dir())
+                        .is_some_and(|refname| refname.path == Some("notes/report.v1".into()))
+            }));
+        }
+    }
+
+    #[test]
+    fn tags_do_not_resolve_file_links() {
+        let vault = test_vault(&[("source.md", "[[/tag]]"), ("tags.md", "#tag")]);
+        let source = vault.root_dir().join("source.md");
+        let reference = vault.select_references(Some(&source)).unwrap()[0].1;
+        let targets = vault.select_referenceables_for_reference(reference, &source);
+
+        assert!(!targets.is_empty());
+        assert!(targets.iter().all(Referenceable::is_unresolved));
     }
 
     #[test]
