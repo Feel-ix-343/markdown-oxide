@@ -7,7 +7,7 @@ use std::{
     hash::Hash,
     iter,
     ops::{Deref, DerefMut, Not, Range},
-    path::{Path, PathBuf, MAIN_SEPARATOR},
+    path::{Path, PathBuf},
     time::SystemTime,
 };
 
@@ -1022,7 +1022,12 @@ impl Reference {
                 | WikiFileLink(ReferenceData {
                     reference_text: file_ref_text,
                     ..
-                }) => matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir)),
+                }) => matches_path_or_file(
+                    file_ref_text,
+                    referenceable.get_refname(root_dir),
+                    file_path,
+                    root_dir,
+                ),
                 Tag(_) => false,
                 WikiHeadingLink(_, _, _) => false,
                 WikiIndexedBlockLink(_, _, _) => false,
@@ -1050,9 +1055,13 @@ impl Reference {
                 | WikiIndexedBlockLink(.., file_ref_text, link_infile_ref)
                 | MDHeadingLink(.., file_ref_text, link_infile_ref)
                 | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => {
-                    matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir))
-                        && heading_to_slug(&link_infile_ref.to_lowercase())
-                            == heading_to_slug(&infile_ref.to_lowercase())
+                    matches_path_or_file(
+                        file_ref_text,
+                        referenceable.get_refname(root_dir),
+                        file_path,
+                        root_dir,
+                    ) && heading_to_slug(&link_infile_ref.to_lowercase())
+                        == heading_to_slug(&infile_ref.to_lowercase())
                 }
                 Tag(_) => false,
                 WikiFileLink(_) => false,
@@ -1560,7 +1569,36 @@ pub enum Referenceable<'a> {
 
 /// Utility function
 pub fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
-    diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(String::from))
+    diff_paths(path, root_dir)
+        .and_then(|diff| diff.with_extension("").to_str().map(normalize_separators))
+}
+
+/// Ref paths are compared as strings, so their separators must agree with the ones
+/// written in links; `diff_paths` produces `\` on Windows while links use `/`.
+fn normalize_separators(path: &str) -> String {
+    path.replace('\\', "/")
+}
+
+/// Resolves a `/` separated link path against `base` -- the vault relative directory
+/// of the note the link is written in -- collapsing `.` and `..` segments.
+/// Returns None when the link points outside of the vault.
+fn resolve_relative_path(base: &str, link: &str) -> Option<String> {
+    let mut segments = base
+        .split('/')
+        .filter(|segment| !segment.is_empty() && *segment != ".")
+        .collect_vec();
+
+    for segment in link.split('/') {
+        match segment {
+            "" | "." => (),
+            ".." => {
+                segments.pop()?;
+            }
+            segment => segments.push(segment),
+        }
+    }
+
+    Some(segments.join("/"))
 }
 
 /// Converts heading text to its slug form for use in links.
@@ -1581,7 +1619,7 @@ impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
         let path = &self.path.clone()?;
 
-        let last = path.split(MAIN_SEPARATOR).next_back()?;
+        let last = path.split('/').next_back()?;
 
         Some(last.to_string())
     }
@@ -1725,9 +1763,12 @@ impl Referenceable<'_> {
                     ..
                 })
                 | MDHeadingLink(.., file_ref_text, _)
-                | MDIndexedBlockLink(.., file_ref_text, _) => {
-                    matches_path_or_file(file_ref_text, self.get_refname(root_dir))
-                }
+                | MDIndexedBlockLink(.., file_ref_text, _) => matches_path_or_file(
+                    file_ref_text,
+                    self.get_refname(root_dir),
+                    reference_path,
+                    root_dir,
+                ),
                 Tag(_) => false,
                 Footnote(_) => false,
                 LinkRef(_) => false,
@@ -1775,22 +1816,34 @@ impl Referenceable<'_> {
     }
 }
 
-fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
+/// `reference_path` is the path of the note the link is written in; it is needed to
+/// resolve links relative to that note, as Obsidian does.
+fn matches_path_or_file(
+    file_ref_text: &str,
+    refname: Option<Refname>,
+    reference_path: &Path,
+    root_dir: &Path,
+) -> bool {
     (|| {
         let refname = refname?;
-        let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
+        let refname_path = normalize_separators(&refname.path.clone()?); // this function should not be used for tags, ... only for heading, files, indexed blocks
 
-        if file_ref_text.contains('/') {
+        if file_ref_text.contains('/') || file_ref_text.contains('\\') {
             let file_ref_text = file_ref_text.replace(r"%20", " ");
             let file_ref_text = file_ref_text.replace(r"\ ", " ");
+            let file_ref_text = normalize_separators(&file_ref_text);
 
-            let chars: Vec<char> = file_ref_text.chars().collect();
-            match chars.as_slice() {
-                &['.', '/', ref path @ ..] | &['/', ref path @ ..] => {
-                    Some(String::from_iter(path) == refname_path)
-                }
-                path => Some(String::from_iter(path) == refname_path),
+            // A path link is resolved from the vault root, ...
+            if resolve_relative_path("", &file_ref_text).as_deref() == Some(&*refname_path) {
+                return Some(true);
             }
+
+            // ... and, when that does not name a file, from the directory of the note
+            // the link is written in; this is what `./file` and `../file` mean.
+            let source_dir = diff_paths(reference_path.parent()?, root_dir)
+                .and_then(|dir| dir.to_str().map(normalize_separators))?;
+
+            Some(resolve_relative_path(&source_dir, &file_ref_text) == Some(refname_path))
         } else {
             let last_segment = refname.link_file_key()?;
 
@@ -1814,8 +1867,8 @@ mod vault_tests {
 
     use super::Reference::*;
     use super::{
-        MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference, Referenceable, Vault,
-        MAX_INDEXED_LINES,
+        matches_path_or_file, MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference,
+        Referenceable, Vault, MAX_INDEXED_LINES,
     };
 
     fn test_settings() -> Settings {
@@ -3432,5 +3485,141 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    fn wiki_file_link(reference_text: &str) -> Reference {
+        WikiFileLink(ReferenceData {
+            reference_text: reference_text.into(),
+            display_text: None,
+            range: Range::default().into(),
+        })
+    }
+
+    #[test]
+    fn wiki_link_to_file_in_subfolder() {
+        let root_dir = Path::new("/home/vault");
+        let target = PathBuf::from("/home/vault/subfolder/file.md");
+        let md_file = MDFile::default();
+        let referenceable = Referenceable::File(&target, &md_file);
+
+        assert!(referenceable.matches_reference(
+            root_dir,
+            &wiki_file_link("subfolder/file"),
+            Path::new("/home/vault/note.md")
+        ));
+
+        // a bare file name still matches a file anywhere in the vault
+        assert!(referenceable.matches_reference(
+            root_dir,
+            &wiki_file_link("file"),
+            Path::new("/home/vault/note.md")
+        ));
+    }
+
+    #[test]
+    fn windows_ref_path_matches_link_with_forward_slashes() {
+        // On Windows `diff_paths` produces `\` separated paths, while links are written with `/`
+        let refname = Refname {
+            full_refname: r"subfolder\file".into(),
+            path: Some(r"subfolder\file".into()),
+            infile_ref: None,
+        };
+
+        assert!(matches_path_or_file(
+            "subfolder/file",
+            Some(refname),
+            Path::new("/home/vault/note.md"),
+            Path::new("/home/vault"),
+        ));
+    }
+
+    #[test]
+    fn link_with_windows_separators_matches_ref_path() {
+        let refname = Refname {
+            full_refname: "subfolder/file".into(),
+            path: Some("subfolder/file".into()),
+            infile_ref: None,
+        };
+
+        assert!(matches_path_or_file(
+            r"subfolder\file",
+            Some(refname),
+            Path::new("/home/vault/note.md"),
+            Path::new("/home/vault"),
+        ));
+    }
+
+    #[test]
+    fn relative_wiki_link_resolves_from_the_note_it_is_written_in() {
+        let root_dir = Path::new("/home/vault");
+        let target = PathBuf::from("/home/vault/sub_dir/nested/file.md");
+        let md_file = MDFile::default();
+        let referenceable = Referenceable::File(&target, &md_file);
+        let source = Path::new("/home/vault/sub_dir/note.md");
+
+        // relative to the source note
+        assert!(referenceable.matches_reference(
+            root_dir,
+            &wiki_file_link("./nested/file"),
+            source
+        ));
+        assert!(referenceable.matches_reference(root_dir, &wiki_file_link("nested/file"), source));
+
+        // ... but not to a note in another directory
+        assert!(!referenceable.matches_reference(
+            root_dir,
+            &wiki_file_link("./nested/file"),
+            Path::new("/home/vault/note.md")
+        ));
+
+        // relative to the vault root, which has always worked
+        assert!(referenceable.matches_reference(
+            root_dir,
+            &wiki_file_link("sub_dir/nested/file"),
+            Path::new("/home/vault/note.md")
+        ));
+    }
+
+    #[test]
+    fn parent_relative_md_link_resolves_from_the_note_it_is_written_in() {
+        let root_dir = Path::new("/home/vault");
+        let target = PathBuf::from("/home/vault/other.md");
+        let md_file = MDFile::default();
+        let referenceable = Referenceable::File(&target, &md_file);
+        let source = Path::new("/home/vault/sub_dir/note.md");
+
+        let reference = Reference::new("Link to [other](../other.md)", "note.md")
+            .collect_vec()
+            .remove(0);
+
+        assert!(reference.references(root_dir, source, &referenceable));
+
+        // `../` out of the vault resolves to nothing
+        assert!(!Reference::new("[other](../../other.md)", "note.md")
+            .collect_vec()
+            .remove(0)
+            .references(root_dir, source, &referenceable));
+    }
+
+    #[test]
+    fn relative_link_to_heading_resolves_from_the_note_it_is_written_in() {
+        let root_dir = Path::new("/home/vault");
+        let target = PathBuf::from("/home/vault/sub_dir/file.md");
+        let heading = MDHeading {
+            heading_text: "Test Heading".into(),
+            range: Range::default().into(),
+            ..Default::default()
+        };
+        let referenceable = Referenceable::Heading(&target, &heading);
+
+        let reference = Reference::new("Link to [[./file#Test Heading]]", "note.md")
+            .collect_vec()
+            .remove(0);
+
+        assert!(reference.references(
+            root_dir,
+            Path::new("/home/vault/sub_dir/note.md"),
+            &referenceable
+        ));
     }
 }
