@@ -617,6 +617,22 @@ pub trait Rangeable {
             && (range.end.line > position.line
                 || (range.end.line == position.line && range.end.character >= position.character))
     }
+
+    fn includes_reference_boundary(&self, other: &impl Rangeable) -> bool {
+        let self_range = self.range();
+        let other_range = other.range();
+
+        range_contains_start(self_range, other_range.start)
+            || range_contains_end(self_range, other_range.end)
+    }
+}
+
+fn range_contains_start(range: &MyRange, position: Position) -> bool {
+    range.start <= position && position < range.end
+}
+
+fn range_contains_end(range: &MyRange, position: Position) -> bool {
+    range.start < position && position <= range.end
 }
 
 impl Rangeable for MDHeading {
@@ -682,7 +698,11 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| {
+                    !code_blocks
+                        .iter()
+                        .any(|codeblock| codeblock.includes_reference_boundary(it))
+                })
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -1803,7 +1823,10 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
 // tests
 #[cfg(test)]
 mod vault_tests {
-    use std::{collections::HashMap, path::Path, path::PathBuf};
+    use std::{
+        collections::HashMap,
+        path::{Path, PathBuf},
+    };
 
     use itertools::Itertools;
     use tower_lsp::lsp_types::{ClientCapabilities, Position, Range};
@@ -1820,6 +1843,12 @@ mod vault_tests {
 
     fn test_settings() -> Settings {
         Settings::new(Path::new("."), &ClientCapabilities::default()).unwrap()
+    }
+
+    fn test_settings_with_references_in_codeblocks(references_in_codeblocks: bool) -> Settings {
+        let mut settings = test_settings();
+        settings.references_in_codeblocks = references_in_codeblocks;
+        settings
     }
 
     #[test]
@@ -1876,6 +1905,33 @@ mod vault_tests {
         ];
 
         assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn mdfile_ignores_wikilink_markers_split_across_inline_code() {
+        let text =
+            "* DO NOT use the square bracket `[[` and `]]` markers\nA real [[note]] remains.";
+        let parsed = MDFile::new(
+            &test_settings_with_references_in_codeblocks(false),
+            text,
+            PathBuf::from("inline-code-links.md"),
+        );
+
+        assert_eq!(parsed.references.len(), 1);
+        assert_eq!(parsed.references[0].data().reference_text, "note");
+    }
+
+    #[test]
+    fn mdfile_keeps_markdown_links_with_inline_code_display_text() {
+        let text = "[display `code`](target.md)";
+        let parsed = MDFile::new(
+            &test_settings_with_references_in_codeblocks(false),
+            text,
+            PathBuf::from("inline-code-display.md"),
+        );
+
+        assert_eq!(parsed.references.len(), 1);
+        assert_eq!(parsed.references[0].data().reference_text, "target");
     }
 
     #[test]
