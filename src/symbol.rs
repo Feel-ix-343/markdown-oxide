@@ -148,10 +148,66 @@ fn map_to_lsp_tree(tree: Vec<Node>) -> Vec<DocumentSymbol> {
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        symbol,
-        vault::{HeadingLevel, MDHeading},
+    use std::{
+        fs,
+        time::{SystemTime, UNIX_EPOCH},
     };
+
+    use tower_lsp::lsp_types::{ClientCapabilities, WorkspaceSymbolParams};
+
+    use crate::{
+        config::Settings,
+        symbol,
+        vault::{HeadingLevel, MDHeading, Vault},
+    };
+
+    #[test]
+    fn test_workspace_symbols_include_file_aliases() {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("markdown-oxide-workspace-symbol-aliases-{nanos}"));
+
+        fs::create_dir_all(&root).unwrap();
+        fs::write(
+            root.join("Aliased Target.md"),
+            "---\naliases: [ResolvedAlias, MyResolvedNote]\n---\n\n# Heading\n",
+        )
+        .unwrap();
+
+        let settings = Settings::new(&root, &ClientCapabilities::default()).unwrap();
+        let vault = Vault::construct_vault(&settings, &root).unwrap();
+
+        let alias_symbols = super::workspace_symbol(
+            &vault,
+            &WorkspaceSymbolParams {
+                query: "ResolvedAlias".to_string(),
+                work_done_progress_params: Default::default(),
+                partial_result_params: Default::default(),
+            },
+        )
+        .unwrap();
+        assert!(alias_symbols
+            .iter()
+            .any(|symbol| symbol.name == "ResolvedAlias"));
+
+        let filename_symbols = super::workspace_symbol(
+            &vault,
+            &WorkspaceSymbolParams {
+                query: "Aliased Target".to_string(),
+                work_done_progress_params: Default::default(),
+                partial_result_params: Default::default(),
+            },
+        )
+        .unwrap();
+        assert!(filename_symbols
+            .iter()
+            .any(|symbol| symbol.name == "Aliased Target"));
+
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn test_simple_tree() {
