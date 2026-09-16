@@ -1022,7 +1022,12 @@ impl Reference {
                 | WikiFileLink(ReferenceData {
                     reference_text: file_ref_text,
                     ..
-                }) => matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir)),
+                }) => matches_path_or_file(
+                    file_ref_text,
+                    referenceable.get_refname(root_dir),
+                    root_dir,
+                    file_path,
+                ),
                 Tag(_) => false,
                 WikiHeadingLink(_, _, _) => false,
                 WikiIndexedBlockLink(_, _, _) => false,
@@ -1050,9 +1055,13 @@ impl Reference {
                 | WikiIndexedBlockLink(.., file_ref_text, link_infile_ref)
                 | MDHeadingLink(.., file_ref_text, link_infile_ref)
                 | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => {
-                    matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir))
-                        && heading_to_slug(&link_infile_ref.to_lowercase())
-                            == heading_to_slug(&infile_ref.to_lowercase())
+                    matches_path_or_file(
+                        file_ref_text,
+                        referenceable.get_refname(root_dir),
+                        root_dir,
+                        file_path,
+                    ) && heading_to_slug(&link_infile_ref.to_lowercase())
+                        == heading_to_slug(&infile_ref.to_lowercase())
                 }
                 Tag(_) => false,
                 WikiFileLink(_) => false,
@@ -1725,9 +1734,12 @@ impl Referenceable<'_> {
                     ..
                 })
                 | MDHeadingLink(.., file_ref_text, _)
-                | MDIndexedBlockLink(.., file_ref_text, _) => {
-                    matches_path_or_file(file_ref_text, self.get_refname(root_dir))
-                }
+                | MDIndexedBlockLink(.., file_ref_text, _) => matches_path_or_file(
+                    file_ref_text,
+                    self.get_refname(root_dir),
+                    root_dir,
+                    reference_path,
+                ),
                 Tag(_) => false,
                 Footnote(_) => false,
                 LinkRef(_) => false,
@@ -1775,7 +1787,12 @@ impl Referenceable<'_> {
     }
 }
 
-fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
+fn matches_path_or_file(
+    file_ref_text: &str,
+    refname: Option<Refname>,
+    root_dir: &Path,
+    reference_path: &Path,
+) -> bool {
     (|| {
         let refname = refname?;
         let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
@@ -1784,11 +1801,23 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
             let file_ref_text = file_ref_text.replace(r"%20", " ");
             let file_ref_text = file_ref_text.replace(r"\ ", " ");
 
+            // Relative links (`./foo`, `../foo`) are resolved relative to the
+            // directory of the file that contains the reference, then converted
+            // back to a workspace-root-relative path so they can be compared to
+            // the refname (which is always root-relative). This makes references
+            // from files in subfolders resolve correctly. See issue #274.
+            if file_ref_text.starts_with("./") || file_ref_text.starts_with("../") {
+                if let Some(resolved) =
+                    resolve_relative_ref(&file_ref_text, root_dir, reference_path)
+                {
+                    return Some(resolved == refname_path);
+                }
+                return Some(false);
+            }
+
             let chars: Vec<char> = file_ref_text.chars().collect();
             match chars.as_slice() {
-                &['.', '/', ref path @ ..] | &['/', ref path @ ..] => {
-                    Some(String::from_iter(path) == refname_path)
-                }
+                &['/', ref path @ ..] => Some(String::from_iter(path) == refname_path),
                 path => Some(String::from_iter(path) == refname_path),
             }
         } else {
@@ -1798,6 +1827,43 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
         }
     })()
     .is_some_and(|b| b)
+}
+
+/// Resolves a relative reference (starting with `./` or `../`) against the
+/// directory of the referencing file and returns the resulting path relative to
+/// the workspace root, using `/` as the separator to match refnames. Resolution
+/// is purely lexical (no filesystem access), so it works regardless of whether
+/// the target currently exists on disk.
+fn resolve_relative_ref(
+    file_ref_text: &str,
+    root_dir: &Path,
+    reference_path: &Path,
+) -> Option<String> {
+    let reference_dir = reference_path.parent()?;
+    let joined = reference_dir.join(file_ref_text);
+
+    // Lexically normalize the joined path, collapsing `.` and `..` components.
+    let mut normalized: Vec<std::ffi::OsString> = Vec::new();
+    for component in joined.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                normalized.pop();
+            }
+            std::path::Component::Prefix(prefix) => {
+                normalized.push(prefix.as_os_str().to_os_string())
+            }
+            std::path::Component::RootDir => normalized.push(std::path::MAIN_SEPARATOR_STR.into()),
+            std::path::Component::Normal(segment) => normalized.push(segment.to_os_string()),
+        }
+    }
+    let normalized_path: PathBuf = normalized.iter().collect();
+
+    let relative_to_root = diff_paths(&normalized_path, root_dir)?;
+    let relative_str = relative_to_root.with_extension("").to_str()?.to_string();
+
+    // Refnames always use `/`; normalize the separator for cross-platform matching.
+    Some(relative_str.replace(MAIN_SEPARATOR, "/"))
 }
 
 // tests
@@ -3432,5 +3498,124 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn root_relative_and_plain_paths_still_match() {
+        use super::matches_path_or_file;
+
+        let root = Path::new("/home/vault");
+        // Referencing file lives in a subfolder, but a root-relative / plain path
+        // must still resolve against the workspace root (unchanged behavior).
+        let reference_path = Path::new("/home/vault/notes/current.md");
+
+        let refname = || {
+            Some(Refname {
+                full_refname: "folder/target".into(),
+                path: Some("folder/target".into()),
+                infile_ref: None,
+            })
+        };
+
+        assert!(
+            matches_path_or_file("folder/target", refname(), root, reference_path),
+            "plain root-relative path should match"
+        );
+        assert!(
+            matches_path_or_file("/folder/target", refname(), root, reference_path),
+            "leading-slash absolute-from-root path should match"
+        );
+        // Filename-only links match case-insensitively regardless of folder.
+        assert!(
+            matches_path_or_file("target", refname(), root, reference_path),
+            "filename-only link should still match"
+        );
+    }
+
+    #[test]
+    fn relative_path_from_subfolder_resolves() {
+        use super::matches_path_or_file;
+
+        let root = Path::new("/home/vault");
+
+        // A file in root/current_dir referencing ./sub_dir/target should resolve
+        // to the root-relative refname "current_dir/sub_dir/target". Issue #274.
+        let reference_path = Path::new("/home/vault/current_dir/note.md");
+        let refname = Some(Refname {
+            full_refname: "current_dir/sub_dir/target".into(),
+            path: Some("current_dir/sub_dir/target".into()),
+            infile_ref: None,
+        });
+        assert!(
+            matches_path_or_file("./sub_dir/target", refname, root, reference_path),
+            "./sub_dir/target from current_dir should resolve"
+        );
+
+        // A file in a subfolder referencing ../target (parent dir) should resolve
+        // to the root-level refname "target".
+        let reference_path = Path::new("/home/vault/sub_dir/note.md");
+        let refname = Some(Refname {
+            full_refname: "target".into(),
+            path: Some("target".into()),
+            infile_ref: None,
+        });
+        assert!(
+            matches_path_or_file("../target", refname, root, reference_path),
+            "../target from sub_dir should resolve to root target"
+        );
+
+        // Sibling folder traversal: root/a/note.md -> ../b/target
+        let reference_path = Path::new("/home/vault/a/note.md");
+        let refname = Some(Refname {
+            full_refname: "b/target".into(),
+            path: Some("b/target".into()),
+            infile_ref: None,
+        });
+        assert!(
+            matches_path_or_file("../b/target", refname, root, reference_path),
+            "../b/target should resolve to sibling folder b/target"
+        );
+    }
+
+    #[test]
+    fn relative_path_does_not_match_wrong_target() {
+        use super::matches_path_or_file;
+
+        let root = Path::new("/home/vault");
+        let reference_path = Path::new("/home/vault/current_dir/note.md");
+
+        // ./sub_dir/target from current_dir resolves to current_dir/sub_dir/target,
+        // NOT the root-level "sub_dir/target"; ensure no false positive.
+        let refname = Some(Refname {
+            full_refname: "sub_dir/target".into(),
+            path: Some("sub_dir/target".into()),
+            infile_ref: None,
+        });
+        assert!(
+            !matches_path_or_file("./sub_dir/target", refname, root, reference_path),
+            "relative link must not match a same-named target at the wrong location"
+        );
+    }
+
+    #[test]
+    fn relative_subfolder_reference_detected_via_references() {
+        // End-to-end through Reference::references, mirroring how diagnostics and
+        // go-to-definition resolve links.
+        let root = Path::new("/home/vault");
+        let reference_path = Path::new("/home/vault/current_dir/note.md");
+        let target_path = PathBuf::from("/home/vault/current_dir/sub_dir/target.md");
+        let md_file = MDFile::default();
+        let referenceable = Referenceable::File(&target_path, &md_file);
+
+        let reference = MDFileLink(ReferenceData {
+            reference_text: "./sub_dir/target".into(),
+            display_text: Some("link".into()),
+            range: Range::default().into(),
+        });
+
+        assert!(
+            reference.references(root, reference_path, &referenceable),
+            "relative link from a subfolder file should resolve via references()"
+        );
     }
 }
