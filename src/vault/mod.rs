@@ -610,6 +610,18 @@ pub trait Rangeable {
                     && self_range.end.character >= other_range.end.character))
     }
 
+    fn overlaps(&self, other: &impl Rangeable) -> bool {
+        let self_range = self.range();
+        let other_range = other.range();
+
+        !(self_range.end.line < other_range.start.line
+            || (self_range.end.line == other_range.start.line
+                && self_range.end.character < other_range.start.character)
+            || self_range.start.line > other_range.end.line
+            || (self_range.start.line == other_range.end.line
+                && self_range.start.character > other_range.end.character))
+    }
+
     fn includes_position(&self, position: Position) -> bool {
         let range = self.range();
         (range.start.line < position.line
@@ -682,7 +694,7 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -3432,5 +3444,29 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn wiki_links_in_inline_code_are_not_references() {
+        // https://github.com/Feel-ix-343/markdown-oxide/issues/269
+        // `[[` and `]]` in inline code spans must not be parsed as a reference.
+        let text = "DO NOT use the square bracket `[[` and `]]` markers";
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("test.md"));
+
+        assert!(!parsed
+            .references
+            .iter()
+            .any(|reference| matches!(reference, WikiFileLink(..))));
+    }
+
+    #[test]
+    fn wiki_links_outside_code_are_still_references() {
+        let text = "See `inline code` and a real [[link]] here";
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("test.md"));
+
+        assert!(parsed.references.iter().any(|reference| matches!(
+            reference,
+            WikiFileLink(data) if data.reference_text == "link"
+        )));
     }
 }
