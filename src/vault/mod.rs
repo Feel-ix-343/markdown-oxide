@@ -866,7 +866,7 @@ impl Reference {
 
     pub fn new<'a>(text: &'a str, file_name: &'a str) -> impl Iterator<Item = Reference> + 'a {
         static WIKI_LINK_RE: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r"\[\[(?<filepath>[^\[\]\|\#]+?)?(?<ending>\.md)?(\#(?<infileref>[^\[\]\|]+))?(\|(?<display>[^\[\]\|]+))?\]\]")
+            Regex::new(r"\[\[(?<filepath>[^`\[\]\|\#]+?)?(?<ending>\.md)?(\#(?<infileref>[^`\[\]\|]+))?(\|(?<display>[^`\[\]\|]+))?\]\]")
 
                 .unwrap()
         }); // A [[link]] that does not have any [ or ] in it
@@ -1820,6 +1820,15 @@ mod vault_tests {
 
     fn test_settings() -> Settings {
         Settings::new(Path::new("."), &ClientCapabilities::default()).unwrap()
+    }
+
+
+    #[test]
+    fn wiki_link_delimiters_inside_inline_code_are_ignored() {
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers";
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        assert!(parsed.is_empty());
     }
 
     #[test]
