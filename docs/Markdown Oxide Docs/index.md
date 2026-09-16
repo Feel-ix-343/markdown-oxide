@@ -17,6 +17,9 @@ Markdown-oxide is for you if...
 
 In this article, I give an overview of the features Markdown-oxide so that you can decide if it is for you. If you do decide you want to use it, there is a linked guide to help you set up and get comfortable with Markdown-oxide. 
 
+> [!note] Github
+> If you want to view the code, open pull-requests, participate in discussions, report bugs, and/or request features, visit the github repo: https://github.com/Feel-ix-343/markdown-oxide
+
 # PKM Features
 
 I will not cover all of Markdown-Oxide's features but instead, list how Markdown-oxide fulfills common PKM needs. If you are looking for all of the features we have, visit the [[Features Index]].
@@ -112,7 +115,5 @@ If the features support your PKM needs and you have a desire to PKM in your favo
 
 If Markdown-Oxide is not quite what you are looking for at this time, good luck on your PKM journey and consider checking back in the future!
 
-> [!note] Github
-> If you want to view the code, open pull-requests, participate in discussions, report bugs, and/or request features, visit the github repo: https://github.com/Feel-ix-343/markdown-oxide
 
 [^1]: ![[rug/Documentation Notes#^docEmbeds]]
