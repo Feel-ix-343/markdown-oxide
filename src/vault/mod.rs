@@ -617,6 +617,22 @@ pub trait Rangeable {
             && (range.end.line > position.line
                 || (range.end.line == position.line && range.end.character >= position.character))
     }
+
+    /// Returns true when the two ranges intersect at any point. Unlike
+    /// [`Rangeable::includes`], this does not require full containment, so a
+    /// reference that starts inside one code span and ends inside another is
+    /// still considered to be inside code.
+    fn overlaps(&self, other: &impl Rangeable) -> bool {
+        let self_range = self.range();
+        let other_range = other.range();
+
+        (self_range.start.line < other_range.end.line
+            || (self_range.start.line == other_range.end.line
+                && self_range.start.character <= other_range.end.character))
+            && (other_range.start.line < self_range.end.line
+                || (other_range.start.line == self_range.end.line
+                    && other_range.start.character <= self_range.end.character))
+    }
 }
 
 impl Rangeable for MDHeading {
@@ -682,7 +698,11 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                // use overlaps instead of includes: a wiki-link that starts in
+                // one inline code span and ends in another (e.g. `[[` and `]]`
+                // on the same line) never fully sits inside a single code
+                // block, but it is still code and not a reference
+                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -3432,5 +3452,33 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn mdfile_does_not_parse_wiki_links_spanning_inline_code() {
+        // https://github.com/Feel-ix-343/markdown-oxide/issues/269
+        // the wiki-link regex matches `[[` from the first inline code span
+        // through to `]]` of the second one; the reference must be filtered
+        // out because it overlaps code
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers";
+
+        let parsed = MDFile::new(&test_settings(), &text, PathBuf::from("test.md"));
+
+        assert!(parsed
+            .references
+            .iter()
+            .all(|reference| !matches!(reference, WikiFileLink(_))));
+    }
+
+    #[test]
+    fn mdfile_still_parses_wiki_links_outside_inline_code() {
+        let text = "* use the [[real link]] markers";
+
+        let parsed = MDFile::new(&test_settings(), &text, PathBuf::from("test.md"));
+
+        assert!(parsed.references.iter().any(|reference| matches!(
+            reference,
+            WikiFileLink(data) if data.reference_text == "real link"
+        )));
     }
 }
