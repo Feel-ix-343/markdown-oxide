@@ -7,7 +7,7 @@ use std::{
     hash::Hash,
     iter,
     ops::{Deref, DerefMut, Not, Range},
-    path::{Path, PathBuf, MAIN_SEPARATOR},
+    path::{Path, PathBuf},
     time::SystemTime,
 };
 
@@ -1022,7 +1022,12 @@ impl Reference {
                 | WikiFileLink(ReferenceData {
                     reference_text: file_ref_text,
                     ..
-                }) => matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir)),
+                }) => matches_path_or_file(
+                    file_ref_text,
+                    referenceable.get_refname(root_dir),
+                    root_dir,
+                    file_path,
+                ),
                 Tag(_) => false,
                 WikiHeadingLink(_, _, _) => false,
                 WikiIndexedBlockLink(_, _, _) => false,
@@ -1050,9 +1055,13 @@ impl Reference {
                 | WikiIndexedBlockLink(.., file_ref_text, link_infile_ref)
                 | MDHeadingLink(.., file_ref_text, link_infile_ref)
                 | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => {
-                    matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir))
-                        && heading_to_slug(&link_infile_ref.to_lowercase())
-                            == heading_to_slug(&infile_ref.to_lowercase())
+                    matches_path_or_file(
+                        file_ref_text,
+                        referenceable.get_refname(root_dir),
+                        root_dir,
+                        file_path,
+                    ) && heading_to_slug(&link_infile_ref.to_lowercase())
+                        == heading_to_slug(&infile_ref.to_lowercase())
                 }
                 Tag(_) => false,
                 WikiFileLink(_) => false,
@@ -1560,7 +1569,17 @@ pub enum Referenceable<'a> {
 
 /// Utility function
 pub fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
-    diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(String::from))
+    let mut relative = diff_paths(path, root_dir)?;
+
+    if relative
+        .extension()
+        .and_then(|extension| extension.to_str())
+        == Some("md")
+    {
+        relative.set_extension("");
+    }
+
+    relative.to_str().map(|path| path.replace('\\', "/"))
 }
 
 /// Converts heading text to its slug form for use in links.
@@ -1581,7 +1600,7 @@ impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
         let path = &self.path.clone()?;
 
-        let last = path.split(MAIN_SEPARATOR).next_back()?;
+        let last = path.rsplit(['/', '\\']).next()?;
 
         Some(last.to_string())
     }
@@ -1725,9 +1744,12 @@ impl Referenceable<'_> {
                     ..
                 })
                 | MDHeadingLink(.., file_ref_text, _)
-                | MDIndexedBlockLink(.., file_ref_text, _) => {
-                    matches_path_or_file(file_ref_text, self.get_refname(root_dir))
-                }
+                | MDIndexedBlockLink(.., file_ref_text, _) => matches_path_or_file(
+                    file_ref_text,
+                    self.get_refname(root_dir),
+                    root_dir,
+                    reference_path,
+                ),
                 Tag(_) => false,
                 Footnote(_) => false,
                 LinkRef(_) => false,
@@ -1775,22 +1797,111 @@ impl Referenceable<'_> {
     }
 }
 
-fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
+fn normalized_link_text(path: &str) -> String {
+    path.replace(r"%20", " ")
+        .replace(r"\ ", " ")
+        .replace('\\', "/")
+}
+
+fn push_lexical_components(components: &mut Vec<String>, path: &str) -> Option<()> {
+    for component in path.split('/') {
+        match component {
+            "" | "." => {}
+            ".." => {
+                components.pop()?;
+            }
+            component => components.push(component.to_string()),
+        }
+    }
+
+    Some(())
+}
+
+fn normalized_vault_components(path: &str) -> Option<Vec<String>> {
+    let mut components = Vec::new();
+    push_lexical_components(&mut components, path)?;
+    Some(components)
+}
+
+fn strip_markdown_suffix(path: &str) -> &str {
+    path.strip_suffix(".md").unwrap_or(path)
+}
+
+/// Resolve a link target to its normalized, extensionless path inside the vault.
+///
+/// Explicit `./` and `../` links are relative to the note containing the link.
+/// All other paths retain the existing vault-root-relative behavior. Traversal
+/// above the vault root is rejected.
+pub(crate) fn resolve_link_ref_path(
+    file_ref_text: &str,
+    root_dir: &Path,
+    reference_path: &Path,
+) -> Option<String> {
+    let normalized_text = normalized_link_text(file_ref_text);
+    let normalized_text = strip_markdown_suffix(&normalized_text);
+    let is_source_relative =
+        normalized_text.starts_with("./") || normalized_text.starts_with("../");
+
+    let mut components = if is_source_relative {
+        let reference_dir = reference_path.parent()?;
+        let reference_dir = diff_paths(reference_dir, root_dir)?;
+        let reference_dir = normalized_link_text(reference_dir.to_str()?);
+        normalized_vault_components(&reference_dir)?
+    } else {
+        Vec::new()
+    };
+
+    push_lexical_components(&mut components, normalized_text)?;
+    Some(components.join("/"))
+}
+
+/// Return an extensionless link target relative to the note containing it.
+/// This shares the same lexical component rules as link resolution so emitted
+/// completions cannot escape the vault or disagree with go-to-definition.
+pub(crate) fn relative_link_ref_path(
+    root_dir: &Path,
+    reference_path: &Path,
+    target_path: &Path,
+) -> Option<String> {
+    let reference_dir = diff_paths(reference_path.parent()?, root_dir)?;
+    let reference_dir = normalized_link_text(reference_dir.to_str()?);
+    let reference_components = normalized_vault_components(&reference_dir)?;
+
+    let target_ref = get_obsidian_ref_path(root_dir, target_path)?;
+    let target_components = normalized_vault_components(&target_ref)?;
+
+    let shared_components = reference_components
+        .iter()
+        .zip(&target_components)
+        .take_while(|(left, right)| left == right)
+        .count();
+
+    let mut relative_components =
+        vec!["..".to_string(); reference_components.len() - shared_components];
+    relative_components.extend(target_components.into_iter().skip(shared_components));
+
+    let relative = relative_components.join("/");
+    if relative.starts_with("../") {
+        Some(relative)
+    } else {
+        Some(format!("./{}", relative))
+    }
+}
+
+fn matches_path_or_file(
+    file_ref_text: &str,
+    refname: Option<Refname>,
+    root_dir: &Path,
+    reference_path: &Path,
+) -> bool {
     (|| {
         let refname = refname?;
-        let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
+        let refname_path = normalized_link_text(&refname.path.clone()?);
 
-        if file_ref_text.contains('/') {
-            let file_ref_text = file_ref_text.replace(r"%20", " ");
-            let file_ref_text = file_ref_text.replace(r"\ ", " ");
-
-            let chars: Vec<char> = file_ref_text.chars().collect();
-            match chars.as_slice() {
-                &['.', '/', ref path @ ..] | &['/', ref path @ ..] => {
-                    Some(String::from_iter(path) == refname_path)
-                }
-                path => Some(String::from_iter(path) == refname_path),
-            }
+        if file_ref_text.contains('/') || file_ref_text.contains('\\') {
+            let resolved_path = resolve_link_ref_path(file_ref_text, root_dir, reference_path)?;
+            let refname_path = normalized_vault_components(&refname_path)?.join("/");
+            Some(resolved_path == refname_path)
         } else {
             let last_segment = refname.link_file_key()?;
 
@@ -1814,12 +1925,183 @@ mod vault_tests {
 
     use super::Reference::*;
     use super::{
-        MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference, Referenceable, Vault,
-        MAX_INDEXED_LINES,
+        get_obsidian_ref_path, relative_link_ref_path, resolve_link_ref_path, MDFile, MDFootnote,
+        MDHeading, MDIndexedBlock, MDTag, Reference, Referenceable, Vault, MAX_INDEXED_LINES,
     };
 
     fn test_settings() -> Settings {
         Settings::new(Path::new("."), &ClientCapabilities::default()).unwrap()
+    }
+
+    #[test]
+    fn explicit_relative_links_resolve_from_the_source_note() {
+        let root = Path::new("/vault");
+        let source = Path::new("/vault/notes/deep/source.md");
+
+        assert_eq!(
+            resolve_link_ref_path("./target", root, source),
+            Some("notes/deep/target".into())
+        );
+        assert_eq!(
+            resolve_link_ref_path("../target", root, source),
+            Some("notes/target".into())
+        );
+        assert_eq!(
+            resolve_link_ref_path("../../target", root, source),
+            Some("target".into())
+        );
+        assert_eq!(resolve_link_ref_path("../../../escape", root, source), None);
+    }
+
+    #[test]
+    fn non_explicit_paths_keep_vault_root_semantics() {
+        let root = Path::new("/vault");
+        let source = Path::new("/vault/notes/deep/source.md");
+
+        assert_eq!(
+            resolve_link_ref_path("folder/target", root, source),
+            Some("folder/target".into())
+        );
+        assert_eq!(
+            resolve_link_ref_path(r"folder\target", root, source),
+            Some("folder/target".into())
+        );
+        assert_eq!(
+            resolve_link_ref_path("/folder/target", root, source),
+            Some("folder/target".into())
+        );
+    }
+
+    #[test]
+    fn path_resolution_preserves_dotted_stems_and_decodes_spaces() {
+        let root = Path::new("/vault");
+        let source = Path::new("/vault/notes/source.md");
+
+        assert_eq!(
+            resolve_link_ref_path("./my.notes", root, source),
+            Some("notes/my.notes".into())
+        );
+        assert_eq!(
+            resolve_link_ref_path("./my.notes.md", root, source),
+            Some("notes/my.notes".into())
+        );
+        assert_eq!(
+            resolve_link_ref_path("./Resolved%20File", root, source),
+            Some("notes/Resolved File".into())
+        );
+        assert_eq!(
+            resolve_link_ref_path(r"./Resolved\ File", root, source),
+            Some("notes/Resolved File".into())
+        );
+    }
+
+    #[test]
+    fn wiki_markdown_heading_and_block_links_share_relative_resolution() {
+        let root = Path::new("/vault");
+        let source = Path::new("/vault/notes/source.md");
+        let target_path = PathBuf::from("/vault/notes/my.notes.md");
+        let target_file = MDFile::default();
+        let file = Referenceable::File(&target_path, &target_file);
+
+        let wiki = WikiFileLink(ReferenceData {
+            reference_text: "./my.notes".into(),
+            ..Default::default()
+        });
+        let markdown = MDFileLink(ReferenceData {
+            reference_text: "./my.notes".into(),
+            ..Default::default()
+        });
+
+        assert!(wiki.references(root, source, &file));
+        assert!(markdown.references(root, source, &file));
+
+        let heading_data = MDHeading {
+            heading_text: "Target Heading".into(),
+            ..Default::default()
+        };
+        let heading = Referenceable::Heading(&target_path, &heading_data);
+        let heading_link = WikiHeadingLink(
+            ReferenceData {
+                reference_text: "./my.notes#Target Heading".into(),
+                ..Default::default()
+            },
+            "./my.notes".into(),
+            "Target Heading".into(),
+        );
+        assert!(heading_link.references(root, source, &heading));
+
+        let block_data = MDIndexedBlock {
+            index: "block-id".into(),
+            range: Range::default().into(),
+        };
+        let block = Referenceable::IndexedBlock(&target_path, &block_data);
+        let block_link = MDIndexedBlockLink(
+            ReferenceData {
+                reference_text: "./my.notes#^block-id".into(),
+                ..Default::default()
+            },
+            "./my.notes".into(),
+            "block-id".into(),
+        );
+        assert!(block_link.references(root, source, &block));
+    }
+
+    #[test]
+    fn existing_bare_and_vault_root_links_still_match() {
+        let root = Path::new("/vault");
+        let source = Path::new("/vault/notes/source.md");
+        let target_path = PathBuf::from("/vault/nested/Target.md");
+        let target_file = MDFile::default();
+        let target = Referenceable::File(&target_path, &target_file);
+
+        let bare = WikiFileLink(ReferenceData {
+            reference_text: "target".into(),
+            ..Default::default()
+        });
+        let rooted = WikiFileLink(ReferenceData {
+            reference_text: "nested/Target".into(),
+            ..Default::default()
+        });
+
+        assert!(bare.references(root, source, &target));
+        assert!(rooted.references(root, source, &target));
+    }
+
+    #[test]
+    fn relative_completion_paths_follow_the_same_lexical_rules() {
+        let root = Path::new("/vault");
+        let source = Path::new("/vault/notes/deep/source.md");
+
+        assert_eq!(
+            relative_link_ref_path(root, source, Path::new("/vault/notes/deep/my.notes.md")),
+            Some("./my.notes".into())
+        );
+        assert_eq!(
+            relative_link_ref_path(root, source, Path::new("/vault/notes/target.md")),
+            Some("../target".into())
+        );
+        assert_eq!(
+            relative_link_ref_path(root, source, Path::new("/vault/notes/deep/child/target.md")),
+            Some("./child/target".into())
+        );
+        assert_eq!(
+            relative_link_ref_path(root, source, Path::new("/outside/target.md")),
+            None
+        );
+    }
+
+    #[test]
+    fn obsidian_ref_path_strips_only_the_final_markdown_extension() {
+        let root = Path::new("/vault");
+
+        assert_eq!(
+            get_obsidian_ref_path(root, Path::new("/vault/notes/my.notes.md")),
+            Some("notes/my.notes".into())
+        );
+        assert_eq!(
+            get_obsidian_ref_path(root, Path::new("/vault/notes/data.json")),
+            Some("notes/data.json".into())
+        );
     }
 
     #[test]
