@@ -617,6 +617,16 @@ pub trait Rangeable {
             && (range.end.line > position.line
                 || (range.end.line == position.line && range.end.character >= position.character))
     }
+
+    fn overlaps(&self, other: &impl Rangeable) -> bool {
+        let self_range = self.range();
+        let other_range = other.range();
+        let before = |left: Position, right: Position| {
+            left.line < right.line || (left.line == right.line && left.character < right.character)
+        };
+
+        before(self_range.start, other_range.end) && before(other_range.start, self_range.end)
+    }
 }
 
 impl Rangeable for MDHeading {
@@ -871,6 +881,8 @@ impl Reference {
                 .unwrap()
         }); // A [[link]] that does not have any [ or ] in it
 
+        let code_blocks = MDCodeBlock::new(text).collect_vec();
+
         let wiki_links = WIKI_LINK_RE
             .captures_iter(text)
             .filter(|captures| {
@@ -882,6 +894,11 @@ impl Reference {
             .flat_map(RegexTuple::new)
             .flat_map(|regextuple| {
                 generic_link_constructor::<WikiReferenceConstructor>(text, file_name, regextuple)
+            })
+            .filter(move |reference| {
+                !code_blocks.iter().any(|codeblock| {
+                    codeblock.overlaps(reference) && !codeblock.includes(reference)
+                })
             });
 
         static MD_LINK_RE: Lazy<Regex> = Lazy::new(|| {
@@ -3231,6 +3248,16 @@ Continued
 
         assert_eq!(parsed, expected);
     }
+
+    #[test]
+    fn parse_wikilink_markers_in_separate_inline_code_spans() {
+        let text = r#"* DO NOT use the square bracket `[[` and `]]` markers"#;
+
+        let parsed = Reference::new(text, "test.md").collect_vec();
+
+        assert_eq!(parsed, Vec::<Reference>::new());
+    }
+
     #[test]
     fn parse_url_encoded_link() {
         let text = " [f](file%20with%20spaces)";
