@@ -148,10 +148,67 @@ fn map_to_lsp_tree(tree: Vec<Node>) -> Vec<DocumentSymbol> {
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        symbol,
-        vault::{HeadingLevel, MDHeading},
+    use std::{
+        fs,
+        time::{SystemTime, UNIX_EPOCH},
     };
+
+    use tower_lsp::lsp_types::{ClientCapabilities, WorkspaceSymbolParams};
+
+    use crate::{
+        config::Settings,
+        symbol,
+        vault::{HeadingLevel, MDHeading, Vault},
+    };
+
+    #[test]
+    fn workspace_symbols_include_frontmatter_aliases() {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be after unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("markdown-oxide-symbol-alias-{suffix}"));
+
+        fs::create_dir_all(&root).expect("test vault should be created");
+        fs::write(
+            root.join("Project Notes.md"),
+            "---\naliases: [Roadmap, LaunchPlan]\n---\n\n# Current work\n",
+        )
+        .expect("test note should be written");
+
+        let settings = Settings::new(&root, &ClientCapabilities::default()).unwrap();
+        let vault = Vault::construct_vault(&settings, &root).unwrap();
+
+        let all_symbols = super::workspace_symbol(
+            &vault,
+            &WorkspaceSymbolParams {
+                query: String::new(),
+                work_done_progress_params: Default::default(),
+                partial_result_params: Default::default(),
+            },
+        )
+        .unwrap();
+
+        assert!(all_symbols.iter().any(|symbol| symbol.name == "Project Notes"));
+        assert!(all_symbols.iter().any(|symbol| symbol.name == "Roadmap"));
+        assert!(all_symbols.iter().any(|symbol| symbol.name == "LaunchPlan"));
+
+        let matching_symbols = super::workspace_symbol(
+            &vault,
+            &WorkspaceSymbolParams {
+                query: "LaunchPlan".to_string(),
+                work_done_progress_params: Default::default(),
+                partial_result_params: Default::default(),
+            },
+        )
+        .unwrap();
+
+        assert!(matching_symbols
+            .iter()
+            .any(|symbol| symbol.name == "LaunchPlan"));
+
+        fs::remove_dir_all(root).expect("test vault should be removed");
+    }
 
     #[test]
     fn test_simple_tree() {
