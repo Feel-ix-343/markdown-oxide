@@ -682,7 +682,16 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| {
+                    !code_blocks.iter().any(|codeblock| {
+                        let reference = it.range();
+                        let code = codeblock.range();
+                        // Reject delimiters in code, but preserve code wholly inside a link.
+                        // Ranges are half-open: adjacent code and links do not overlap.
+                        (code.start <= reference.start && reference.start < code.end)
+                            || (code.start < reference.end && reference.end <= code.end)
+                    })
+                })
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -1820,6 +1829,48 @@ mod vault_tests {
 
     fn test_settings() -> Settings {
         Settings::new(Path::new("."), &ClientCapabilities::default()).unwrap()
+    }
+
+    #[test]
+    fn split_inline_code_delimiters_are_not_references() {
+        let settings = test_settings();
+        let file = MDFile::new(
+            &settings,
+            "* DO NOT use the square bracket `[[` and `]]` markers",
+            PathBuf::from("test.md"),
+        );
+        assert!(file.references.is_empty());
+    }
+
+    #[test]
+    fn inline_code_filter_preserves_adjacent_and_containing_links() {
+        let settings = test_settings();
+        for text in [
+            "`code`[[target]]",
+            "[[target]]`code`",
+            "[[a `code` title]]",
+            "[[before]] `[[` and `]]` [[after]]",
+        ] {
+            let file = MDFile::new(&settings, text, PathBuf::from("test.md"));
+            let expected = if text.contains("[[before]]") { 2 } else { 1 };
+            assert_eq!(file.references.len(), expected, "{text}");
+        }
+    }
+
+    #[test]
+    fn code_reference_filter_respects_the_setting() {
+        for enabled in [false, true] {
+            let mut settings = test_settings();
+            settings.references_in_codeblocks = enabled;
+            for text in [
+                "`[[target]]`",
+                "```markdown\n[[target]]\n```",
+                "`[[` and `]]`",
+            ] {
+                let file = MDFile::new(&settings, text, PathBuf::from("test.md"));
+                assert_eq!(file.references.len(), usize::from(enabled), "{text}");
+            }
+        }
     }
 
     #[test]
