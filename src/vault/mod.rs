@@ -682,7 +682,15 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|reference| {
+                    !code_blocks.iter().any(|codeblock| {
+                        let code = codeblock.range();
+                        let link = reference.range();
+                        // Delimiters in code cannot open or close a reference. Ranges are half-open.
+                        (code.start <= link.start && link.start < code.end)
+                            || (code.start < link.end && link.end <= code.end)
+                    })
+                })
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -1820,6 +1828,42 @@ mod vault_tests {
 
     fn test_settings() -> Settings {
         Settings::new(Path::new("."), &ClientCapabilities::default()).unwrap()
+    }
+
+    #[test]
+    fn split_inline_code_delimiters_are_not_references() {
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers\n[[real]]";
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("example.md"));
+        assert_eq!(parsed.references.len(), 1);
+        assert_eq!(parsed.references[0].data().reference_text, "real");
+    }
+
+    #[test]
+    fn inline_code_filter_preserves_adjacent_links_and_code_labels() {
+        let text = "`code`[[before]][[after]]`code` [a `code` label](target.md)";
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("example.md"));
+        assert_eq!(parsed.references.len(), 3);
+        assert!(parsed
+            .references
+            .iter()
+            .any(|reference| reference.data().reference_text == "before"));
+        assert!(parsed
+            .references
+            .iter()
+            .any(|reference| reference.data().reference_text == "after"));
+        assert!(parsed
+            .references
+            .iter()
+            .any(|reference| reference.data().reference_text == "target"));
+    }
+
+    #[test]
+    fn inline_code_filter_respects_enabled_code_references() {
+        let mut settings = test_settings();
+        settings.references_in_codeblocks = true;
+        let text = "`[[literal]]` and `[[` and `]]`";
+        let parsed = MDFile::new(&settings, text, PathBuf::from("example.md"));
+        assert_eq!(parsed.references.len(), 2);
     }
 
     #[test]
