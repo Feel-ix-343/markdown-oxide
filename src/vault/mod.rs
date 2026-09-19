@@ -1183,6 +1183,10 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
     let decoded_filepath = file_path
         .map(|file_path| {
             let file_path = file_path.as_str();
+            #[cfg(windows)]
+            let normalized_path = file_path.replace(r"\ ", " ").replace('\\', "/");
+            #[cfg(windows)]
+            let file_path = normalized_path.as_str();
             urlencoding::decode(file_path).map_or_else(|_| file_path.to_string(), |d| d.to_string())
         })
         .unwrap_or_else(|| file_name.to_string());
@@ -1560,7 +1564,11 @@ pub enum Referenceable<'a> {
 
 /// Utility function
 pub fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
-    diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(String::from))
+    diff_paths(path, root_dir).and_then(|diff| {
+        diff.with_extension("")
+            .to_str()
+            .map(|path| path.replace(MAIN_SEPARATOR, "/"))
+    })
 }
 
 /// Converts heading text to its slug form for use in links.
@@ -1581,7 +1589,7 @@ impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
         let path = &self.path.clone()?;
 
-        let last = path.split(MAIN_SEPARATOR).next_back()?;
+        let last = path.split('/').next_back()?;
 
         Some(last.to_string())
     }
@@ -1820,6 +1828,72 @@ mod vault_tests {
 
     fn test_settings() -> Settings {
         Settings::new(Path::new("."), &ClientCapabilities::default()).unwrap()
+    }
+
+    #[test]
+    fn nested_file_refnames_use_markdown_separators() {
+        let root = std::env::current_dir().unwrap();
+        let path = root.join("folder").join("nested").join("note.v2.md");
+        assert_eq!(
+            super::get_obsidian_ref_path(&root, &path).as_deref(),
+            Some("folder/nested/note.v2")
+        );
+    }
+
+    #[test]
+    fn nested_file_resolves_slash_links_and_bare_names() {
+        let root = std::env::current_dir().unwrap();
+        let target_path = root.join("folder").join("note.md");
+        let target = MDFile::new(&test_settings(), "", target_path.clone());
+        let referenceable = Referenceable::File(&target_path, &target);
+        let source_path = root.join("index.md");
+        let source = "[[folder/note]] [[note]] [note](folder/note.md)";
+        let references = Reference::new(source, "index").collect_vec();
+        assert_eq!(references.len(), 3);
+        for reference in references {
+            assert!(referenceable.matches_reference(&root, &reference, &source_path));
+        }
+        assert_eq!(
+            referenceable
+                .get_refname(&root)
+                .unwrap()
+                .link_file_key()
+                .as_deref(),
+            Some("note")
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn legacy_windows_links_do_not_become_unresolved() {
+        let root = std::env::current_dir().unwrap();
+        let source_path = root.join("index.md");
+        let target_path = root.join("folder").join("note.md");
+        let mut vault = Vault {
+            md_files: HashMap::new().into(),
+            ropes: HashMap::new().into(),
+            root_dir: root,
+        };
+        let settings = test_settings();
+        Vault::update_vault(
+            &settings,
+            &mut vault,
+            (&target_path, "# Heading\ntext ^block"),
+        );
+        let source = r"[[folder\note|display]] [[folder\note#Heading]] [[folder\note#^block]]";
+        Vault::update_vault(&settings, &mut vault, (&source_path, source));
+        assert!(!vault
+            .select_referenceable_nodes(None)
+            .iter()
+            .any(|node| node.is_unresolved()));
+        let references = &vault.md_files.get(&source_path).unwrap().references;
+        assert_eq!(references.len(), 3);
+        assert_eq!(
+            references[0].data().display_text.as_deref(),
+            Some("display")
+        );
+        assert_eq!(references[0].data().range.start.character, 0);
+        assert_eq!(references[0].data().range.end.character, 23);
     }
 
     #[test]
