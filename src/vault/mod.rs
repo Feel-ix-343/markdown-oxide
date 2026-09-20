@@ -1560,7 +1560,13 @@ pub enum Referenceable<'a> {
 
 /// Utility function
 pub fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
-    diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(String::from))
+    diff_paths(path, root_dir).and_then(|diff| {
+        diff.with_extension("")
+            .to_str()
+            // Obsidian link paths always use `/`; diff_paths produces `\`
+            // separators on Windows
+            .map(|string| string.replace(MAIN_SEPARATOR, "/"))
+    })
 }
 
 /// Converts heading text to its slug form for use in links.
@@ -1581,7 +1587,7 @@ impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
         let path = &self.path.clone()?;
 
-        let last = path.split(MAIN_SEPARATOR).next_back()?;
+        let last = path.split(&['/', '\\'][..]).next_back()?;
 
         Some(last.to_string())
     }
@@ -1779,6 +1785,7 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
     (|| {
         let refname = refname?;
         let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
+        let refname_path = refname_path.replace(MAIN_SEPARATOR, "/");
 
         if file_ref_text.contains('/') {
             let file_ref_text = file_ref_text.replace(r"%20", " ");
@@ -3432,5 +3439,50 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn refname_path_matches_link_text_with_forward_slashes() {
+        // Link text always uses `/` separators, while vault-relative
+        // refnames carry the platform's separator (`\` on Windows).
+        let refname = || Refname {
+            path: Some(format!("sub{}inner", std::path::MAIN_SEPARATOR)),
+            ..Default::default()
+        };
+
+        assert!(super::matches_path_or_file("sub/inner", Some(refname())));
+        assert!(super::matches_path_or_file("./sub/inner", Some(refname())));
+        assert!(super::matches_path_or_file("inner", Some(refname())));
+        assert!(!super::matches_path_or_file("other/inner", Some(refname())));
+        assert!(!super::matches_path_or_file("other", Some(refname())));
+    }
+
+    #[test]
+    fn link_file_key_splits_on_either_separator() {
+        let refname = |path: &str| Refname {
+            path: Some(path.into()),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            refname("sub/inner").link_file_key().as_deref(),
+            Some("inner")
+        );
+        assert_eq!(
+            refname("sub\\inner").link_file_key().as_deref(),
+            Some("inner")
+        );
+        assert_eq!(refname("inner").link_file_key().as_deref(), Some("inner"));
+    }
+
+    #[test]
+    fn obsidian_ref_path_uses_forward_slashes() {
+        let root_dir = Path::new("vault");
+        let path = Path::new("vault").join("sub").join("inner.md");
+
+        assert_eq!(
+            super::get_obsidian_ref_path(root_dir, &path).as_deref(),
+            Some("sub/inner")
+        );
     }
 }
