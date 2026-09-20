@@ -617,6 +617,16 @@ pub trait Rangeable {
             && (range.end.line > position.line
                 || (range.end.line == position.line && range.end.character >= position.character))
     }
+
+    fn overlaps(&self, other: &impl Rangeable) -> bool {
+        let self_range = self.range();
+        let other_range = other.range();
+
+        (self_range.start.line, self_range.start.character)
+            < (other_range.end.line, other_range.end.character)
+            && (other_range.start.line, other_range.start.character)
+                < (self_range.end.line, self_range.end.character)
+    }
 }
 
 impl Rangeable for MDHeading {
@@ -682,7 +692,7 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -3379,6 +3389,20 @@ Some content here";
                 WikiFileLink(data) if data.reference_text == "outside cap"
             )
         }));
+    }
+
+    #[test]
+    fn wikilinks_spanning_inline_code_are_not_references() {
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers\n[[real link]]";
+
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("test.md"));
+
+        let reference_texts = parsed
+            .references
+            .iter()
+            .map(|reference| reference.data().reference_text.as_str())
+            .collect_vec();
+        assert_eq!(reference_texts, vec!["real link"]);
     }
 
     #[test]
