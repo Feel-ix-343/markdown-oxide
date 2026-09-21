@@ -7,7 +7,7 @@ use std::{
     hash::Hash,
     iter,
     ops::{Deref, DerefMut, Not, Range},
-    path::{Path, PathBuf, MAIN_SEPARATOR},
+    path::{Path, PathBuf},
     time::SystemTime,
 };
 
@@ -1560,7 +1560,14 @@ pub enum Referenceable<'a> {
 
 /// Utility function
 pub fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
-    diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(String::from))
+    // Obsidian / Markdown link paths always use `/`. On Windows, `diff_paths`
+    // emits `\`, so a note at `sub/file.md` was indexed as `sub\file` and
+    // never matched `[[sub/file]]` (Unresolved Reference + broken go-to-def).
+    diff_paths(path, root_dir).and_then(|diff| {
+        diff.with_extension("")
+            .to_str()
+            .map(|s| s.replace('\\', "/"))
+    })
 }
 
 /// Converts heading text to its slug form for use in links.
@@ -1581,7 +1588,9 @@ impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
         let path = &self.path.clone()?;
 
-        let last = path.split(MAIN_SEPARATOR).next_back()?;
+        // Accept either separator: after normalizing refnames to `/`, Windows
+        // clients may still carry legacy `\` paths from older indexes/links.
+        let last = path.split(['/', '\\']).next_back()?;
 
         Some(last.to_string())
     }
@@ -1779,11 +1788,15 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
     (|| {
         let refname = refname?;
         let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
+        // Compare on `/` so Windows-indexed `sub\file` matches Obsidian `sub/file`.
+        let refname_path = refname_path.replace('\\', "/");
+
+        let file_ref_text = file_ref_text
+            .replace(r"%20", " ")
+            .replace(r"\ ", " ")
+            .replace('\\', "/");
 
         if file_ref_text.contains('/') {
-            let file_ref_text = file_ref_text.replace(r"%20", " ");
-            let file_ref_text = file_ref_text.replace(r"\ ", " ");
-
             let chars: Vec<char> = file_ref_text.chars().collect();
             match chars.as_slice() {
                 &['.', '/', ref path @ ..] | &['/', ref path @ ..] => {
@@ -3432,5 +3445,94 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    /// Clearer failing case than MAIN_SEPARATOR-based tests used by other PRs:
+    /// hardcode Windows-style `\\` refnames so this fails on Linux CI today
+    /// against unfixed code (MAIN_SEPARATOR tests are no-ops on Unix hosts).
+    #[test]
+    fn windows_backslash_refname_matches_obsidian_slash_wikilink() {
+        let windows_refname = || Refname {
+            path: Some(r"notes\nested\daily".into()),
+            full_refname: r"notes\nested\daily".into(),
+            ..Default::default()
+        };
+
+        // Exact subfolder repro from #274 reports: link text uses `/`.
+        assert!(super::matches_path_or_file(
+            "notes/nested/daily",
+            Some(windows_refname())
+        ));
+        assert!(super::matches_path_or_file(
+            "./notes/nested/daily",
+            Some(windows_refname())
+        ));
+        // Bare name still resolves via link_file_key.
+        assert!(super::matches_path_or_file("daily", Some(windows_refname())));
+        // Legacy Windows link text with backslashes also matches.
+        assert!(super::matches_path_or_file(
+            r"notes\nested\daily",
+            Some(windows_refname())
+        ));
+        assert!(!super::matches_path_or_file(
+            "notes/other/daily",
+            Some(windows_refname())
+        ));
+    }
+
+    #[test]
+    fn link_file_key_splits_windows_backslash_paths() {
+        let refname = |path: &str| Refname {
+            path: Some(path.into()),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            refname(r"notes\nested\daily").link_file_key().as_deref(),
+            Some("daily")
+        );
+        assert_eq!(
+            refname("notes/nested/daily").link_file_key().as_deref(),
+            Some("daily")
+        );
+        assert_eq!(refname("daily").link_file_key().as_deref(), Some("daily"));
+    }
+
+    #[test]
+    fn obsidian_ref_path_emits_forward_slashes_for_subfolders() {
+        let root_dir = Path::new("vault");
+        let path = Path::new("vault").join("notes").join("nested").join("daily.md");
+
+        let ref_path = super::get_obsidian_ref_path(root_dir, &path).expect("ref path");
+        assert_eq!(ref_path, "notes/nested/daily");
+        assert!(
+            !ref_path.contains('\\'),
+            "refname must not carry OS separators: {ref_path}"
+        );
+    }
+
+    #[test]
+    fn subfolder_file_referenceable_matches_slash_links() {
+        // End-to-end: File referenceable under a nested path matches the
+        // wiki/md link forms reporters actually type (always `/`).
+        let root = PathBuf::from("vault");
+        let target_path = root.join("notes").join("nested").join("daily.md");
+        let target = MDFile::new(&test_settings(), "# Daily\n", target_path.clone());
+        let referenceable = Referenceable::File(&target_path, &target);
+        let source_path = root.join("index.md");
+
+        let links = [
+            "[[notes/nested/daily]]",
+            "[[daily]]",
+            "[daily](notes/nested/daily.md)",
+        ];
+        for link in links {
+            let references = Reference::new(link, "index").collect_vec();
+            assert_eq!(references.len(), 1, "parse {link}");
+            assert!(
+                referenceable.matches_reference(&root, &references[0], &source_path),
+                "expected {link} to resolve to notes/nested/daily"
+            );
+        }
     }
 }
