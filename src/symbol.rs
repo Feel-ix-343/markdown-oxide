@@ -148,10 +148,118 @@ fn map_to_lsp_tree(tree: Vec<Node>) -> Vec<DocumentSymbol> {
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        symbol,
-        vault::{HeadingLevel, MDHeading},
+    use std::{
+        fs,
+        path::PathBuf,
+        time::{SystemTime, UNIX_EPOCH},
     };
+
+    use tower_lsp::lsp_types::{ClientCapabilities, WorkspaceSymbolParams};
+
+    use crate::{
+        config::Settings,
+        symbol,
+        vault::{HeadingLevel, MDHeading, Vault},
+    };
+
+    fn temp_vault_dir(label: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "markdown-oxide-workspace-symbol-{}-{}-{}",
+            label,
+            std::process::id(),
+            nanos
+        ));
+        fs::create_dir_all(&dir).expect("create temp vault");
+        dir
+    }
+
+    #[test]
+    fn workspace_symbols_include_frontmatter_aliases_with_context() {
+        let root = temp_vault_dir("aliases");
+        let nested = root.join("notes");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(
+            nested.join("Canonical Note.md"),
+            "---\naliases:\n  - ResolvedAlias\n  - My Resolved Note\n  - \n---\n\n# Heading\n",
+        )
+        .unwrap();
+
+        let settings = Settings::new(&root, &ClientCapabilities::default()).unwrap();
+        let vault = Vault::construct_vault(&settings, &root).unwrap();
+
+        // Telescope / one-shot pickers request the full list with an empty query.
+        let all = super::workspace_symbol(
+            &vault,
+            &WorkspaceSymbolParams {
+                query: String::new(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let by_name: std::collections::HashMap<_, _> =
+            all.iter().map(|s| (s.name.clone(), s)).collect();
+
+        let file_symbol = by_name
+            .get("notes/Canonical Note")
+            .expect("canonical file symbol");
+        assert!(
+            file_symbol.container_name.is_none(),
+            "canonical file symbol should not set container_name"
+        );
+
+        let alias = by_name.get("ResolvedAlias").expect("alias symbol");
+        assert_eq!(
+            alias.container_name.as_deref(),
+            Some("notes/Canonical Note"),
+            "alias symbols should point pickers at the canonical refname"
+        );
+        assert_eq!(alias.location.uri, file_symbol.location.uri);
+
+        assert!(
+            by_name.contains_key("My Resolved Note"),
+            "multi-word aliases should be returned"
+        );
+        assert!(
+            !all.iter().any(|s| s.name.trim().is_empty()),
+            "blank aliases must be skipped"
+        );
+        assert_eq!(
+            all.iter().filter(|s| s.name == "ResolvedAlias").count(),
+            1,
+            "each alias should appear once"
+        );
+
+        // Fuzzy / filtered query used by vim.lsp.buf.workspace_symbol()
+        let filtered = super::workspace_symbol(
+            &vault,
+            &WorkspaceSymbolParams {
+                query: "ResolvedAlias".to_string(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(filtered.iter().any(|s| s.name == "ResolvedAlias"));
+        assert!(filtered
+            .iter()
+            .any(|s| s.container_name.as_deref() == Some("notes/Canonical Note")));
+
+        let by_filename = super::workspace_symbol(
+            &vault,
+            &WorkspaceSymbolParams {
+                query: "Canonical Note".to_string(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(by_filename.iter().any(|s| s.name == "notes/Canonical Note"));
+
+        let _ = fs::remove_dir_all(root);
+    }
 
     #[test]
     fn test_simple_tree() {
