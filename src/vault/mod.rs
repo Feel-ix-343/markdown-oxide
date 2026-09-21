@@ -7,7 +7,7 @@ use std::{
     hash::Hash,
     iter,
     ops::{Deref, DerefMut, Not, Range},
-    path::{Path, PathBuf, MAIN_SEPARATOR},
+    path::{Path, PathBuf},
     time::SystemTime,
 };
 
@@ -1559,8 +1559,21 @@ pub enum Referenceable<'a> {
 }
 
 /// Utility function
+///
+/// Vault-relative ref paths always use `/`, matching Obsidian link text.
+/// `diff_paths` otherwise keeps the OS separator (`\` on Windows), which made
+/// every `[[sub/note]]` comparison fail on native Windows.
 pub fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
-    diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(String::from))
+    diff_paths(path, root_dir).and_then(|diff| {
+        diff.with_extension("")
+            .to_str()
+            .map(normalize_ref_separators)
+    })
+}
+
+/// Normalize path separators in refnames / link text to `/`.
+fn normalize_ref_separators(path: &str) -> String {
+    path.replace('\\', "/")
 }
 
 /// Converts heading text to its slug form for use in links.
@@ -1581,7 +1594,9 @@ impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
         let path = &self.path.clone()?;
 
-        let last = path.split(MAIN_SEPARATOR).next_back()?;
+        // Refnames may carry either separator depending on when they were built;
+        // split on both so basename matching stays cross-platform.
+        let last = path.split(['/', '\\']).next_back()?;
 
         Some(last.to_string())
     }
@@ -1778,19 +1793,23 @@ impl Referenceable<'_> {
 fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
     (|| {
         let refname = refname?;
-        let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
+        // this function should not be used for tags, ... only for heading, files, indexed blocks
+        let refname_path = normalize_ref_separators(&refname.path.clone()?);
 
-        if file_ref_text.contains('/') {
+        let has_path_sep = file_ref_text.contains('/') || file_ref_text.contains('\\');
+        if has_path_sep {
             let file_ref_text = file_ref_text.replace(r"%20", " ");
             let file_ref_text = file_ref_text.replace(r"\ ", " ");
+            let file_ref_text = normalize_ref_separators(&file_ref_text);
 
-            let chars: Vec<char> = file_ref_text.chars().collect();
-            match chars.as_slice() {
-                &['.', '/', ref path @ ..] | &['/', ref path @ ..] => {
-                    Some(String::from_iter(path) == refname_path)
-                }
-                path => Some(String::from_iter(path) == refname_path),
-            }
+            let cleaned = file_ref_text
+                .strip_prefix("./")
+                .or_else(|| file_ref_text.strip_prefix('/'))
+                .unwrap_or(file_ref_text.as_str());
+
+            // Obsidian resolves path links case-insensitively; keep filename-only
+            // matching consistent with that and with existing basename behavior.
+            Some(cleaned.eq_ignore_ascii_case(&refname_path))
         } else {
             let last_segment = refname.link_file_key()?;
 
@@ -3432,5 +3451,118 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn obsidian_ref_path_uses_forward_slashes() {
+        let root_dir = Path::new("vault");
+        let path = Path::new("vault").join("sub").join("inner.md");
+
+        assert_eq!(
+            super::get_obsidian_ref_path(root_dir, &path).as_deref(),
+            Some("sub/inner")
+        );
+    }
+
+    #[test]
+    fn link_file_key_splits_on_either_separator() {
+        let refname = |path: &str| Refname {
+            path: Some(path.into()),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            refname("sub/inner").link_file_key().as_deref(),
+            Some("inner")
+        );
+        assert_eq!(
+            refname("sub\\inner").link_file_key().as_deref(),
+            Some("inner")
+        );
+        assert_eq!(refname("inner").link_file_key().as_deref(), Some("inner"));
+    }
+
+    #[test]
+    fn subfolder_path_links_match_despite_platform_separators() {
+        // Simulate Windows-indexed refnames (native `\`) against Obsidian `/` links.
+        let refname = || Refname {
+            path: Some(format!("Folder{}Note", std::path::MAIN_SEPARATOR)),
+            full_refname: format!("Folder{}Note", std::path::MAIN_SEPARATOR),
+            infile_ref: None,
+        };
+
+        assert!(super::matches_path_or_file("Folder/Note", Some(refname())));
+        assert!(super::matches_path_or_file(
+            "./Folder/Note",
+            Some(refname())
+        ));
+        assert!(super::matches_path_or_file("/Folder/Note", Some(refname())));
+        assert!(super::matches_path_or_file("folder/note", Some(refname())));
+        assert!(super::matches_path_or_file("Note", Some(refname())));
+        assert!(!super::matches_path_or_file("Other/Note", Some(refname())));
+        assert!(!super::matches_path_or_file("Other", Some(refname())));
+    }
+
+    #[test]
+    fn windows_style_link_text_matches_forward_slash_refname() {
+        let refname = Refname {
+            path: Some("sub/inner".into()),
+            full_refname: "sub/inner".into(),
+            infile_ref: None,
+        };
+
+        assert!(super::matches_path_or_file("sub\\inner", Some(refname)));
+    }
+
+    #[test]
+    fn wiki_link_to_subfolder_file_resolves_in_vault() {
+        use std::{
+            fs,
+            time::{SystemTime, UNIX_EPOCH},
+        };
+
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "markdown-oxide-subfolder-refs-{}-{}",
+            std::process::id(),
+            nanos
+        ));
+        fs::create_dir_all(root.join("docs")).unwrap();
+        fs::write(root.join("docs").join("inner.md"), "# Inner\n").unwrap();
+        fs::write(
+            root.join("root.md"),
+            "See [[docs/inner]] and [[docs/Inner]].\n",
+        )
+        .unwrap();
+
+        let settings = Settings::new(&root, &ClientCapabilities::default()).unwrap();
+        let vault = Vault::construct_vault(&settings, &root).unwrap();
+        let root_note = root.join("root.md");
+
+        let unresolved =
+            crate::diagnostics::path_unresolved_references(&vault, &root_note).unwrap_or_default();
+        assert!(
+            unresolved.is_empty(),
+            "subfolder wiki links should resolve, got: {:?}",
+            unresolved
+                .iter()
+                .map(|(_, r)| r.data().reference_text.clone())
+                .collect::<Vec<_>>()
+        );
+
+        let target = root.join("docs").join("inner.md");
+        let md = vault.md_files.get(&target).expect("inner note indexed");
+        let referenceable = Referenceable::File(&target, md);
+        let link = WikiFileLink(ReferenceData {
+            reference_text: "docs/inner".into(),
+            display_text: None,
+            range: Range::default().into(),
+        });
+        assert!(referenceable.matches_reference(&root, &link, &root_note));
+
+        let _ = fs::remove_dir_all(root);
     }
 }
