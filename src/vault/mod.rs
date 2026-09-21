@@ -439,6 +439,11 @@ impl Vault {
 
     /// Returns one [`SymbolInformation`] per name for the given referenceable,
     /// including any aliases defined in YAML frontmatter metadata.
+    ///
+    /// Alias symbols set `container_name` to the canonical vault name so
+    /// workspace-symbol clients (Telescope, `vim.lsp.buf.workspace_symbol`)
+    /// can show which file an alias belongs to. Empty aliases and aliases
+    /// that match the canonical name are skipped to avoid duplicate entries.
     #[allow(deprecated)] // SymbolInformation::deprecated field is deprecated in lsp-types
     pub fn to_symbol_informations(&self, referenceable: &Referenceable) -> Vec<SymbolInformation> {
         let uri = match Url::from_file_path(referenceable.get_path()).ok() {
@@ -467,19 +472,37 @@ impl Vault {
             _ => &[],
         };
 
+        let canonical = vault_name.clone();
+
         std::iter::once(vault_name)
-            .chain(alias_names.iter().map(|a| Some(a.to_string())))
+            .chain(alias_names.iter().filter_map(|alias| {
+                let alias = alias.trim();
+                if alias.is_empty() {
+                    return None;
+                }
+                if canonical.as_ref().is_some_and(|name| name == alias) {
+                    return None;
+                }
+                Some(Some(alias.to_string()))
+            }))
             .flatten()
-            .map(|name| SymbolInformation {
-                name,
-                kind,
-                location: Location {
-                    uri: uri.clone(),
-                    range,
-                },
-                container_name: None,
-                tags: None,
-                deprecated: None,
+            .map(|name| {
+                let is_alias = canonical.as_ref().is_some_and(|c| c != &name);
+                SymbolInformation {
+                    name,
+                    kind,
+                    location: Location {
+                        uri: uri.clone(),
+                        range,
+                    },
+                    container_name: if is_alias {
+                        canonical.clone()
+                    } else {
+                        None
+                    },
+                    tags: None,
+                    deprecated: None,
+                }
             })
             .collect()
     }

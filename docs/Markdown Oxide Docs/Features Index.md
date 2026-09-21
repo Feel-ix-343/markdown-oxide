@@ -209,7 +209,7 @@ When clicking on each drop-down, you will be presented with a demo of the featur
 - ^implSymbols
 
     - File symbols: A hierarchical outline of headings and subheadings in the current file ^fileSymbols
-    - Workspace symbols: search everything linkable: files, headings, tags.        ^workspaceSymbols
+    - Workspace symbols: search everything linkable: files, headings, tags, and frontmatter aliases.        ^workspaceSymbols
     - Find all references to a tag by typing the tag name as a search term for workspace symbols ^workspaceTag
 
 ## Unimplemented Symbols

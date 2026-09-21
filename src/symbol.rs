@@ -148,10 +148,107 @@ fn map_to_lsp_tree(tree: Vec<Node>) -> Vec<DocumentSymbol> {
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        symbol,
-        vault::{HeadingLevel, MDHeading},
+    use std::{
+        fs,
+        path::PathBuf,
+        time::{SystemTime, UNIX_EPOCH},
     };
+
+    use tower_lsp::lsp_types::{ClientCapabilities, SymbolKind, WorkspaceSymbolParams};
+
+    use crate::{
+        config::Settings,
+        symbol,
+        vault::{HeadingLevel, MDHeading, Vault},
+    };
+
+    fn workspace_params(query: &str) -> WorkspaceSymbolParams {
+        WorkspaceSymbolParams {
+            query: query.to_string(),
+            work_done_progress_params: Default::default(),
+            partial_result_params: Default::default(),
+        }
+    }
+
+    fn temp_vault_root(label: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock should be after unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "markdown-oxide-ws-alias-{}-{}-{}",
+            label,
+            std::process::id(),
+            nanos
+        ));
+        fs::create_dir_all(&root).expect("create temp vault");
+        root
+    }
+
+    /// Regression for #263: aliases from YAML frontmatter must appear in
+    /// workspace/symbol results for both empty-query clients (Telescope /
+    /// vim.lsp.buf.workspace_symbol) and filtered alias queries. Alias
+    /// entries should share the file URI, use SymbolKind::FILE, and expose
+    /// the canonical note name via container_name for picker context.
+    #[test]
+    fn workspace_symbols_include_frontmatter_aliases_with_container() {
+        let root = temp_vault_root("aliases");
+        fs::write(
+            root.join("Canonical Note.md"),
+            "---\naliases:\n  - Moon Alias\n  - LaunchPlan\n  - Canonical Note\n  - \" \"\n---\n\n# Heading\n",
+        )
+        .expect("write aliased note");
+        fs::write(root.join("Plain Note.md"), "# Just a heading\n").expect("write plain note");
+
+        let settings = Settings::new(&root, &ClientCapabilities::default()).unwrap();
+        let vault = Vault::construct_vault(&settings, &root).unwrap();
+
+        let all = super::workspace_symbol(&vault, &workspace_params(""))
+            .expect("empty query should return symbols");
+
+        let canonical = all
+            .iter()
+            .find(|s| s.name == "Canonical Note")
+            .expect("canonical file symbol");
+        assert_eq!(canonical.kind, SymbolKind::FILE);
+        assert_eq!(canonical.container_name, None);
+
+        let moon = all
+            .iter()
+            .find(|s| s.name == "Moon Alias")
+            .expect("Moon Alias should be listed");
+        assert_eq!(moon.kind, SymbolKind::FILE);
+        assert_eq!(moon.container_name.as_deref(), Some("Canonical Note"));
+        assert_eq!(moon.location.uri, canonical.location.uri);
+        assert_eq!(moon.location.range, canonical.location.range);
+
+        assert!(all.iter().any(|s| s.name == "LaunchPlan"));
+        // Alias equal to the vault name and blank aliases must not duplicate.
+        assert_eq!(
+            all.iter().filter(|s| s.name == "Canonical Note").count(),
+            1
+        );
+
+        let plain = all
+            .iter()
+            .find(|s| s.name == "Plain Note")
+            .expect("unaliased file still appears");
+        assert_eq!(plain.container_name, None);
+
+        let by_alias = super::workspace_symbol(&vault, &workspace_params("LaunchPlan"))
+            .expect("alias query");
+        assert!(by_alias.iter().any(|s| s.name == "LaunchPlan"));
+
+        let by_fuzzy = super::workspace_symbol(&vault, &workspace_params("moon"))
+            .expect("fuzzy alias query");
+        assert!(by_fuzzy.iter().any(|s| s.name == "Moon Alias"));
+
+        let by_file = super::workspace_symbol(&vault, &workspace_params("Canonical Note"))
+            .expect("filename query");
+        assert!(by_file.iter().any(|s| s.name == "Canonical Note"));
+
+        fs::remove_dir_all(root).ok();
+    }
 
     #[test]
     fn test_simple_tree() {
