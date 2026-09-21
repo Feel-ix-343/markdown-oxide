@@ -439,6 +439,10 @@ impl Vault {
 
     /// Returns one [`SymbolInformation`] per name for the given referenceable,
     /// including any aliases defined in YAML frontmatter metadata.
+    ///
+    /// Alias entries keep the same file location as the canonical symbol and set
+    /// `container_name` to that canonical refname so workspace-symbol pickers
+    /// (Telescope, `vim.lsp.buf.workspace_symbol()`) can show where the alias points.
     #[allow(deprecated)] // SymbolInformation::deprecated field is deprecated in lsp-types
     pub fn to_symbol_informations(&self, referenceable: &Referenceable) -> Vec<SymbolInformation> {
         let uri = match Url::from_file_path(referenceable.get_path()).ok() {
@@ -455,9 +459,11 @@ impl Vault {
             _ => SymbolKind::KEY,
         };
 
+        // Obsidian link paths always use `/`; normalize so nested notes show
+        // consistently in symbol pickers on Windows too.
         let vault_name = referenceable
             .get_refname(self.root_dir())
-            .map(|refname| refname.to_string());
+            .map(|refname| refname.to_string().replace(MAIN_SEPARATOR, "/"));
 
         let alias_names: &[String] = match referenceable {
             Referenceable::File(_, mdfile) => match &mdfile.metadata {
@@ -467,19 +473,33 @@ impl Vault {
             _ => &[],
         };
 
-        std::iter::once(vault_name)
-            .chain(alias_names.iter().map(|a| Some(a.to_string())))
-            .flatten()
-            .map(|name| SymbolInformation {
-                name,
-                kind,
-                location: Location {
-                    uri: uri.clone(),
-                    range,
-                },
-                container_name: None,
-                tags: None,
-                deprecated: None,
+        let canonical = vault_name.clone();
+
+        std::iter::once((vault_name, None))
+            .chain(alias_names.iter().filter_map(|alias| {
+                let trimmed = alias.trim();
+                if trimmed.is_empty() {
+                    return None;
+                }
+                // Skip aliases that duplicate the canonical name; they add noise.
+                if canonical.as_deref() == Some(trimmed) {
+                    return None;
+                }
+                Some((Some(trimmed.to_string()), canonical.clone()))
+            }))
+            .filter_map(|(name, container)| {
+                let name = name?;
+                Some(SymbolInformation {
+                    name,
+                    kind,
+                    location: Location {
+                        uri: uri.clone(),
+                        range,
+                    },
+                    container_name: container,
+                    tags: None,
+                    deprecated: None,
+                })
             })
             .collect()
     }
