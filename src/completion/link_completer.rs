@@ -17,7 +17,7 @@ use tower_lsp::lsp_types::{
 
 use crate::{
     completion::util::check_in_code_block,
-    config::Settings,
+    config::{LinkFormat, Settings},
     ui::preview_referenceable,
     vault::{heading_to_slug, MDFile, MDHeading, Reference, Referenceable, Vault},
 };
@@ -109,7 +109,10 @@ pub trait LinkCompleter<'a>: Completer<'a> {
         // TODO: This could be slow
         let refnames = completions
             .par_iter()
-            .map(|completion| completion.refname())
+            .map(|completion| match completion {
+                LinkCompletion::DailyNote(MDDailyNote { ref_name, .. }) => ref_name.clone(),
+                _ => completion.refname(self),
+            })
             .collect::<HashSet<_>>();
 
         // Get daily notes for convienience
@@ -613,6 +616,9 @@ impl LinkCompletion<'_> {
         referenceable: Referenceable<'a>,
         completer: &impl LinkCompleter<'a>,
     ) -> Option<Vec<LinkCompletion<'a>>> {
+        let match_path =
+            |path: &PathBuf| -> Option<String> { Some(path.file_stem()?.to_str()?.to_string()) };
+
         if let Some(daily) = MDDailyNote::from_referenceable(referenceable.clone(), completer) {
             Some(vec![DailyNote(daily)])
         } else {
@@ -621,7 +627,7 @@ impl LinkCompletion<'_> {
                     Some(
                         once(File {
                             mdfile,
-                            match_string: mdfile.file_name()?.to_string(),
+                            match_string: match_path(&mdfile.path)?,
                             referenceable: referenceable.clone(),
                         })
                         .chain(mdfile.metadata.iter().flat_map(|it| it.aliases()).flat_map(
@@ -645,11 +651,7 @@ impl LinkCompletion<'_> {
                     Some(
                         once(Heading {
                             heading: mdheading,
-                            match_string: format!(
-                                "{}#{}",
-                                path.file_stem()?.to_str()?,
-                                heading_text
-                            ),
+                            match_string: format!("{}#{}", match_path(path)?, heading_text),
                             referenceable,
                         })
                         .collect(),
@@ -657,7 +659,7 @@ impl LinkCompletion<'_> {
                 }
                 Referenceable::IndexedBlock(path, indexed) => Some(
                     once(Block {
-                        match_string: format!("{}#^{}", path.file_stem()?.to_str()?, indexed.index),
+                        match_string: format!("{}#^{}", match_path(path)?, indexed.index),
                         referenceable,
                     })
                     .collect(),
@@ -707,7 +709,11 @@ impl LinkCompletion<'_> {
             Self::DailyNote(daily) => daily.referenceable(completer),
         };
 
-        let label = self.match_string();
+        let label = if matches!(completer.settings().link_format, LinkFormat::Absolute) {
+            self.refname(completer)
+        } else {
+            self.match_string().to_string()
+        };
 
         CompletionItem {
             label: label.to_string(),
@@ -745,7 +751,9 @@ impl LinkCompletion<'_> {
                 Self::DailyNote(daily) => {
                     daily.relative_name(completer) == Some(completer.entered_refname())
                 }
-                link_completion => link_completion.refname() == completer.entered_refname(),
+                link_completion => {
+                    link_completion.refname(completer) == completer.entered_refname()
+                }
             }),
             filter_text: Some(filter_text.to_string()),
             documentation: preview_referenceable(vault, &referenceable)
@@ -755,15 +763,33 @@ impl LinkCompletion<'_> {
     }
 
     /// Refname to be inserted into the document
-    fn refname(&self) -> String {
-        match self {
+    fn refname<'a>(&self, completer: &impl LinkCompleter<'a>) -> String {
+        let fallback = match self {
             Self::DailyNote(MDDailyNote { ref_name, .. }) => ref_name.to_string(),
             File { match_string, .. }
             | Heading { match_string, .. }
             | Block { match_string, .. }
             | Unresolved { match_string, .. } => match_string.to_string(),
             Alias { filename, .. } => filename.to_string(),
+        };
+
+        if !matches!(completer.settings().link_format, LinkFormat::Absolute) {
+            return fallback;
         }
+
+        let referenceable = match self {
+            Self::DailyNote(daily) => daily.referenceable(completer),
+            Self::File { referenceable, .. }
+            | Self::Heading { referenceable, .. }
+            | Self::Block { referenceable, .. }
+            | Self::Unresolved { referenceable, .. }
+            | Self::Alias { referenceable, .. } => referenceable.to_owned(),
+        };
+
+        referenceable
+            .get_refname(completer.vault().root_dir())
+            .map(|r| r.full_refname)
+            .unwrap_or(fallback)
     }
 }
 
@@ -772,7 +798,7 @@ impl<'a> Completable<'a, MarkdownLinkCompleter<'a>> for LinkCompletion<'a> {
         &self,
         markdown_link_completer: &MarkdownLinkCompleter<'a>,
     ) -> Option<CompletionItem> {
-        let refname = self.refname();
+        let refname = self.refname(markdown_link_completer);
         let match_string = self.match_string();
 
         let display = &markdown_link_completer.display;
@@ -835,7 +861,7 @@ impl<'a> Completable<'a, MarkdownLinkCompleter<'a>> for LinkCompletion<'a> {
 
 impl<'a> Completable<'a, WikiLinkCompleter<'a>> for LinkCompletion<'a> {
     fn completions(&self, completer: &WikiLinkCompleter<'a>) -> Option<CompletionItem> {
-        let refname = self.refname();
+        let refname = self.refname(completer);
         let match_text = self.match_string();
 
         let wikilink_display_text = match self {
