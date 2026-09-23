@@ -628,10 +628,10 @@ pub trait Rangeable {
 
         (self_range.start.line < other_range.end.line
             || (self_range.start.line == other_range.end.line
-                && self_range.start.character <= other_range.end.character))
+                && self_range.start.character < other_range.end.character))
             && (other_range.start.line < self_range.end.line
                 || (other_range.start.line == self_range.end.line
-                    && other_range.start.character <= self_range.end.character))
+                    && other_range.start.character < self_range.end.character))
     }
 }
 
@@ -3480,5 +3480,32 @@ Some content here";
             reference,
             WikiFileLink(data) if data.reference_text == "real link"
         )));
+    }
+
+    #[test]
+    fn mdfile_wiki_link_code_boundaries() {
+        let cases = [
+            ("`code`[[link]]", true),
+            ("[[link]]`code`", true),
+            ("`[[link]]`", false),
+            ("[[link]]", true),
+        ];
+
+        for references_in_codeblocks in [false, true] {
+            for (text, expected) in cases {
+                let mut settings = test_settings();
+                settings.references_in_codeblocks = references_in_codeblocks;
+                let parsed = MDFile::new(&settings, text, PathBuf::from("test.md"));
+                let has_link = parsed.references.iter().any(|reference| {
+                    matches!(reference, WikiFileLink(data) if data.reference_text == "link")
+                });
+
+                assert_eq!(
+                    has_link,
+                    references_in_codeblocks || expected,
+                    "text={text:?}, references_in_codeblocks={references_in_codeblocks}"
+                );
+            }
+        }
     }
 }
