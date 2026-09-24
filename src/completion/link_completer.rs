@@ -383,6 +383,9 @@ pub struct WikiLinkCompleter<'a> {
     context_path: &'a Path,
     settings: &'a Settings,
     chars_in_line: u32,
+    /// Number of consecutive `]` characters immediately after the cursor position (0, 1, or 2).
+    /// Used to extend the replacement range to cover existing closing brackets and avoid duplication.
+    closing_brackets: u32,
 }
 
 impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
@@ -429,7 +432,7 @@ impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
                 },
                 end: Position {
                     line: self.line,
-                    character: (self.chars_in_line - 1).min(self.character + 2_u32), // TODO: in zed, you cannot zed end to be out of the line count index
+                    character: (self.character + self.closing_brackets).min(self.chars_in_line),
                 },
             },
 
@@ -486,6 +489,12 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
         index.and_then(|index| {
             let cmp_text = line_chars.get(index + 1..character)?;
 
+            let closing_brackets = line_chars
+                .get(character..)
+                .map(|chars| chars.iter().take_while(|&&c| c == ']').count() as u32)
+                .unwrap_or(0)
+                .min(2);
+
             Some(WikiLinkCompleter {
                 vault,
                 cmp_text: cmp_text.to_vec(),
@@ -496,6 +505,7 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
                 context_path: context.path,
                 settings: context.settings,
                 chars_in_line: line_chars.len() as u32,
+                closing_brackets,
             })
         })
     }
