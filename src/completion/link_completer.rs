@@ -19,7 +19,9 @@ use crate::{
     completion::util::check_in_code_block,
     config::Settings,
     ui::preview_referenceable,
-    vault::{heading_to_slug, MDFile, MDHeading, Reference, Referenceable, Vault},
+    vault::{
+        get_obsidian_ref_path, heading_to_slug, MDFile, MDHeading, Reference, Referenceable, Vault,
+    },
 };
 
 use super::{
@@ -613,6 +615,14 @@ impl LinkCompletion<'_> {
         referenceable: Referenceable<'a>,
         completer: &impl LinkCompleter<'a>,
     ) -> Option<Vec<LinkCompletion<'a>>> {
+        let get_path_as_obsidian_relative = |path: &PathBuf| -> Option<String> {
+            if completer.settings().complete_paths_as_relative_to_vault {
+                get_obsidian_ref_path(completer.vault().root_dir(), path)
+            } else {
+                Some(String::from(path.file_stem()?.to_str()?))
+            }
+        };
+
         if let Some(daily) = MDDailyNote::from_referenceable(referenceable.clone(), completer) {
             Some(vec![DailyNote(daily)])
         } else {
@@ -621,7 +631,7 @@ impl LinkCompletion<'_> {
                     Some(
                         once(File {
                             mdfile,
-                            match_string: mdfile.file_name()?.to_string(),
+                            match_string: get_path_as_obsidian_relative(&mdfile.path)?,
                             referenceable: referenceable.clone(),
                         })
                         .chain(mdfile.metadata.iter().flat_map(|it| it.aliases()).flat_map(
@@ -647,7 +657,7 @@ impl LinkCompletion<'_> {
                             heading: mdheading,
                             match_string: format!(
                                 "{}#{}",
-                                path.file_stem()?.to_str()?,
+                                get_path_as_obsidian_relative(path)?,
                                 heading_text
                             ),
                             referenceable,
@@ -657,7 +667,11 @@ impl LinkCompletion<'_> {
                 }
                 Referenceable::IndexedBlock(path, indexed) => Some(
                     once(Block {
-                        match_string: format!("{}#^{}", path.file_stem()?.to_str()?, indexed.index),
+                        match_string: format!(
+                            "{}#^{}",
+                            get_path_as_obsidian_relative(path)?,
+                            indexed.index
+                        ),
                         referenceable,
                     })
                     .collect(),
