@@ -34,6 +34,9 @@ impl Vault {
     pub fn construct_vault(context: &Settings, root_dir: &Path) -> Result<Vault, std::io::Error> {
         let excluded_folders = &context.excluded_folders;
         let md_file_paths = WalkDir::new(root_dir)
+            // Vaults often pull shared folders in through directory symlinks; walkdir
+            // reports link loops as errors, which `flatten` below drops.
+            .follow_links(true)
             .into_iter()
             .filter_entry(|e| {
                 // Allow the root directory itself even if it starts with '.'
@@ -3432,5 +3435,37 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn construct_vault_follows_symlinks() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = std::env::temp_dir().join(format!("moxide-symlinks-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(tmp.join("shared/sub")).unwrap();
+        std::fs::create_dir_all(tmp.join("vault")).unwrap();
+        for file in ["shared/x.md", "shared/sub/y.md", "vault/a.md"] {
+            std::fs::write(tmp.join(file), "# Note\n").unwrap();
+        }
+        symlink("../shared", tmp.join("vault/linked")).unwrap();
+        symlink("../vault", tmp.join("shared/back")).unwrap();
+        symlink("../shared/x.md", tmp.join("vault/file.md")).unwrap();
+
+        let root = tmp.join("vault");
+        let vault = Vault::construct_vault(&test_settings(), &root).unwrap();
+        let paths = vault
+            .md_files
+            .keys()
+            .map(|path| path.strip_prefix(&root).unwrap().to_path_buf())
+            .sorted()
+            .collect_vec();
+        std::fs::remove_dir_all(&tmp).unwrap();
+
+        assert_eq!(
+            paths,
+            ["a.md", "file.md", "linked/sub/y.md", "linked/x.md"].map(PathBuf::from)
+        );
     }
 }
