@@ -320,17 +320,42 @@ impl Vault {
                         .into_par_iter()
                         .filter(|(_, reference)| {
                             let ref_text = &reference.data().reference_text;
+                            // Strip a leading "./" or "/" from the file-path portion,
+                            // matching how matches_path_or_file() resolves such links,
+                            // so links like "./subdir/inner" aren't flagged as
+                            // unresolved even though they resolve for navigation.
+                            let (file_part, heading_part) = match ref_text.split_once('#') {
+                                Some((file_part, heading_part)) => {
+                                    (file_part, Some(heading_part))
+                                }
+                                None => (ref_text.as_str(), None),
+                            };
+                            let stripped_file_part = file_part
+                                .strip_prefix("./")
+                                .or_else(|| file_part.strip_prefix('/'))
+                                .unwrap_or(file_part);
+                            let stripped = match heading_part {
+                                Some(heading_part) => {
+                                    format!("{}#{}", stripped_file_part, heading_part)
+                                }
+                                None => stripped_file_part.to_string(),
+                            };
                             // Normalize only the heading portion (after #) of the
                             // reference text so that e.g. "file#Some Heading" matches
                             // the slugified refname "file#Some-Heading" in the resolved
                             // set, without corrupting spaces in file paths.
-                            let normalized =
-                                if let Some((file_part, heading_part)) = ref_text.split_once('#') {
-                                    format!("{}#{}", file_part, heading_to_slug(heading_part))
-                                } else {
-                                    ref_text.clone()
-                                };
+                            let normalized = match heading_part {
+                                Some(heading_part) => {
+                                    format!(
+                                        "{}#{}",
+                                        stripped_file_part,
+                                        heading_to_slug(heading_part)
+                                    )
+                                }
+                                None => stripped.clone(),
+                            };
                             !resolved_referenceables_refnames.contains(ref_text)
+                                && !resolved_referenceables_refnames.contains(&stripped)
                                 && !resolved_referenceables_refnames.contains(&normalized)
                         })
                         .flat_map(|(_, reference)| match reference {
@@ -3432,5 +3457,27 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn dot_slash_prefixed_subfolder_link_is_not_unresolved() {
+        let dir = std::env::temp_dir().join("mo-issue-274-dotslash");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("subdir")).unwrap();
+        std::fs::write(dir.join("outer.md"), "[link](./subdir/inner.md)").unwrap();
+        std::fs::write(dir.join("subdir").join("inner.md"), "hi").unwrap();
+
+        let settings = Settings::new(&dir, &ClientCapabilities::default()).unwrap();
+        let vault = Vault::construct_vault(&settings, &dir).unwrap();
+
+        let unresolved = vault
+            .select_referenceable_nodes(None)
+            .into_iter()
+            .filter(|r| matches!(r, Referenceable::UnresovledFile(..)))
+            .collect_vec();
+
+        assert!(unresolved.is_empty(), "unexpected unresolved: {:?}", unresolved);
+
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
