@@ -617,6 +617,21 @@ pub trait Rangeable {
             && (range.end.line > position.line
                 || (range.end.line == position.line && range.end.character >= position.character))
     }
+
+    /// Whether this range shares any characters with `other`, even if neither fully contains
+    /// the other. This matters for constructs like `[[` and `]]` split across separate inline
+    /// code spans: the link regex can match across the gap between them, producing a reference
+    /// range that isn't fully contained in either code span but does overlap both.
+    fn overlaps(&self, other: &impl Rangeable) -> bool {
+        fn le(a: Position, b: Position) -> bool {
+            a.line < b.line || (a.line == b.line && a.character <= b.character)
+        }
+
+        let self_range = self.range();
+        let other_range = other.range();
+
+        le(self_range.start, other_range.end) && le(other_range.start, self_range.end)
+    }
 }
 
 impl Rangeable for MDHeading {
@@ -682,7 +697,7 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -3339,6 +3354,15 @@ Some content here";
         let tags = MDTag::from_frontmatter(text, &metadata);
 
         assert!(tags.is_empty());
+    }
+
+    #[test]
+    fn brackets_split_across_code_spans_are_not_references() {
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers\n";
+
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("test.md"));
+
+        assert!(parsed.references.is_empty());
     }
 
     #[test]
