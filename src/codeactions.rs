@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use pathdiff::diff_paths;
+use ropey::Rope;
 use tower_lsp::lsp_types::{
     CodeAction, CodeActionOrCommand, CodeActionParams, CreateFile, CreateFileOptions,
     DocumentChangeOperation, DocumentChanges, OneOf, OptionalVersionedTextDocumentIdentifier,
@@ -13,6 +14,18 @@ use crate::{
     diagnostics::path_unresolved_references,
     vault::{Reference, Vault},
 };
+
+fn end_of_document_position(file: Option<&Rope>) -> Position {
+    let Some(file) = file else {
+        return Position::default();
+    };
+
+    let line = file.len_lines().saturating_sub(1);
+    Position {
+        line: line as u32,
+        character: file.line(line).len_chars() as u32,
+    }
+}
 
 pub fn code_actions(
     vault: &Vault,
@@ -85,17 +98,12 @@ pub fn code_actions(
 
                         let file = vault.ropes.get(&new_path_buf);
 
-                        let length = match file {
-                            Some(file) => file.lines().len(),
-                            None => 0
-                        };
-
-
                         let new_text = match file {
                             Some(..) => format!("\n\n# {}", heading),
                             None => format!("# {}", heading)
                         }; // move this calculation to the vault somehow
 
+                        let end_of_document = end_of_document_position(file);
 
                         Some(CodeActionOrCommand::CodeAction(CodeAction {
                             title: format!(
@@ -122,14 +130,8 @@ pub fn code_actions(
                                             OneOf::Left(TextEdit{
                                                 new_text,
                                                 range: Range {
-                                                    start: Position {
-                                                        line: (length + 1) as u32,
-                                                        character: 0
-                                                    },
-                                                    end: Position {
-                                                        line: length as u32,
-                                                        character: 0
-                                                    }
+                                                    start: end_of_document,
+                                                    end: end_of_document,
                                                 }
                                             })
                                         ]
@@ -146,4 +148,43 @@ pub fn code_actions(
             })
             .collect(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use ropey::Rope;
+    use tower_lsp::lsp_types::Position;
+
+    use super::end_of_document_position;
+
+    #[test]
+    fn append_position_for_a_new_file_is_the_origin() {
+        assert_eq!(end_of_document_position(None), Position::default());
+    }
+
+    #[test]
+    fn append_position_uses_the_final_character_of_the_last_line() {
+        let file = Rope::from_str("first\nsecond");
+
+        assert_eq!(
+            end_of_document_position(Some(&file)),
+            Position {
+                line: 1,
+                character: 6,
+            }
+        );
+    }
+
+    #[test]
+    fn append_position_handles_a_trailing_newline() {
+        let file = Rope::from_str("first\nsecond\n");
+
+        assert_eq!(
+            end_of_document_position(Some(&file)),
+            Position {
+                line: 2,
+                character: 0,
+            }
+        );
+    }
 }
