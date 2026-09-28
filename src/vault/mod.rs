@@ -467,11 +467,10 @@ impl Vault {
             _ => &[],
         };
 
-        std::iter::once(vault_name)
-            .chain(alias_names.iter().map(|a| Some(a.to_string())))
-            .flatten()
-            .map(|name| SymbolInformation {
-                name,
+        let mut symbols = Vec::new();
+        if let Some(ref name) = vault_name {
+            symbols.push(SymbolInformation {
+                name: name.clone(),
                 kind,
                 location: Location {
                     uri: uri.clone(),
@@ -480,8 +479,33 @@ impl Vault {
                 container_name: None,
                 tags: None,
                 deprecated: None,
-            })
-            .collect()
+            });
+        }
+
+        for alias in alias_names {
+            let trimmed = alias.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            if let Some(ref name) = vault_name {
+                if trimmed == name.as_str() {
+                    continue;
+                }
+            }
+            symbols.push(SymbolInformation {
+                name: trimmed.to_string(),
+                kind,
+                location: Location {
+                    uri: uri.clone(),
+                    range,
+                },
+                container_name: vault_name.clone(),
+                tags: None,
+                deprecated: None,
+            });
+        }
+
+        symbols
     }
 }
 
