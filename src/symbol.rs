@@ -148,10 +148,93 @@ fn map_to_lsp_tree(tree: Vec<Node>) -> Vec<DocumentSymbol> {
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        symbol,
-        vault::{HeadingLevel, MDHeading},
+    use std::{
+        fs,
+        time::{SystemTime, UNIX_EPOCH},
     };
+
+    use tower_lsp::lsp_types::{ClientCapabilities, WorkspaceSymbolParams};
+
+    use crate::{
+        config::Settings,
+        symbol,
+        vault::{HeadingLevel, MDHeading, Vault},
+    };
+
+    #[test]
+    fn test_workspace_symbols_include_file_aliases() {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("markdown-oxide-workspace-symbol-aliases-{nanos}"));
+
+        fs::create_dir_all(&root).unwrap();
+        fs::write(
+            root.join("Aliased Target.md"),
+            "---\naliases: [ResolvedAlias, MyResolvedNote, \"  \"]\n---\n\n# Heading\n",
+        )
+        .unwrap();
+
+        let settings = Settings::new(&root, &ClientCapabilities::default()).unwrap();
+        let vault = Vault::construct_vault(&settings, &root).unwrap();
+
+        // 1. Empty query (e.g. Telescope / picker opening) returns both canonical symbol and aliases
+        let all_symbols = super::workspace_symbol(
+            &vault,
+            &WorkspaceSymbolParams {
+                query: "".to_string(),
+                work_done_progress_params: Default::default(),
+                partial_result_params: Default::default(),
+            },
+        )
+        .unwrap();
+
+        let canonical = all_symbols
+            .iter()
+            .find(|s| s.name == "Aliased Target")
+            .expect("canonical symbol should be returned");
+        assert_eq!(canonical.container_name, None);
+
+        let alias_symbol = all_symbols
+            .iter()
+            .find(|s| s.name == "ResolvedAlias")
+            .expect("alias symbol should be returned in workspace symbols");
+        assert_eq!(
+            alias_symbol.container_name.as_deref(),
+            Some("Aliased Target")
+        );
+
+        // Blank/whitespace alias should not be emitted
+        assert!(!all_symbols.iter().any(|s| s.name.trim().is_empty()));
+
+        // 2. Querying by alias name
+        let alias_results = super::workspace_symbol(
+            &vault,
+            &WorkspaceSymbolParams {
+                query: "ResolvedAlias".to_string(),
+                work_done_progress_params: Default::default(),
+                partial_result_params: Default::default(),
+            },
+        )
+        .unwrap();
+        assert!(alias_results.iter().any(|s| s.name == "ResolvedAlias"));
+
+        // 3. Querying by canonical filename
+        let filename_results = super::workspace_symbol(
+            &vault,
+            &WorkspaceSymbolParams {
+                query: "Aliased Target".to_string(),
+                work_done_progress_params: Default::default(),
+                partial_result_params: Default::default(),
+            },
+        )
+        .unwrap();
+        assert!(filename_results.iter().any(|s| s.name == "Aliased Target"));
+
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn test_simple_tree() {
