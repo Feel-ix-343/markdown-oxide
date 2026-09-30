@@ -438,7 +438,11 @@ impl Vault {
     }
 
     /// Returns one [`SymbolInformation`] per name for the given referenceable,
-    /// including any aliases defined in YAML frontmatter metadata.
+    /// including any aliases defined in YAML frontmatter metadata. Alias
+    /// symbols carry the canonical name in `container_name` so that workspace
+    /// symbol pickers (Telescope, `vim.lsp.buf.workspace_symbol()`, ...) show
+    /// which note an alias resolves to, mirroring link completion's
+    /// "Alias: <file>" detail.
     #[allow(deprecated)] // SymbolInformation::deprecated field is deprecated in lsp-types
     pub fn to_symbol_informations(&self, referenceable: &Referenceable) -> Vec<SymbolInformation> {
         let uri = match Url::from_file_path(referenceable.get_path()).ok() {
@@ -467,17 +471,24 @@ impl Vault {
             _ => &[],
         };
 
-        std::iter::once(vault_name)
-            .chain(alias_names.iter().map(|a| Some(a.to_string())))
-            .flatten()
-            .map(|name| SymbolInformation {
+        std::iter::once((vault_name.clone(), None))
+            .chain(
+                alias_names
+                    .iter()
+                    .filter(|alias| !alias.trim().is_empty())
+                    .unique()
+                    .filter(|alias| Some(*alias) != vault_name.as_ref())
+                    .map(|alias| (Some(alias.clone()), vault_name.clone())),
+            )
+            .filter_map(|(name, container_name)| name.map(|name| (name, container_name)))
+            .map(|(name, container_name)| SymbolInformation {
                 name,
                 kind,
                 location: Location {
                     uri: uri.clone(),
                     range,
                 },
-                container_name: None,
+                container_name,
                 tags: None,
                 deprecated: None,
             })
@@ -1806,7 +1817,10 @@ mod vault_tests {
     use std::{collections::HashMap, path::Path, path::PathBuf};
 
     use itertools::Itertools;
-    use tower_lsp::lsp_types::{ClientCapabilities, Position, Range};
+    use ropey::Rope;
+    use tower_lsp::lsp_types::{
+        ClientCapabilities, Position, Range, SymbolKind, WorkspaceSymbolParams,
+    };
 
     use crate::config::Settings;
     use crate::vault::{HeadingLevel, ReferenceData};
@@ -3432,5 +3446,128 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    fn vault_with_frontmatter_aliases(aliases_yaml: &str) -> Vault {
+        let settings = test_settings();
+        let root_dir = PathBuf::from("/testvault");
+        let path = root_dir.join("note.md");
+        let text = format!("---\naliases: {}\n---\n# Note\n", aliases_yaml);
+
+        let md_file = MDFile::new(&settings, &text, path.clone());
+        let mut md_files = HashMap::new();
+        md_files.insert(path.clone(), md_file);
+        let mut ropes = HashMap::new();
+        ropes.insert(path, Rope::from_str(&text));
+
+        Vault {
+            md_files: md_files.into(),
+            ropes: ropes.into(),
+            root_dir,
+        }
+    }
+
+    fn only_file_referenceable(vault: &Vault) -> Referenceable<'_> {
+        vault
+            .select_referenceable_nodes(None)
+            .into_iter()
+            .find(|referenceable| matches!(referenceable, Referenceable::File(_, _)))
+            .expect("vault should contain a file referenceable")
+    }
+
+    #[test]
+    fn symbol_informations_include_frontmatter_aliases() {
+        let vault = vault_with_frontmatter_aliases("[\"Alias One\", \"Alias Two\"]");
+        let file = only_file_referenceable(&vault);
+
+        let symbols = vault.to_symbol_informations(&file);
+
+        let names = symbols
+            .iter()
+            .map(|symbol| symbol.name.as_str())
+            .collect_vec();
+        assert_eq!(names, vec!["note", "Alias One", "Alias Two"]);
+        assert!(symbols.iter().all(|symbol| symbol.kind == SymbolKind::FILE));
+
+        let canonical = &symbols[0];
+        assert_eq!(canonical.container_name, None);
+        for alias_symbol in &symbols[1..] {
+            // Alias symbols point at the same location and name the canonical
+            // note as their container so pickers show what the alias resolves to
+            assert_eq!(alias_symbol.location, canonical.location);
+            assert_eq!(alias_symbol.container_name, Some("note".to_string()));
+        }
+    }
+
+    #[test]
+    fn symbol_informations_skip_blank_and_duplicate_aliases() {
+        let vault = vault_with_frontmatter_aliases(
+            "[\"\", \"  \", \"note\", \"Alias One\", \"Alias One\"]",
+        );
+        let file = only_file_referenceable(&vault);
+
+        let symbols = vault.to_symbol_informations(&file);
+
+        let names = symbols
+            .iter()
+            .map(|symbol| symbol.name.as_str())
+            .collect_vec();
+        assert_eq!(names, vec!["note", "Alias One"]);
+    }
+
+    #[test]
+    fn workspace_symbol_lists_aliases_on_empty_query() {
+        let vault = vault_with_frontmatter_aliases("[\"Alias One\"]");
+
+        let symbols = crate::symbol::workspace_symbol(
+            &vault,
+            &WorkspaceSymbolParams {
+                query: String::new(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        assert!(symbols.iter().any(|symbol| symbol.name == "note"));
+        assert!(symbols.iter().any(|symbol| symbol.name == "Alias One"));
+    }
+
+    #[test]
+    fn workspace_symbol_fuzzy_matches_alias_query() {
+        let vault = vault_with_frontmatter_aliases("[\"Alias One\"]");
+
+        let symbols = crate::symbol::workspace_symbol(
+            &vault,
+            &WorkspaceSymbolParams {
+                query: "Alias One".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(symbols.len(), 1);
+        assert_eq!(symbols[0].name, "Alias One");
+        assert_eq!(symbols[0].container_name, Some("note".to_string()));
+    }
+
+    #[test]
+    fn workspace_symbol_filename_query_resolves_to_canonical_symbol() {
+        let vault = vault_with_frontmatter_aliases("[\"Alias One\"]");
+
+        let symbols = crate::symbol::workspace_symbol(
+            &vault,
+            &WorkspaceSymbolParams {
+                query: "note".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let names = symbols
+            .iter()
+            .map(|symbol| symbol.name.as_str())
+            .collect_vec();
+        assert!(names.contains(&"note"));
+        assert!(!names.contains(&"Alias One"));
     }
 }
