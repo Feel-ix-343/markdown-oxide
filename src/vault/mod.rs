@@ -1022,7 +1022,12 @@ impl Reference {
                 | WikiFileLink(ReferenceData {
                     reference_text: file_ref_text,
                     ..
-                }) => matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir)),
+                }) => matches_path_or_file(
+                    file_ref_text,
+                    referenceable.get_refname(root_dir),
+                    root_dir,
+                    file_path,
+                ),
                 Tag(_) => false,
                 WikiHeadingLink(_, _, _) => false,
                 WikiIndexedBlockLink(_, _, _) => false,
@@ -1050,9 +1055,13 @@ impl Reference {
                 | WikiIndexedBlockLink(.., file_ref_text, link_infile_ref)
                 | MDHeadingLink(.., file_ref_text, link_infile_ref)
                 | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => {
-                    matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir))
-                        && heading_to_slug(&link_infile_ref.to_lowercase())
-                            == heading_to_slug(&infile_ref.to_lowercase())
+                    matches_path_or_file(
+                        file_ref_text,
+                        referenceable.get_refname(root_dir),
+                        root_dir,
+                        file_path,
+                    ) && heading_to_slug(&link_infile_ref.to_lowercase())
+                        == heading_to_slug(&infile_ref.to_lowercase())
                 }
                 Tag(_) => false,
                 WikiFileLink(_) => false,
@@ -1725,9 +1734,12 @@ impl Referenceable<'_> {
                     ..
                 })
                 | MDHeadingLink(.., file_ref_text, _)
-                | MDIndexedBlockLink(.., file_ref_text, _) => {
-                    matches_path_or_file(file_ref_text, self.get_refname(root_dir))
-                }
+                | MDIndexedBlockLink(.., file_ref_text, _) => matches_path_or_file(
+                    file_ref_text,
+                    self.get_refname(root_dir),
+                    root_dir,
+                    reference_path,
+                ),
                 Tag(_) => false,
                 Footnote(_) => false,
                 LinkRef(_) => false,
@@ -1775,7 +1787,12 @@ impl Referenceable<'_> {
     }
 }
 
-fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
+fn matches_path_or_file(
+    file_ref_text: &str,
+    refname: Option<Refname>,
+    root_dir: &Path,
+    file_path: &Path,
+) -> bool {
     (|| {
         let refname = refname?;
         let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
@@ -1785,12 +1802,18 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
             let file_ref_text = file_ref_text.replace(r"\ ", " ");
 
             let chars: Vec<char> = file_ref_text.chars().collect();
-            match chars.as_slice() {
-                &['.', '/', ref path @ ..] | &['/', ref path @ ..] => {
-                    Some(String::from_iter(path) == refname_path)
-                }
-                path => Some(String::from_iter(path) == refname_path),
-            }
+            let path = match chars.as_slice() {
+                &['.', '/', ref path @ ..] | &['/', ref path @ ..] => String::from_iter(path),
+                path => String::from_iter(path),
+            };
+
+            // Paths are matched against the vault-root-relative refname, but
+            // relative links (`./x`, `../x`) are relative to the file containing
+            // the link, so also try resolving them against its directory
+            Some(
+                path == refname_path
+                    || source_relative_refname(root_dir, file_path, &path) == Some(refname_path),
+            )
         } else {
             let last_segment = refname.link_file_key()?;
 
@@ -1798,6 +1821,35 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
         }
     })()
     .is_some_and(|b| b)
+}
+
+/// Resolves a link path against the directory of the file containing the link
+/// and returns the resulting vault-root-relative refname, if it stays inside the vault
+fn source_relative_refname(root_dir: &Path, file_path: &Path, link_path: &str) -> Option<String> {
+    let resolved = normalize_path(&file_path.parent()?.join(link_path));
+    let refname = get_obsidian_ref_path(root_dir, &resolved)?;
+
+    // Paths escaping the vault diff to `../...`, which no real refname contains
+    if refname.starts_with("..") {
+        None
+    } else {
+        Some(refname)
+    }
+}
+
+/// Resolves `.` and `..` components without touching the filesystem
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                normalized.pop();
+            }
+            component => normalized.push(component.as_os_str()),
+        }
+    }
+    normalized
 }
 
 // tests
@@ -3432,5 +3484,97 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn dot_slash_md_link_resolves_relative_to_source_file() {
+        let root_dir = Path::new("/home/vault");
+        let source_path = PathBuf::from("/home/vault/subdir/note.md");
+        let md_file = MDFile::default();
+        let target_path = PathBuf::from("/home/vault/subdir/inner.md");
+        let target = Referenceable::File(&target_path, &md_file);
+
+        let reference = Reference::new("[link](./inner.md)", "note").next().unwrap();
+
+        assert!(reference.references(root_dir, &source_path, &target));
+    }
+
+    #[test]
+    fn dot_dot_md_link_resolves_relative_to_source_file() {
+        let root_dir = Path::new("/home/vault");
+        let source_path = PathBuf::from("/home/vault/subdir/note.md");
+        let md_file = MDFile::default();
+        let target_path = PathBuf::from("/home/vault/sibling.md");
+        let target = Referenceable::File(&target_path, &md_file);
+
+        let reference = Reference::new("[link](../sibling.md)", "note")
+            .next()
+            .unwrap();
+
+        assert!(reference.references(root_dir, &source_path, &target));
+    }
+
+    #[test]
+    fn dot_slash_wiki_link_resolves_relative_to_source_file() {
+        let root_dir = Path::new("/home/vault");
+        let source_path = PathBuf::from("/home/vault/subdir/note.md");
+        let md_file = MDFile::default();
+        let target_path = PathBuf::from("/home/vault/subdir/inner.md");
+        let target = Referenceable::File(&target_path, &md_file);
+
+        let reference = Reference::new("[[./inner]]", "note").next().unwrap();
+
+        assert!(reference.references(root_dir, &source_path, &target));
+    }
+
+    #[test]
+    fn dot_slash_heading_link_resolves_relative_to_source_file() {
+        let root_dir = Path::new("/home/vault");
+        let source_path = PathBuf::from("/home/vault/subdir/note.md");
+        let target_path = PathBuf::from("/home/vault/subdir/inner.md");
+        let heading = MDHeading {
+            heading_text: "Some Heading".into(),
+            range: tower_lsp::lsp_types::Range::default().into(),
+            ..Default::default()
+        };
+        let target = Referenceable::Heading(&target_path, &heading);
+
+        let reference = Reference::new("[link](./inner.md#Some Heading)", "note")
+            .next()
+            .unwrap();
+
+        assert!(reference.references(root_dir, &source_path, &target));
+    }
+
+    #[test]
+    fn root_relative_path_links_still_resolve() {
+        let root_dir = Path::new("/home/vault");
+        let source_path = PathBuf::from("/home/vault/note.md");
+        let md_file = MDFile::default();
+        let target_path = PathBuf::from("/home/vault/subdir/inner.md");
+        let target = Referenceable::File(&target_path, &md_file);
+
+        let wiki = Reference::new("[[subdir/inner]]", "note").next().unwrap();
+        let md = Reference::new("[link](subdir/inner.md)", "note")
+            .next()
+            .unwrap();
+
+        assert!(wiki.references(root_dir, &source_path, &target));
+        assert!(md.references(root_dir, &source_path, &target));
+    }
+
+    #[test]
+    fn relative_link_escaping_vault_does_not_resolve() {
+        let root_dir = Path::new("/home/vault");
+        let source_path = PathBuf::from("/home/vault/subdir/note.md");
+        let md_file = MDFile::default();
+        let target_path = PathBuf::from("/home/vault/outside.md");
+        let target = Referenceable::File(&target_path, &md_file);
+
+        let reference = Reference::new("[link](../../outside.md)", "note")
+            .next()
+            .unwrap();
+
+        assert!(!reference.references(root_dir, &source_path, &target));
     }
 }
