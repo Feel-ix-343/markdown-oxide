@@ -1,4 +1,3 @@
-```rust
 use markdown;
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 use serde::Serialize;

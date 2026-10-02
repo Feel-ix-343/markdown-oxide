@@ -1,4 +1,3 @@
-```rust
 use crate::ast::{Document, Node};
 use crate::parse;
 use std::collections::HashSet;

@@ -1,4 +1,3 @@
-```rust
 use crate::ast::{Document, Node};
 use pulldown_cmark::{Parser, Event, Tag, TagEnd, Options};
 

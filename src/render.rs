@@ -1,4 +1,3 @@
-```rust
 use crate::ast::{Document, Node};
 
 pub fn render_document(doc: &Document) -> String {
