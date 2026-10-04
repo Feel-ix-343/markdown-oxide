@@ -7,7 +7,7 @@ use std::{
     hash::Hash,
     iter,
     ops::{Deref, DerefMut, Not, Range},
-    path::{Path, PathBuf, MAIN_SEPARATOR},
+    path::{Path, PathBuf},
     time::SystemTime,
 };
 
@@ -1560,7 +1560,16 @@ pub enum Referenceable<'a> {
 
 /// Utility function
 pub fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
-    diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(String::from))
+    diff_paths(path, root_dir).and_then(|diff| {
+        // Obsidian-style links always use `/` regardless of platform. Joining
+        // path components (rather than stringifying the diff) normalizes the
+        // OS separator while leaving literal `\` file names on Unix alone.
+        diff.with_extension("")
+            .components()
+            .map(|component| component.as_os_str().to_str().map(String::from))
+            .collect::<Option<Vec<String>>>()
+            .map(|parts| parts.join("/"))
+    })
 }
 
 /// Converts heading text to its slug form for use in links.
@@ -1581,7 +1590,7 @@ impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
         let path = &self.path.clone()?;
 
-        let last = path.split(MAIN_SEPARATOR).next_back()?;
+        let last = path.split(['/', '\\']).next_back()?;
 
         Some(last.to_string())
     }
@@ -1778,12 +1787,17 @@ impl Referenceable<'_> {
 fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
     (|| {
         let refname = refname?;
-        let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
+        // Vault paths pick up the OS separator (`\` on Windows) while link text
+        // may be typed either way; compare both sides with `/` separators.
+        // this function should not be used for tags, ... only for heading, files, indexed blocks
+        let refname_path = refname.path.clone()?.replace('\\', "/");
+
+        let file_ref_text = file_ref_text
+            .replace(r"%20", " ")
+            .replace(r"\ ", " ")
+            .replace('\\', "/");
 
         if file_ref_text.contains('/') {
-            let file_ref_text = file_ref_text.replace(r"%20", " ");
-            let file_ref_text = file_ref_text.replace(r"\ ", " ");
-
             let chars: Vec<char> = file_ref_text.chars().collect();
             match chars.as_slice() {
                 &['.', '/', ref path @ ..] | &['/', ref path @ ..] => {
@@ -3432,5 +3446,64 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    /// https://github.com/Feel-ix-343/markdown-oxide/issues/274
+    /// On Windows, `get_obsidian_ref_path` builds vault-relative refnames with
+    /// `\` separators while link text always uses `/`, so `[[sub/note]]` never
+    /// matches. These tests use literal `\` refnames so they exercise the
+    /// mismatch on any host, not just Windows.
+    fn windows_refname(path: &str) -> Refname {
+        Refname {
+            full_refname: path.replace('/', "\\"),
+            path: Some(path.replace('/', "\\")),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn wikilink_matches_backslash_refname() {
+        assert!(super::matches_path_or_file(
+            "sub/note",
+            Some(windows_refname("sub/note"))
+        ));
+    }
+
+    #[test]
+    fn backslash_link_text_matches_forward_slash_refname() {
+        assert!(super::matches_path_or_file(
+            r"sub\note",
+            Some(Refname {
+                full_refname: "sub/note".into(),
+                path: Some("sub/note".into()),
+                ..Default::default()
+            })
+        ));
+    }
+
+    #[test]
+    fn bare_filename_matches_backslash_refname() {
+        assert!(super::matches_path_or_file(
+            "note",
+            Some(windows_refname("sub/note"))
+        ));
+    }
+
+    #[test]
+    fn dot_relative_link_matches_backslash_refname() {
+        assert!(super::matches_path_or_file(
+            "./sub/note",
+            Some(windows_refname("sub/note"))
+        ));
+    }
+
+    /// Refnames are emitted with `/` separators regardless of platform, so
+    /// references and links written on Windows match too.
+    #[test]
+    fn ref_path_joins_components_with_forward_slashes() {
+        assert_eq!(
+            super::get_obsidian_ref_path(Path::new("/vault"), Path::new("/vault/sub/note.md")),
+            Some("sub/note".to_string())
+        );
     }
 }
