@@ -682,7 +682,20 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|reference| {
+                    !code_blocks.iter().any(|codeblock| {
+                        let code = codeblock.range();
+                        let link = reference.range();
+                        // A wiki match can span separate code spans. Check its
+                        // markers while allowing inline code within link labels.
+                        codeblock.includes(reference)
+                            || (matches!(
+                                reference,
+                                WikiFileLink(..) | WikiHeadingLink(..) | WikiIndexedBlockLink(..)
+                            ) && ((code.start <= link.start && link.start < code.end)
+                                || (code.start < link.end && link.end <= code.end)))
+                    })
+                })
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -3407,6 +3420,112 @@ Some content here";
                 reference,
                 WikiFileLink(data) if data.reference_text == "outside cap"
             )));
+    }
+
+    #[test]
+    fn inline_code_wiki_markers_do_not_create_references() {
+        let mut settings = test_settings();
+        settings.references_in_codeblocks = false;
+        for text in [
+            "* DO NOT use the square bracket `[[` and `]]` markers",
+            "`[[target`]]",
+            "[[`target]]`",
+            "é🦀 `[[`\nand `]]`",
+        ] {
+            let file = MDFile::new(&settings, text, PathBuf::from("source.md"));
+            assert!(file.references.is_empty(), "unexpected reference in {text}");
+        }
+    }
+
+    #[test]
+    fn inline_code_preserves_real_links_and_formatted_labels() {
+        let mut settings = test_settings();
+        settings.references_in_codeblocks = false;
+        let text = "`code`[[target]]`code`[[target#Some Heading]]`code`[[target#^block]]\n\
+                    [[target|`label`]] [[target#`heading`]] [[target#^block|`label`]]\n\
+                    é🦀 [[nöte|`label`]]\n\
+                    [`code`](target.md) [heading `code`](target.md#Some-Heading)\n\
+                    [block `code`](target.md#^block)";
+        let file = MDFile::new(&settings, text, PathBuf::from("source.md"));
+        let references = file
+            .references
+            .iter()
+            .map(|reference| reference.data().reference_text.as_str())
+            .collect_vec();
+
+        assert_eq!(
+            references,
+            [
+                "target",
+                "target#Some Heading",
+                "target#^block",
+                "target",
+                "target#`heading`",
+                "target#^block",
+                "nöte",
+                "target",
+                "target#Some-Heading",
+                "target#^block",
+            ]
+        );
+        assert!(matches!(file.references[0], WikiFileLink(..)));
+        assert!(matches!(file.references[1], WikiHeadingLink(..)));
+        assert!(matches!(file.references[2], WikiIndexedBlockLink(..)));
+        assert!(matches!(file.references[7], MDFileLink(..)));
+        assert!(matches!(file.references[8], MDHeadingLink(..)));
+        assert!(matches!(file.references[9], MDIndexedBlockLink(..)));
+        assert_eq!(
+            file.references[0].data().range,
+            Range {
+                start: Position::new(0, 6),
+                end: Position::new(0, 16),
+            }
+            .into()
+        );
+    }
+
+    #[test]
+    fn inline_code_reference_setting_is_respected() {
+        let text = "`[[target]]`\n```markdown\n[[target#Some Heading]]\n```\n\
+                    * DO NOT use the square bracket `[[` and `]]` markers";
+        let mut settings = test_settings();
+        settings.references_in_codeblocks = false;
+        assert!(MDFile::new(&settings, text, PathBuf::from("source.md"))
+            .references
+            .is_empty());
+
+        settings.references_in_codeblocks = true;
+        let references = MDFile::new(&settings, text, PathBuf::from("source.md"))
+            .references
+            .into_iter()
+            .map(|reference| reference.data().reference_text.clone())
+            .collect_vec();
+        assert_eq!(references, ["target", "target#Some Heading", "` and `"]);
+    }
+
+    #[test]
+    fn inline_code_markers_do_not_produce_unresolved_diagnostics() {
+        let mut settings = test_settings();
+        settings.references_in_codeblocks = false;
+        let root = std::env::temp_dir().join("markdown-oxide-inline-code-vault");
+        let source_path = root.join("source.md");
+        let target_path = root.join("target.md");
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers\n\
+                    [[target]] [`code`](target.md) [[missing]]";
+        let source = MDFile::new(&settings, text, source_path.clone());
+        let target = MDFile::new(&settings, "# Target", target_path.clone());
+        let vault = Vault {
+            md_files: HashMap::from([(source_path.clone(), source), (target_path, target)]).into(),
+            ropes: HashMap::new().into(),
+            root_dir: root,
+        };
+
+        let unresolved = crate::diagnostics::path_unresolved_references(&vault, &source_path)
+            .unwrap()
+            .into_iter()
+            .map(|(_, reference)| reference.data().reference_text.as_str())
+            .collect_vec();
+        assert_eq!(unresolved, ["missing"]);
     }
 
     #[test]
