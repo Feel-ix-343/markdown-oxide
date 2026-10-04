@@ -617,6 +617,24 @@ pub trait Rangeable {
             && (range.end.line > position.line
                 || (range.end.line == position.line && range.end.character >= position.character))
     }
+
+    /// Whether the other's start position, or its (exclusive) end position,
+    /// reaches into this range's interior — i.e. the match crosses one of this
+    /// range's boundaries. A range merely contained inside `other` (like a
+    /// code span inside link display text) does not intersect.
+    fn intersects(&self, other: &impl Rangeable) -> bool {
+        let self_range = self.range();
+        let other_range = other.range();
+
+        ((self_range.start.line, self_range.start.character)
+            <= (other_range.start.line, other_range.start.character)
+            && (other_range.start.line, other_range.start.character)
+                < (self_range.end.line, self_range.end.character))
+            || ((self_range.start.line, self_range.start.character)
+                < (other_range.end.line, other_range.end.character)
+                && (other_range.end.line, other_range.end.character)
+                    <= (self_range.end.line, self_range.end.character))
+    }
 }
 
 impl Rangeable for MDHeading {
@@ -682,7 +700,12 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                // Drop a match only when it crosses a code span's boundary — e.g.
+                // `[[` inside one inline code span and `]]` inside another. Full
+                // containment misses such spanning matches, while plain overlap
+                // would also drop links merely containing code in their display
+                // text, like `[see `code` docs](doc.md)`.
+                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.intersects(it)))
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -3432,5 +3455,64 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    /// https://github.com/Feel-ix-343/markdown-oxide/issues/269
+    /// `[[` and `]]` sitting in *separate* inline code spans produce a wikilink
+    /// regex match that is not contained in any single codeblock; it must still
+    /// be dropped when references_in_codeblocks is off.
+    #[test]
+    fn wikilink_markers_split_across_inline_code_spans_are_not_references() {
+        let text = r"* DO NOT use the square bracket `[[` and `]]` markers";
+        let md_file = MDFile::new(&test_settings(), text, PathBuf::from("note.md"));
+
+        assert_eq!(md_file.references, vec![]);
+    }
+
+    /// A match whose interior crosses code spans is equally fake: `[[a` and
+    /// `b]]` each live inside inline code but the regex joins them.
+    #[test]
+    fn wikilink_spanning_two_inline_code_spans_is_not_a_reference() {
+        let text = r"one `[[a` two `b]]` three";
+        let md_file = MDFile::new(&test_settings(), text, PathBuf::from("note.md"));
+
+        assert_eq!(md_file.references, vec![]);
+    }
+
+    /// References still parse when they sit next to code spans without
+    /// touching their interiors.
+    #[test]
+    fn wikilinks_adjacent_to_inline_code_still_parse() {
+        let text = r"prefix `code` [[real-link]] suffix `code2`[[other]]";
+        let md_file = MDFile::new(&test_settings(), text, PathBuf::from("note.md"));
+        let parsed: Vec<String> = md_file
+            .references
+            .iter()
+            .map(|reference| reference.data().reference_text.clone())
+            .collect();
+
+        assert_eq!(parsed, vec!["real-link".to_string(), "other".to_string()]);
+    }
+
+    /// A markdown link may legitimately contain an inline code span inside its
+    /// display text — the reference does not cross a code boundary.
+    #[test]
+    fn md_link_with_code_in_display_text_still_parses() {
+        let text = r"prefix [see `code` docs](doc.md) suffix";
+        let md_file = MDFile::new(&test_settings(), text, PathBuf::from("note.md"));
+
+        assert!(md_file.references.iter().any(|reference| matches!(
+            reference,
+            MDFileLink(data) if data.reference_text == "doc"
+        )));
+    }
+
+    /// Fully contained matches stay filtered exactly as before.
+    #[test]
+    fn wikilink_inside_single_code_span_is_not_a_reference() {
+        let text = "prefix `[[not-a-link]]` suffix\n\n```\n[[also-not]]\n```";
+        let md_file = MDFile::new(&test_settings(), text, PathBuf::from("note.md"));
+
+        assert_eq!(md_file.references, vec![]);
     }
 }
