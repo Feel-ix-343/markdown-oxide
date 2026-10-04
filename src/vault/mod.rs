@@ -326,9 +326,13 @@ impl Vault {
                             // set, without corrupting spaces in file paths.
                             let normalized =
                                 if let Some((file_part, heading_part)) = ref_text.split_once('#') {
-                                    format!("{}#{}", file_part, heading_to_slug(heading_part))
+                                    format!(
+                                        "{}#{}",
+                                        file_part.replace(MAIN_SEPARATOR, "/"),
+                                        heading_to_slug(heading_part)
+                                    )
                                 } else {
-                                    ref_text.clone()
+                                    ref_text.replace(MAIN_SEPARATOR, "/")
                                 };
                             !resolved_referenceables_refnames.contains(ref_text)
                                 && !resolved_referenceables_refnames.contains(&normalized)
@@ -1560,7 +1564,11 @@ pub enum Referenceable<'a> {
 
 /// Utility function
 pub fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
-    diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(String::from))
+    diff_paths(path, root_dir).and_then(|diff| {
+        diff.with_extension("")
+            .to_str()
+            .map(|path| path.replace(MAIN_SEPARATOR, "/"))
+    })
 }
 
 /// Converts heading text to its slug form for use in links.
@@ -1581,7 +1589,7 @@ impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
         let path = &self.path.clone()?;
 
-        let last = path.split(MAIN_SEPARATOR).next_back()?;
+        let last = path.split(['/', MAIN_SEPARATOR]).next_back()?;
 
         Some(last.to_string())
     }
@@ -1778,11 +1786,12 @@ impl Referenceable<'_> {
 fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
     (|| {
         let refname = refname?;
-        let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
-
-        if file_ref_text.contains('/') {
+        let refname_path = refname.path.clone()?.replace(MAIN_SEPARATOR, "/"); // this function should not be used for tags, ... only for heading, files, indexed blocks
+        if file_ref_text.contains('/') || file_ref_text.contains(MAIN_SEPARATOR) {
             let file_ref_text = file_ref_text.replace(r"%20", " ");
-            let file_ref_text = file_ref_text.replace(r"\ ", " ");
+            let file_ref_text = file_ref_text
+                .replace(r"\ ", " ")
+                .replace(MAIN_SEPARATOR, "/");
 
             let chars: Vec<char> = file_ref_text.chars().collect();
             match chars.as_slice() {
@@ -1820,6 +1829,142 @@ mod vault_tests {
 
     fn test_settings() -> Settings {
         Settings::new(Path::new("."), &ClientCapabilities::default()).unwrap()
+    }
+
+    #[test]
+    fn subfolder_refnames_use_forward_slashes() {
+        let root = std::env::temp_dir().join("markdown-oxide-vault");
+        let path = root.join("sub").join("note.v1.md");
+
+        assert_eq!(
+            super::get_obsidian_ref_path(&root, &path),
+            Some("sub/note.v1".to_string())
+        );
+    }
+
+    #[test]
+    fn subfolder_file_key_uses_forward_slashes() {
+        for path in [
+            "sub/note.v1".to_string(),
+            format!("sub{}note.v1", std::path::MAIN_SEPARATOR),
+        ] {
+            let refname = Refname {
+                full_refname: path.clone(),
+                path: Some(path),
+                ..Default::default()
+            };
+
+            assert_eq!(refname.link_file_key(), Some("note.v1".to_string()));
+        }
+    }
+
+    #[test]
+    fn subfolder_links_resolve_files_headings_and_blocks() {
+        let settings = test_settings();
+        let root = std::env::temp_dir().join("markdown-oxide-vault");
+        let source_path = root.join("source.md");
+        let target_path = root.join("sub").join("note.v1.md");
+        let source = MDFile::new(
+            &settings,
+            "[[sub/note.v1]]\n[Note](sub/note.v1.md)\n[[note.v1]]\n\
+             [[sub/note.v1#Some Heading]]\n[Heading](sub/note.v1.md#Some-Heading)\n\
+             [[sub/note.v1#^block]]\n[Block](sub/note.v1.md#^block)\n\
+             [[/sub/note.v1]]\n[Note](./sub/note.v1.md)",
+            source_path.clone(),
+        );
+        let target = MDFile::new(
+            &settings,
+            "# Some Heading\n\nText ^block",
+            target_path.clone(),
+        );
+        let vault = Vault {
+            md_files: HashMap::from([(source_path.clone(), source), (target_path.clone(), target)])
+                .into(),
+            ropes: HashMap::new().into(),
+            root_dir: root,
+        };
+        let references = vault.select_references(Some(&source_path)).unwrap();
+        assert_eq!(references.len(), 9);
+
+        for (_, reference) in references {
+            let targets = vault.select_referenceables_for_reference(reference, &source_path);
+            assert!(
+                !targets.is_empty(),
+                "no target for {}",
+                reference.data().reference_text
+            );
+            assert!(
+                targets
+                    .iter()
+                    .any(|target| { !target.is_unresolved() && target.get_path() == target_path }),
+                "wrong target for {}",
+                reference.data().reference_text
+            );
+        }
+
+        assert!(
+            crate::diagnostics::path_unresolved_references(&vault, &source_path)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn subfolder_missing_links_stay_unresolved() {
+        let settings = test_settings();
+        let root = std::env::temp_dir().join("markdown-oxide-vault");
+        let source_path = root.join("source.md");
+        let source = MDFile::new(&settings, "[[sub/missing]]", source_path.clone());
+        let vault = Vault {
+            md_files: HashMap::from([(source_path.clone(), source)]).into(),
+            ropes: HashMap::new().into(),
+            root_dir: root,
+        };
+
+        assert_eq!(
+            crate::diagnostics::path_unresolved_references(&vault, &source_path)
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn subfolder_windows_backslash_links_still_resolve() {
+        let settings = test_settings();
+        let root = std::env::temp_dir().join("markdown-oxide-vault");
+        let source_path = root.join("source.md");
+        let target_path = root.join("sub").join("note.v1.md");
+        let source = MDFile::new(
+            &settings,
+            "[[./sub\\note.v1]]\n[[./sub\\note.v1#Some Heading]]\n[[./sub\\note.v1#^block]]\n\
+             [[sub\\note.v1]]\n[[sub\\note.v1#Some Heading]]\n[[sub\\note.v1#^block]]",
+            source_path.clone(),
+        );
+        let target = MDFile::new(
+            &settings,
+            "# Some Heading\n\nText ^block",
+            target_path.clone(),
+        );
+        let vault = Vault {
+            md_files: HashMap::from([(source_path.clone(), source), (target_path.clone(), target)])
+                .into(),
+            ropes: HashMap::new().into(),
+            root_dir: root,
+        };
+
+        for (_, reference) in vault.select_references(Some(&source_path)).unwrap() {
+            let targets = vault.select_referenceables_for_reference(reference, &source_path);
+            assert_eq!(targets.len(), 1);
+            assert_eq!(targets[0].get_path(), target_path);
+            assert!(!targets[0].is_unresolved());
+        }
+        assert!(
+            crate::diagnostics::path_unresolved_references(&vault, &source_path)
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]
