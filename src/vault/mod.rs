@@ -3433,4 +3433,79 @@ Some content here";
 
         assert_eq!(parsed, expected);
     }
+
+    /// https://github.com/Feel-ix-343/markdown-oxide/issues/263
+    /// Aliases must reach `workspace/symbol` clients — both in the empty-query
+    /// listing (Telescope, `vim.lsp.buf.workspace_symbol()`) and when
+    /// searching by the alias name itself.
+    fn aliased_vault() -> Vault {
+        let root_dir = PathBuf::from("/vault");
+        let file_path = root_dir.join("note.md");
+        let text = "---\naliases: [\"Alias Note\", \"Second Name\"]\n---\n# Heading\nbody";
+
+        let md_file = MDFile::new(&test_settings(), text, file_path.clone());
+        Vault {
+            md_files: HashMap::from([(file_path.clone(), md_file)]).into(),
+            ropes: HashMap::from([(file_path.clone(), ropey::Rope::from_str(text))]).into(),
+            root_dir,
+        }
+    }
+
+    fn symbol_names(vault: &Vault, query: &str) -> Vec<String> {
+        let params = tower_lsp::lsp_types::WorkspaceSymbolParams {
+            query: query.to_string(),
+            ..Default::default()
+        };
+        crate::symbol::workspace_symbol(vault, &params)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|symbol| symbol.name)
+            .collect()
+    }
+
+    #[test]
+    fn workspace_symbol_empty_query_lists_aliases() {
+        let vault = aliased_vault();
+        let names = symbol_names(&vault, "");
+
+        assert!(names.contains(&"note".to_string()));
+        assert!(names.contains(&"Alias Note".to_string()));
+        assert!(names.contains(&"Second Name".to_string()));
+    }
+
+    #[test]
+    fn workspace_symbol_finds_file_by_alias() {
+        let vault = aliased_vault();
+        let names = symbol_names(&vault, "Alias Note");
+
+        assert_eq!(names, vec!["Alias Note".to_string()]);
+    }
+
+    #[test]
+    fn workspace_symbol_alias_shares_canonical_location() {
+        let vault = aliased_vault();
+        let params = tower_lsp::lsp_types::WorkspaceSymbolParams {
+            query: "alias".to_string(),
+            ..Default::default()
+        };
+        let symbols = crate::symbol::workspace_symbol(&vault, &params).unwrap_or_default();
+        let canonical =
+            vault
+                .select_referenceable_nodes(None)
+                .into_iter()
+                .find_map(|referenceable| {
+                    (referenceable.get_refname(vault.root_dir())?.full_refname == "note")
+                        .then(|| referenceable.get_path().to_path_buf())
+                });
+
+        assert!(!symbols.is_empty());
+        assert!(symbols.iter().all(|symbol| {
+            symbol.kind == tower_lsp::lsp_types::SymbolKind::FILE
+                && Some(&symbol.location.uri)
+                    == canonical
+                        .as_ref()
+                        .and_then(|path| tower_lsp::lsp_types::Url::from_file_path(path).ok())
+                        .as_ref()
+        }));
+    }
 }
