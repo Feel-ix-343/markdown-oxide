@@ -698,11 +698,19 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                // use overlaps instead of includes: a wiki-link that starts in
-                // one inline code span and ends in another (e.g. `[[` and `]]`
-                // on the same line) never fully sits inside a single code
-                // block, but it is still code and not a reference
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
+                // Discard a wiki/markdown link only when an inline code span
+                // *crosses its boundary* — the issue-#269 shape where `[[`
+                // lives in one code span and `]]` in another, or where the
+                // link is fully wrapped in a single `` `...` `` span. A span
+                // that lies wholly inside the link's own range is legitimate
+                // display text (e.g. ``[see `code` docs](doc.md)``) and must
+                // stay, which is why plain `overlaps` is too aggressive and
+                // plain `includes` (upstream's old filter) is too permissive.
+                .filter(|it| {
+                    !code_blocks
+                        .iter()
+                        .any(|codeblock| codeblock.overlaps(it) && !it.includes(codeblock))
+                })
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -3507,5 +3515,23 @@ Some content here";
                 );
             }
         }
+    }
+
+    /// A markdown link whose display text contains an inline code span is
+    /// legitimate (e.g. ``[see `code` docs](doc.md)``); the code span sits
+    /// entirely inside the link's own range, so no code-span boundary is
+    /// crossed and the backlink must still be produced. Regression guard for
+    /// the false-negative introduced when the filter switched from
+    /// `includes` to plain `overlaps`.
+    #[test]
+    fn mdfile_keeps_link_whose_display_text_contains_inline_code() {
+        let text = "See [read `code` first](doc.md) for details.";
+
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("test.md"));
+
+        assert!(parsed.references.iter().any(|reference| matches!(
+            reference,
+            MDFileLink(data) if data.reference_text == "doc"
+        )));
     }
 }
