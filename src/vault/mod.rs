@@ -617,6 +617,21 @@ pub trait Rangeable {
             && (range.end.line > position.line
                 || (range.end.line == position.line && range.end.character >= position.character))
     }
+
+    /// True when the two ranges share any interior (half-open `[start, end)`).
+    /// Adjacent ranges that only touch at an endpoint do not overlap, so a
+    /// real wiki-link next to an inline code span is preserved.
+    fn overlaps(&self, other: &impl Rangeable) -> bool {
+        let self_range = self.range();
+        let other_range = other.range();
+
+        let self_start = (self_range.start.line, self_range.start.character);
+        let self_end = (self_range.end.line, self_range.end.character);
+        let other_start = (other_range.start.line, other_range.start.character);
+        let other_end = (other_range.end.line, other_range.end.character);
+
+        self_start < other_end && other_start < self_end
+    }
 }
 
 impl Rangeable for MDHeading {
@@ -682,7 +697,17 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                // Drop a match only when a code span crosses its boundary.
+                // Full containment (`includes`) misses the issue-#269 shape
+                // where `[[` lives in one inline span and `]]` in another.
+                // Plain `overlaps` is too aggressive: a legitimate link can
+                // contain inline code in its display text (e.g.
+                // `[see `code` docs](doc.md)`), which must still parse.
+                .filter(|it| {
+                    !code_blocks
+                        .iter()
+                        .any(|codeblock| codeblock.overlaps(it) && !it.includes(codeblock))
+                })
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -3432,5 +3457,130 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    /// https://github.com/Feel-ix-343/markdown-oxide/issues/269
+    /// `WIKI_LINK_RE` matches from `[[` in one inline code span through `]]`
+    /// in another; that spanning match must not become a reference when
+    /// `references_in_codeblocks` is disabled.
+    #[test]
+    fn mdfile_does_not_parse_wiki_links_spanning_inline_code() {
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers";
+
+        // The raw regex still produces a match — that is the false positive.
+        assert!(
+            Reference::new(text, "test").any(|reference| matches!(reference, WikiFileLink(_))),
+            "precondition: wiki-link regex should match across the two inline code spans"
+        );
+
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("test.md"));
+        assert!(
+            parsed
+                .references
+                .iter()
+                .all(|reference| !matches!(reference, WikiFileLink(_))),
+            "spanning inline-code wiki-link markers must not be treated as references"
+        );
+    }
+
+    /// Same shape with content between the split markers, e.g. `` `[[a` `` … `` `b]]` ``.
+    #[test]
+    fn mdfile_does_not_parse_wiki_link_spanning_two_inline_code_spans() {
+        let text = r"one `[[a` two `b]]` three";
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("note.md"));
+        assert!(parsed.references.is_empty());
+    }
+
+    #[test]
+    fn mdfile_still_parses_wiki_links_outside_inline_code() {
+        let text = "* use the [[real link]] markers";
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("test.md"));
+
+        assert!(parsed.references.iter().any(|reference| matches!(
+            reference,
+            WikiFileLink(data) if data.reference_text == "real link"
+        )));
+    }
+
+    /// Real wiki-links next to (but not inside) inline code must still parse,
+    /// including the no-space adjacent forms `` `code`[[link]] `` and
+    /// `` [[link]]`code` ``.
+    #[test]
+    fn mdfile_parses_wiki_links_adjacent_to_inline_code() {
+        let text = r"prefix `code` [[real-link]] suffix `code2`[[other]][[last]]`tail`";
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("note.md"));
+        let names: Vec<_> = parsed
+            .references
+            .iter()
+            .map(|reference| reference.data().reference_text.clone())
+            .collect();
+
+        assert_eq!(
+            names,
+            vec![
+                "real-link".to_string(),
+                "other".to_string(),
+                "last".to_string()
+            ]
+        );
+    }
+
+    /// Fully contained matches stay filtered: a wiki-link wrapped in one
+    /// inline span, or sitting inside a fenced code block.
+    #[test]
+    fn mdfile_does_not_parse_wiki_links_inside_code() {
+        let text = "prefix `[[not-a-link]]` suffix\n\n```\n[[also-not]]\n```";
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("note.md"));
+        assert!(parsed.references.is_empty());
+    }
+
+    /// A markdown link whose display text contains an inline code span is
+    /// legitimate; the code span sits entirely inside the link range, so no
+    /// code-span boundary is crossed.
+    #[test]
+    fn mdfile_keeps_md_link_whose_display_text_contains_inline_code() {
+        let text = "See [read `code` first](doc.md) for details.";
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("test.md"));
+
+        assert!(parsed.references.iter().any(|reference| matches!(
+            reference,
+            MDFileLink(data) if data.reference_text == "doc"
+        )));
+    }
+
+    /// Wiki-link alias/display text may also contain inline code.
+    #[test]
+    fn mdfile_keeps_wiki_link_whose_display_text_contains_inline_code() {
+        let text = "See [[doc|read `code` first]] for details.";
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("test.md"));
+
+        assert!(parsed.references.iter().any(|reference| matches!(
+            reference,
+            WikiFileLink(data) if data.reference_text == "doc"
+        )));
+    }
+
+    /// When `references_in_codeblocks` is enabled, code-overlapping matches
+    /// are kept (including the original false-positive shape).
+    #[test]
+    fn mdfile_parses_code_overlapping_wiki_links_when_setting_enabled() {
+        let mut settings = test_settings();
+        settings.references_in_codeblocks = true;
+
+        let spanning = MDFile::new(
+            &settings,
+            "* DO NOT use the square bracket `[[` and `]]` markers",
+            PathBuf::from("test.md"),
+        );
+        assert!(spanning
+            .references
+            .iter()
+            .any(|reference| matches!(reference, WikiFileLink(_))));
+
+        let contained = MDFile::new(&settings, "`[[inside]]`", PathBuf::from("test.md"));
+        assert!(contained.references.iter().any(|reference| matches!(
+            reference,
+            WikiFileLink(data) if data.reference_text == "inside"
+        )));
     }
 }
