@@ -11,7 +11,7 @@ use crate::{
     config::Settings,
     daily::filename_is_formatted,
     diagnostics::path_unresolved_references,
-    vault::{Reference, Vault},
+    vault::{Reference, ReferenceData, Vault},
 };
 
 pub fn code_actions(
@@ -71,14 +71,38 @@ pub fn code_actions(
                         }))
                     }
                     Reference::WikiHeadingLink(_data, link_path, heading) => {
+                        // Construct a ref without the heading part to
+                        // check if the file already exists
+                        let reference_data = ReferenceData {
+                            reference_text: _data
+                                .reference_text
+                                .clone()
+                                .split_once('#')
+                                .expect("Heading link contains #")
+                                .0 // Take the file part
+                                .to_string(),
+                            display_text: _data.display_text.clone(),
+                            range: _data.range,
+                        };
+                        let referenceables = vault.select_referenceables_for_reference(
+                            &Reference::WikiFileLink(reference_data),
+                            path,
+                        );
 
-                        let mut new_path_buf = vault.root_dir().clone();
-                        if filename_is_formatted(settings, link_path) {
-                            new_path_buf.push(&settings.daily_notes_folder);
-                        } else {
-                            new_path_buf.push(&settings.new_file_folder_path);
-                        }
-                        new_path_buf.push(link_path);
+                        let mut new_path_buf = referenceables
+                            .first()
+                            .map(|referencable| referencable.get_path().to_path_buf())
+                            .unwrap_or({
+                                let mut new_path_buf = vault.root_dir().clone();
+                                if filename_is_formatted(settings, link_path) {
+                                    new_path_buf.push(&settings.daily_notes_folder);
+                                } else {
+                                    new_path_buf.push(&settings.new_file_folder_path);
+                                }
+                                new_path_buf.push(link_path);
+                                new_path_buf
+                            });
+
                         new_path_buf.set_extension("md");
 
                         let new_path = Url::from_file_path(&new_path_buf).ok()?;
