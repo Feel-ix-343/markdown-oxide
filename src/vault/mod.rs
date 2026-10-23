@@ -610,6 +610,20 @@ pub trait Rangeable {
                     && self_range.end.character >= other_range.end.character))
     }
 
+    fn overlaps(&self, other: &impl Rangeable) -> bool {
+        let self_range = self.range();
+        let other_range = other.range();
+
+        let self_before_other = self_range.end.line < other_range.start.line
+            || (self_range.end.line == other_range.start.line
+                && self_range.end.character <= other_range.start.character);
+        let other_before_self = other_range.end.line < self_range.start.line
+            || (other_range.end.line == self_range.start.line
+                && other_range.end.character <= self_range.start.character);
+
+        !self_before_other && !other_before_self
+    }
+
     fn includes_position(&self, position: Position) -> bool {
         let range = self.range();
         (range.start.line < position.line
@@ -682,7 +696,7 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -3432,5 +3446,36 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn test_code_block_cross_codespan_reference_ignored() {
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers\n";
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("test.md"));
+
+        assert_eq!(parsed.references, vec![]);
+
+        // Real wikilink on the same line should still be parsed
+        let text_with_real_link = "* DO NOT use `[[` and `]]`, but use [[real_target]] instead\n";
+        let parsed_with_real = MDFile::new(
+            &test_settings(),
+            text_with_real_link,
+            PathBuf::from("test.md"),
+        );
+        assert!(parsed_with_real.references.iter().any(|r| matches!(
+            r,
+            WikiFileLink(data) if data.reference_text == "real_target"
+        )));
+        assert_eq!(parsed_with_real.references.len(), 1);
+
+        // Reference adjacent to code spans should still be parsed
+        let text_adjacent = "Code `foo` and [[real_target]] and `bar`\n";
+        let parsed_adjacent =
+            MDFile::new(&test_settings(), text_adjacent, PathBuf::from("test.md"));
+        assert!(parsed_adjacent.references.iter().any(|r| matches!(
+            r,
+            WikiFileLink(data) if data.reference_text == "real_target"
+        )));
+        assert_eq!(parsed_adjacent.references.len(), 1);
     }
 }
