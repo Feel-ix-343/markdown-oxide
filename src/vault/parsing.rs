@@ -10,6 +10,22 @@ pub struct MDCodeBlock {
 }
 
 impl MDCodeBlock {
+    pub(super) fn intersects_reference(&self, reference: &impl Rangeable) -> bool {
+        let start = (self.range.start.line, self.range.start.character);
+        let end = (self.range.end.line, self.range.end.character);
+        let reference = reference.range();
+        let reference_start = (reference.start.line, reference.start.character);
+        let reference_end = (reference.end.line, reference.end.character);
+
+        let overlaps = start < reference_end && reference_start < end;
+        // Inline formatting inside a link label does not cover its delimiters.
+        // A fenced block, however, cannot be part of a valid link.
+        let inline_inside_reference = self.range.start.line == self.range.end.line
+            && reference_start < start
+            && end < reference_end;
+        overlaps && !inline_inside_reference
+    }
+
     pub fn new(text: &str) -> impl Iterator<Item = MDCodeBlock> + '_ {
         static RE: Lazy<Regex> = Lazy::new(|| {
             Regex::new(r"(^|\n)(?<fullblock>``` *(?<lang>[^\n]+)?\n(?<code>(\n|.)*?)\n```)")

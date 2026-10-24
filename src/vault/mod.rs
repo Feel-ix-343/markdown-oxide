@@ -682,7 +682,11 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|reference| {
+                    !code_blocks
+                        .iter()
+                        .any(|codeblock| codeblock.intersects_reference(reference))
+                })
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -1820,6 +1824,76 @@ mod vault_tests {
 
     fn test_settings() -> Settings {
         Settings::new(Path::new("."), &ClientCapabilities::default()).unwrap()
+    }
+
+    fn issue269_references(text: &str, in_code: bool) -> Vec<String> {
+        let mut settings = test_settings();
+        settings.references_in_codeblocks = in_code;
+        MDFile::new(&settings, text, PathBuf::from("issue269.md"))
+            .references
+            .into_iter()
+            .map(|reference| reference.reference_text.clone())
+            .collect()
+    }
+
+    #[test]
+    fn issue269_split_literal_markers_are_not_references() {
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers";
+        assert!(issue269_references(text, false).is_empty());
+    }
+
+    #[test]
+    fn issue269_partially_coded_delimiters_are_ignored() {
+        for text in [
+            "`[[` ghost]]",
+            "[[ghost `]]`",
+            "```\n[[ghost\n```\nrest]]",
+            "[[rest\n```\nghost]]\n```",
+        ] {
+            assert!(issue269_references(text, false).is_empty(), "{text:?}");
+        }
+    }
+
+    #[test]
+    fn issue269_real_links_adjacent_to_code_survive() {
+        let text = "`x`[[left]]\n[[right]]`x`\n`x`[[middle]]`y`";
+        assert_eq!(
+            issue269_references(text, false),
+            vec!["left", "right", "middle"]
+        );
+    }
+
+    #[test]
+    fn issue269_inline_display_formatting_stays_linked() {
+        let text = "[`label`](target)\n[[target|`alias`]]";
+        assert_eq!(issue269_references(text, false), vec!["target", "target"]);
+    }
+
+    #[test]
+    fn issue269_opt_in_code_references_are_unchanged() {
+        let text = "`[[` and `]]`\n`[[inline]]`\n```\n[[fenced]]\n```";
+        assert_eq!(
+            issue269_references(text, true),
+            vec!["` and `", "inline", "fenced"]
+        );
+    }
+
+    #[test]
+    fn issue269_whole_code_references_stay_disabled() {
+        let text = "`[[inline]]`\n```\n[[fenced]]\n```";
+        assert!(issue269_references(text, false).is_empty());
+    }
+
+    #[test]
+    fn issue269_multiline_reference_crossing_fence_is_not_a_link() {
+        let text = "[[before\n```\ncode\n```\nafter]]";
+        assert!(issue269_references(text, false).is_empty());
+    }
+
+    #[test]
+    fn issue269_unicode_prefix_does_not_hide_neighbouring_links() {
+        let text = "😀 `[[` and `]]` [[Visible]]";
+        assert_eq!(issue269_references(text, false), vec!["Visible"]);
     }
 
     #[test]
