@@ -1844,7 +1844,10 @@ mod vault_tests {
             ..Default::default()
         };
         assert_eq!(refname.link_file_key().as_deref(), Some("note.v1"));
-        assert!(super::matches_path_or_file("issue274/note.v1", Some(refname)));
+        assert!(super::matches_path_or_file(
+            "issue274/note.v1",
+            Some(refname)
+        ));
     }
 
     #[test]
@@ -1878,7 +1881,10 @@ mod vault_tests {
             1,
             "Existing file, heading and block links must resolve"
         );
-        assert_eq!(unresolved[0].1.data().reference_text, "missing-note-control");
+        assert_eq!(
+            unresolved[0].1.data().reference_text,
+            "missing-note-control"
+        );
     }
 
     #[cfg(windows)]
