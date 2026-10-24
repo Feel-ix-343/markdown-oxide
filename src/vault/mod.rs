@@ -1853,7 +1853,7 @@ mod vault_tests {
         let root = PathBuf::from("vault");
         let source = root.join("source.md");
         let target = root.join("issue274").join("note.v1.md");
-        let source_text = "[[issue274/note.v1]]\n[[issue274/note.v1#Nested heading]]\n[[issue274/note.v1#^nested-block]]\n[Markdown](issue274/note.v1.md)\n[[note.v1]]\n[[missing-note-control]]\n";
+        let source_text = "[[issue274/note.v1]]\n[[issue274/note.v1#Nested heading]]\n[[issue274/note.v1#^nestedblock]]\n[Markdown](issue274/note.v1.md)\n[[note.v1]]\n[[missing-note-control]]\n";
         let mut files = HashMap::new();
         files.insert(
             source.clone(),
@@ -1863,7 +1863,7 @@ mod vault_tests {
             target.clone(),
             MDFile::new(
                 &settings,
-                "# Nested heading\n\nNested block content ^nested-block\n",
+                "# Nested heading\n\nNested block content ^nestedblock\n",
                 target,
             ),
         );
