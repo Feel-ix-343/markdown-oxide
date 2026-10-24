@@ -7,7 +7,7 @@ use std::{
     hash::Hash,
     iter,
     ops::{Deref, DerefMut, Not, Range},
-    path::{Path, PathBuf, MAIN_SEPARATOR},
+    path::{Path, PathBuf},
     time::SystemTime,
 };
 
@@ -1560,7 +1560,12 @@ pub enum Referenceable<'a> {
 
 /// Utility function
 pub fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
-    diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(String::from))
+    let relative = diff_paths(path, root_dir)?.with_extension("");
+    let components = relative
+        .components()
+        .map(|component| component.as_os_str().to_str())
+        .collect::<Option<Vec<_>>>()?;
+    Some(components.join("/"))
 }
 
 /// Converts heading text to its slug form for use in links.
@@ -1581,7 +1586,7 @@ impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
         let path = &self.path.clone()?;
 
-        let last = path.split(MAIN_SEPARATOR).next_back()?;
+        let last = path.rsplit('/').next()?;
 
         Some(last.to_string())
     }
@@ -1776,6 +1781,11 @@ impl Referenceable<'_> {
 }
 
 fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
+    // Backslashes are separators on Windows, but may be literal filename
+    // characters on Unix. Decode escaped spaces before normalizing them.
+    #[cfg(windows)]
+    let file_ref_text = file_ref_text.replace(r"\ ", " ").replace('\\', "/");
+
     (|| {
         let refname = refname?;
         let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
@@ -1820,6 +1830,83 @@ mod vault_tests {
 
     fn test_settings() -> Settings {
         Settings::new(Path::new("."), &ClientCapabilities::default()).unwrap()
+    }
+
+    #[test]
+    fn issue274_native_subfolder_paths_use_portable_refnames() {
+        let root = PathBuf::from("vault");
+        let target = root.join("issue274").join("note.v1.md");
+        let path = super::get_obsidian_ref_path(&root, &target).unwrap();
+        assert_eq!(path, "issue274/note.v1");
+        let refname = Refname {
+            full_refname: path.clone(),
+            path: Some(path),
+            ..Default::default()
+        };
+        assert_eq!(refname.link_file_key().as_deref(), Some("note.v1"));
+        assert!(super::matches_path_or_file("issue274/note.v1", Some(refname)));
+    }
+
+    #[test]
+    fn issue274_nested_links_resolve_and_only_missing_target_is_diagnostic() {
+        let settings = test_settings();
+        let root = PathBuf::from("vault");
+        let source = root.join("source.md");
+        let target = root.join("issue274").join("note.v1.md");
+        let source_text = "[[issue274/note.v1]]\n[[issue274/note.v1#Nested heading]]\n[[issue274/note.v1#^nested-block]]\n[Markdown](issue274/note.v1.md)\n[[note.v1]]\n[[missing-note-control]]\n";
+        let mut files = HashMap::new();
+        files.insert(
+            source.clone(),
+            MDFile::new(&settings, source_text, source.clone()),
+        );
+        files.insert(
+            target.clone(),
+            MDFile::new(
+                &settings,
+                "# Nested heading\n\nNested block content ^nested-block\n",
+                target,
+            ),
+        );
+        let vault = Vault {
+            md_files: files.into(),
+            ropes: HashMap::new().into(),
+            root_dir: root,
+        };
+        let unresolved = crate::diagnostics::path_unresolved_references(&vault, &source).unwrap();
+        assert_eq!(
+            unresolved.len(),
+            1,
+            "Existing file, heading and block links must resolve"
+        );
+        assert_eq!(unresolved[0].1.data().reference_text, "missing-note-control");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn issue274_windows_backslash_links_match_portable_refnames() {
+        let refname = Refname {
+            path: Some("issue274/note with space.v1".into()),
+            ..Default::default()
+        };
+        assert!(super::matches_path_or_file(
+            r"issue274\note\ with\ space.v1",
+            Some(refname)
+        ));
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn issue274_unix_literal_backslashes_are_preserved() {
+        let root = PathBuf::from("vault");
+        let target = root.join("issue274").join(r"note\literal.v1.md");
+        let path = super::get_obsidian_ref_path(&root, &target).unwrap();
+        assert_eq!(path, r"issue274/note\literal.v1");
+        let refname = Refname {
+            path: Some(path.clone()),
+            ..Default::default()
+        };
+        assert_eq!(refname.link_file_key().as_deref(), Some(r"note\literal.v1"));
+        assert!(super::matches_path_or_file(&path, Some(refname)));
     }
 
     #[test]
