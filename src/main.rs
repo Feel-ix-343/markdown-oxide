@@ -115,6 +115,9 @@ impl Backend {
                 .await;
             return;
         };
+        if path.file_stem().is_none() {
+            return;
+        }
 
         let Ok(settings) = self.bind_settings(|settings| Ok(settings.clone())).await else {
             return;
@@ -584,6 +587,15 @@ impl LanguageServer for Backend {
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
+        if params
+            .text_document
+            .uri
+            .to_file_path()
+            .map(|p| p.file_stem().is_none())
+            .unwrap_or(true)
+        {
+            return;
+        }
         {
             let _new_files = self
                 .bind_opened_files_mut(|files| {
