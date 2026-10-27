@@ -47,8 +47,11 @@ pub fn code_actions(
                         } else {
                             new_path_buf.push(&settings.new_file_folder_path);
                         }
-                        new_path_buf.push(filename);
-                        new_path_buf.set_extension("md");
+                        if filename.ends_with(".md") {
+                            new_path_buf.push(filename);
+                        } else {
+                            new_path_buf.push(format!("{filename}.md"));
+                        }
 
                         let new_path = Url::from_file_path(&new_path_buf).ok()?;
 
@@ -78,8 +81,11 @@ pub fn code_actions(
                         } else {
                             new_path_buf.push(&settings.new_file_folder_path);
                         }
-                        new_path_buf.push(link_path);
-                        new_path_buf.set_extension("md");
+                        if link_path.ends_with(".md") {
+                            new_path_buf.push(link_path);
+                        } else {
+                            new_path_buf.push(format!("{link_path}.md"));
+                        }
 
                         let new_path = Url::from_file_path(&new_path_buf).ok()?;
 
@@ -146,4 +152,136 @@ pub fn code_actions(
             })
             .collect(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use tower_lsp::lsp_types::{
+        CodeActionContext, PartialResultParams, TextDocumentIdentifier, WorkDoneProgressParams,
+    };
+
+    #[test]
+    fn code_action_create_file_preserves_dots_in_note_name() {
+        let temp_dir = std::env::temp_dir().join("moxide_test_codeactions_dots");
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let settings = Settings::new(&temp_dir, &Default::default()).unwrap();
+        let mut vault = Vault::construct_vault(&settings, &temp_dir).unwrap();
+
+        let source_path = temp_dir.join("index.md");
+        Vault::update_vault(
+            &settings,
+            &mut vault,
+            (&source_path, "[[TECH.51.04-Proxmox backups]]"),
+        );
+
+        let params = CodeActionParams {
+            text_document: TextDocumentIdentifier {
+                uri: Url::from_file_path(&source_path).unwrap(),
+            },
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 2,
+                },
+                end: Position {
+                    line: 0,
+                    character: 2,
+                },
+            },
+            context: CodeActionContext::default(),
+            work_done_progress_params: WorkDoneProgressParams::default(),
+            partial_result_params: PartialResultParams::default(),
+        };
+
+        let actions = code_actions(&vault, &params, &source_path, &settings).unwrap();
+        assert_eq!(actions.len(), 1);
+        match &actions[0] {
+            CodeActionOrCommand::CodeAction(action) => {
+                assert_eq!(
+                    action.title,
+                    format!(
+                        "Create File: {:?}",
+                        PathBuf::from("TECH.51.04-Proxmox backups.md")
+                    )
+                );
+                let Some(DocumentChanges::Operations(ops)) = action
+                    .edit
+                    .as_ref()
+                    .and_then(|e| e.document_changes.as_ref())
+                else {
+                    panic!("expected DocumentChanges::Operations");
+                };
+                let DocumentChangeOperation::Op(ResourceOp::Create(create_file)) = &ops[0] else {
+                    panic!("expected CreateFile operation");
+                };
+                assert_eq!(
+                    create_file.uri.to_file_path().unwrap(),
+                    temp_dir.join("TECH.51.04-Proxmox backups.md")
+                );
+            }
+            _ => panic!("expected CodeAction"),
+        }
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn code_action_append_heading_preserves_dots_in_note_name() {
+        let temp_dir = std::env::temp_dir().join("moxide_test_codeactions_heading_dots");
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let settings = Settings::new(&temp_dir, &Default::default()).unwrap();
+        let mut vault = Vault::construct_vault(&settings, &temp_dir).unwrap();
+
+        let source_path = temp_dir.join("index.md");
+        Vault::update_vault(
+            &settings,
+            &mut vault,
+            (&source_path, "[[TECH.51.04-Proxmox backups#Setup]]"),
+        );
+
+        let params = CodeActionParams {
+            text_document: TextDocumentIdentifier {
+                uri: Url::from_file_path(&source_path).unwrap(),
+            },
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 2,
+                },
+                end: Position {
+                    line: 0,
+                    character: 2,
+                },
+            },
+            context: CodeActionContext::default(),
+            work_done_progress_params: WorkDoneProgressParams::default(),
+            partial_result_params: PartialResultParams::default(),
+        };
+
+        let actions = code_actions(&vault, &params, &source_path, &settings).unwrap();
+        assert_eq!(actions.len(), 1);
+        match &actions[0] {
+            CodeActionOrCommand::CodeAction(action) => {
+                let Some(DocumentChanges::Operations(ops)) = action
+                    .edit
+                    .as_ref()
+                    .and_then(|e| e.document_changes.as_ref())
+                else {
+                    panic!("expected DocumentChanges::Operations");
+                };
+                let DocumentChangeOperation::Op(ResourceOp::Create(create_file)) = &ops[0] else {
+                    panic!("expected CreateFile operation");
+                };
+                assert_eq!(
+                    create_file.uri.to_file_path().unwrap(),
+                    temp_dir.join("TECH.51.04-Proxmox backups.md")
+                );
+            }
+            _ => panic!("expected CodeAction"),
+        }
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
 }
