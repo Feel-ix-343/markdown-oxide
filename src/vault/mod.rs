@@ -513,10 +513,11 @@ impl Vault {
             Referenceable::Footnote(_, _) | Referenceable::LinkRefDef(..) => {
                 let range = referenceable.get_range()?;
                 Some(
-                    String::from_iter(
-                        self.select_line(referenceable.get_path(), range.start.line as isize)?,
-                    )
-                    .into(),
+                    (range.start.line..=range.end.line)
+                        .filter_map(|ln| self.select_line(referenceable.get_path(), ln as isize))
+                        .map(String::from_iter)
+                        .join("")
+                        .into(),
                 )
             }
             Referenceable::Heading(_, _) => {
@@ -1513,8 +1514,10 @@ pub struct MDLinkReferenceDefinition {
 
 impl MDLinkReferenceDefinition {
     fn new(text: &str) -> impl Iterator<Item = MDLinkReferenceDefinition> + '_ {
-        static REGEX: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"\[(?<index>[^\^][^ \[\]]+)\]\:(?<text>.+)").unwrap());
+        static REGEX: Lazy<Regex> = Lazy::new(|| {
+            Regex::new(r"\[(?<index>[^\^][^ \[\]]+)\]\:(?:[ \t]*\r?\n)?[ \t]*(?<text>\S[^\r\n]*)")
+                .unwrap()
+        });
 
         let result = REGEX
             .captures_iter(text)
@@ -3432,5 +3435,51 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn parse_line_wrapped_link_ref_def() {
+        let text = "Here is [some text][ref].\n\n[ref]:\n  https://example.com/very/long/url/that/causes/wrapping\n\n[empty]:\n\nNot a url";
+
+        let parsed_defs = MDLinkReferenceDefinition::new(text).collect_vec();
+        assert_eq!(
+            parsed_defs,
+            vec![MDLinkReferenceDefinition {
+                link_ref_name: "ref".into(),
+                url: "https://example.com/very/long/url/that/causes/wrapping".into(),
+                title: None,
+                range: Range {
+                    start: Position {
+                        line: 2,
+                        character: 0,
+                    },
+                    end: Position {
+                        line: 3,
+                        character: 56,
+                    },
+                }
+                .into(),
+            }]
+        );
+
+        let parsed_refs = Reference::new(text, "test.md").collect_vec();
+        assert_eq!(
+            parsed_refs,
+            vec![Reference::LinkRef(ReferenceData {
+                reference_text: "ref".into(),
+                range: Range {
+                    start: Position {
+                        line: 0,
+                        character: 19,
+                    },
+                    end: Position {
+                        line: 0,
+                        character: 24,
+                    },
+                }
+                .into(),
+                ..ReferenceData::default()
+            })]
+        );
     }
 }
