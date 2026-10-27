@@ -247,8 +247,8 @@ impl<'a> Completer<'a> for MarkdownLinkCompleter<'a> {
         let file_name = context
             .path
             .file_stem()
-            .expect("File name is not valid")
-            .to_string_lossy();
+            .map(|s| s.to_string_lossy())
+            .unwrap_or_default();
         let reference_under_cursor = Reference::new(&line_string, &file_name).find(|reference| {
             reference.range.start.character <= character as u32
                 && reference.range.end.character >= character as u32

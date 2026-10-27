@@ -88,6 +88,9 @@ impl Vault {
     }
 
     pub fn update_vault(context: &Settings, old: &mut Vault, new_file: (&PathBuf, &str)) {
+        if new_file.0.file_stem().is_none() {
+            return;
+        }
         let new_md_file = MDFile::new(context, new_file.1, new_file.0.clone());
         let new = old.md_files.get_mut(new_file.0);
         match new {
@@ -674,8 +677,7 @@ impl MDFile {
         let code_blocks = MDCodeBlock::new(text).collect_vec();
         let file_name = path
             .file_stem()
-            .expect("file should have file stem")
-            .to_str()
+            .and_then(|s| s.to_str())
             .unwrap_or_default();
         let links = match context {
             Settings {
@@ -3432,5 +3434,25 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn md_file_new_and_update_vault_do_not_panic_on_path_without_file_stem() {
+        let empty_uri = tower_lsp::lsp_types::Url::parse("file://").unwrap();
+        let path = empty_uri.to_file_path().unwrap();
+        assert_eq!(path.file_stem(), None);
+
+        let parsed = MDFile::new(&test_settings(), "# Heading\n[[note]]", path.clone());
+        assert_eq!(parsed.file_name(), None);
+        assert_eq!(parsed.headings.len(), 1);
+
+        let mut vault = Vault {
+            md_files: HashMap::new().into(),
+            ropes: HashMap::new().into(),
+            root_dir: PathBuf::from("."),
+        };
+        Vault::update_vault(&test_settings(), &mut vault, (&path, "# Heading\n[[note]]"));
+        assert!(!vault.md_files.contains_key(&path));
+        assert!(!vault.ropes.contains_key(&path));
     }
 }
