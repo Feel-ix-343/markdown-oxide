@@ -67,7 +67,12 @@ fn parse_relative_directive(input: &str) -> Option<i64> {
 
 fn date_to_path(date: NaiveDate, dailynote_format: &str, daily_notes_folder: &Path) -> PathBuf {
     let filename = date.format(dailynote_format).to_string();
-    daily_notes_folder.join(filename).with_extension("md")
+    let filename_with_ext = if filename.ends_with(".md") {
+        filename
+    } else {
+        format!("{filename}.md")
+    };
+    daily_notes_folder.join(filename_with_ext)
 }
 
 fn resolve_date(date_str: &str) -> Result<NaiveDate> {
@@ -185,5 +190,8 @@ mod tests {
         let date = NaiveDate::from_ymd_opt(2024, 11, 25).unwrap();
         let path = date_to_path(date, "%Y-%m-%d", Path::new("/notes"));
         assert_eq!(path, PathBuf::from("/notes/2024-11-25.md"));
+
+        let dotted_path = date_to_path(date, "%Y.%m.%d", Path::new("/notes"));
+        assert_eq!(dotted_path, PathBuf::from("/notes/2024.11.25.md"));
     }
 }

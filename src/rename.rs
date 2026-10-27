@@ -38,7 +38,12 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                 (Some(change_op), name.to_string())
             }
             Referenceable::File(path, _file) => {
-                let new_path = path.with_file_name(&params.new_name).with_extension("md");
+                let new_file_name = if params.new_name.ends_with(".md") {
+                    params.new_name.clone()
+                } else {
+                    format!("{}.md", params.new_name)
+                };
+                let new_path = path.with_file_name(new_file_name);
 
                 let change_op = DocumentChangeOperation::Op(ResourceOp::Rename(RenameFile {
                     old_uri: Url::from_file_path(path).ok()?,
@@ -258,4 +263,60 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
         )),
         ..Default::default()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Settings;
+    use tower_lsp::lsp_types::{
+        Position, TextDocumentIdentifier, TextDocumentPositionParams, WorkDoneProgressParams,
+    };
+
+    #[test]
+    fn rename_file_preserves_dots_in_new_note_name() {
+        let temp_dir = std::env::temp_dir().join("moxide_test_rename_dots");
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let settings = Settings::new(&temp_dir, &Default::default()).unwrap();
+        let mut vault = Vault::construct_vault(&settings, &temp_dir).unwrap();
+
+        let target_path = temp_dir.join("TECH.51.03-Old.md");
+        let index_path = temp_dir.join("index.md");
+        Vault::update_vault(&settings, &mut vault, (&target_path, "# Old Note"));
+        Vault::update_vault(&settings, &mut vault, (&index_path, "[[TECH.51.03-Old]]"));
+
+        let params = RenameParams {
+            text_document_position: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier {
+                    uri: Url::from_file_path(&index_path).unwrap(),
+                },
+                position: Position {
+                    line: 0,
+                    character: 3,
+                },
+            },
+            new_name: "TECH.51.04-Proxmox backups".to_string(),
+            work_done_progress_params: WorkDoneProgressParams::default(),
+        };
+
+        let edit = rename(&vault, &params, &index_path).unwrap();
+        let Some(DocumentChanges::Operations(ops)) = edit.document_changes else {
+            panic!("expected DocumentChanges::Operations");
+        };
+
+        let rename_op = ops
+            .iter()
+            .find_map(|op| match op {
+                DocumentChangeOperation::Op(ResourceOp::Rename(r)) => Some(r),
+                _ => None,
+            })
+            .expect("expected RenameFile operation");
+
+        assert_eq!(
+            rename_op.new_uri.to_file_path().unwrap(),
+            temp_dir.join("TECH.51.04-Proxmox backups.md")
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
 }

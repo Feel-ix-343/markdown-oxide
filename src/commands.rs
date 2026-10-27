@@ -15,16 +15,26 @@ fn datetime_to_file(
     root_dir: &Path,
 ) -> Option<Url> {
     let filename = datetime.format(dailynote_format).to_string();
-    let path = root_dir.join(&filename);
+    let filename_with_ext = if filename.ends_with(".md") {
+        filename
+    } else {
+        format!("{filename}.md")
+    };
+    let path = root_dir.join(filename_with_ext);
 
-    Url::from_file_path(path.with_extension("md")).ok()
+    Url::from_file_path(path).ok()
 }
 
 fn date_to_file(date: NaiveDate, dailynote_format: &str, root_dir: &Path) -> Option<Url> {
     let filename = date.format(dailynote_format).to_string();
-    let path = root_dir.join(&filename);
+    let filename_with_ext = if filename.ends_with(".md") {
+        filename
+    } else {
+        format!("{filename}.md")
+    };
+    let path = root_dir.join(filename_with_ext);
 
-    Url::from_file_path(path.with_extension("md")).ok()
+    Url::from_file_path(path).ok()
 }
 
 fn extract_date_from_filename(filename: &str, dailynote_format: &str) -> Option<NaiveDate> {
@@ -188,5 +198,13 @@ mod tests {
 
         let date = extract_date_from_filename("2024-13-01.md", "%Y-%m-%d");
         assert_eq!(date, None);
+    }
+
+    #[test]
+    fn test_date_to_file_preserves_dots_in_format() {
+        let root_dir = std::env::temp_dir();
+        let date = NaiveDate::from_ymd_opt(2024, 11, 9).unwrap();
+        let url = super::date_to_file(date, "%Y.%m.%d", &root_dir).unwrap();
+        assert_eq!(url.to_file_path().unwrap(), root_dir.join("2024.11.09.md"));
     }
 }
