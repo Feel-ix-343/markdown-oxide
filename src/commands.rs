@@ -27,9 +27,9 @@ fn date_to_file(date: NaiveDate, dailynote_format: &str, root_dir: &Path) -> Opt
     Url::from_file_path(path.with_extension("md")).ok()
 }
 
+#[allow(dead_code)]
 fn extract_date_from_filename(filename: &str, dailynote_format: &str) -> Option<NaiveDate> {
-    let filename = filename.strip_suffix(".md").unwrap_or(filename);
-    NaiveDate::parse_from_str(filename, dailynote_format).ok()
+    crate::daily::parse_daily_note_date_from_format(filename, dailynote_format)
 }
 
 fn parse_relative_directive(input: &str) -> Option<i64> {
@@ -188,5 +188,16 @@ mod tests {
 
         let date = extract_date_from_filename("2024-13-01.md", "%Y-%m-%d");
         assert_eq!(date, None);
+    }
+    #[test]
+    fn test_extract_date_from_filename_with_folders() {
+        let date = extract_date_from_filename("2026-10-26.md", "%Y/%m/%Y-%m-%d");
+        assert_eq!(date, Some(NaiveDate::from_ymd_opt(2026, 10, 26).unwrap()));
+
+        let date_bare = extract_date_from_filename("2026-10-26", "%Y/%m/%Y-%m-%d");
+        assert_eq!(date_bare, Some(NaiveDate::from_ymd_opt(2026, 10, 26).unwrap()));
+
+        let date_full = extract_date_from_filename("2026/10/2026-10-26.md", "%Y/%m/%Y-%m-%d");
+        assert_eq!(date_full, Some(NaiveDate::from_ymd_opt(2026, 10, 26).unwrap()));
     }
 }
