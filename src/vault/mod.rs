@@ -866,7 +866,7 @@ impl Reference {
 
     pub fn new<'a>(text: &'a str, file_name: &'a str) -> impl Iterator<Item = Reference> + 'a {
         static WIKI_LINK_RE: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r"\[\[(?<filepath>[^\[\]\|\#]+?)?(?<ending>\.md)?(\#(?<infileref>[^\[\]\|]+))?(\|(?<display>[^\[\]\|]+))?\]\]")
+            Regex::new(r"\[\[(?<filepath>[^\[\]\|\#`\n]+?)?(?<ending>\.md)?(\#(?<infileref>[^\[\]\|`\n]+))?(\|(?<display>[^\[\]\|`\n]+))?\]\]")
 
                 .unwrap()
         }); // A [[link]] that does not have any [ or ] in it
@@ -3432,5 +3432,32 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn test_issue_269_square_bracket_code_reference() {
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers";
+        let parsed = Reference::new(text, "test.md").collect_vec();
+        assert_eq!(parsed, vec![]);
+
+        let path = PathBuf::from("test.md");
+        let settings = test_settings();
+        let md_file = MDFile::new(&settings, text, path);
+        assert_eq!(md_file.references, vec![]);
+
+        // Multiple code blocks should also not produce false references
+        let multi_text = "* DO NOT use `[[` and `]]` or `[[` and `]]` in text";
+        let multi_parsed = Reference::new(multi_text, "test.md").collect_vec();
+        assert_eq!(multi_parsed, vec![]);
+
+        // Multi-line [[...]] should not be treated as a wikilink
+        let multiline_text = "[[invalid\nlink]]";
+        let multiline_parsed = Reference::new(multiline_text, "test.md").collect_vec();
+        assert_eq!(multiline_parsed, vec![]);
+
+        // Valid wikilinks should still parse properly
+        let valid_text = "This is a [[valid link]] and [[valid link#heading|display]]";
+        let valid_parsed = Reference::new(valid_text, "test.md").collect_vec();
+        assert_eq!(valid_parsed.len(), 2);
     }
 }
