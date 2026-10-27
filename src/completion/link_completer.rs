@@ -895,9 +895,7 @@ impl MDDailyNote<'_> {
     }
 
     pub fn get_self_date<'a>(&self, completer: &impl LinkCompleter<'a>) -> Option<NaiveDate> {
-        let dailynote_format = &completer.settings().dailynote;
-
-        chrono::NaiveDate::parse_from_str(&self.ref_name, dailynote_format).ok()
+        crate::daily::parse_daily_note_date(completer.settings(), &self.ref_name)
     }
 
     fn relative_date_string(date: NaiveDate) -> Option<String> {
@@ -924,12 +922,11 @@ impl MDDailyNote<'_> {
         let (filerefname, filter_refname) = (match referenceable {
             Referenceable::File(&ref path, _) | Referenceable::UnresovledFile(ref path, _) => {
                 let filename = path.file_name();
-                let dailynote_format = &completer.settings().dailynote;
                 let (date, filename) = filename.and_then(|filename| {
                     let filename = filename.to_str()?;
                     let filename = filename.replace(".md", "");
                     Some((
-                        chrono::NaiveDate::parse_from_str(&filename, dailynote_format).ok(),
+                        crate::daily::parse_daily_note_date(completer.settings(), &filename),
                         filename,
                     ))
                 })?;
@@ -951,7 +948,7 @@ impl MDDailyNote<'_> {
         date: NaiveDate,
         completer: &impl LinkCompleter<'a>,
     ) -> Option<MDDailyNote<'a>> {
-        let filerefname = date.format(&completer.settings().dailynote).to_string();
+        let filerefname = crate::daily::daily_note_ref_name(completer.settings(), date);
         let match_string = format!("{}: {}", Self::relative_date_string(date)?, filerefname);
 
         // path on unresolved file is useless
@@ -969,9 +966,15 @@ impl MDDailyNote<'_> {
         }
 
         let mut path = completer.vault().root_dir().to_path_buf();
-        path.push(format!("{}.md", self.ref_name));
+        if let Some(date) = self.get_self_date(completer) {
+            path.push(&completer.settings().daily_notes_folder);
+            path.push(crate::daily::daily_note_relative_path(completer.settings(), date));
+        } else {
+            path.push(&self.ref_name);
+        }
+        path.set_extension("md");
 
-        let unresolved_file = Referenceable::UnresovledFile(path.to_path_buf(), &self.ref_name);
+        let unresolved_file = Referenceable::UnresovledFile(path, &self.ref_name);
 
         unresolved_file
     }

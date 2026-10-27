@@ -9,7 +9,7 @@ use tower_lsp::lsp_types::{
 
 use crate::{
     config::Settings,
-    daily::filename_is_formatted,
+    daily::{daily_note_relative_path, parse_daily_note_date},
     diagnostics::path_unresolved_references,
     vault::{Reference, Vault},
 };
@@ -42,12 +42,14 @@ pub fn code_actions(
                         let filename = &reference.data().reference_text;
 
                         let mut new_path_buf = vault.root_dir().clone();
-                        if filename_is_formatted(settings, filename) {
+                        if let Some(date) = parse_daily_note_date(settings, filename) {
                             new_path_buf.push(&settings.daily_notes_folder);
+                            let formatted_path = daily_note_relative_path(settings, date);
+                            new_path_buf.push(formatted_path);
                         } else {
                             new_path_buf.push(&settings.new_file_folder_path);
+                            new_path_buf.push(filename);
                         }
-                        new_path_buf.push(filename);
                         new_path_buf.set_extension("md");
 
                         let new_path = Url::from_file_path(&new_path_buf).ok()?;
@@ -73,12 +75,14 @@ pub fn code_actions(
                     Reference::WikiHeadingLink(_data, link_path, heading) => {
 
                         let mut new_path_buf = vault.root_dir().clone();
-                        if filename_is_formatted(settings, link_path) {
+                        if let Some(date) = parse_daily_note_date(settings, link_path) {
                             new_path_buf.push(&settings.daily_notes_folder);
+                            let formatted_path = daily_note_relative_path(settings, date);
+                            new_path_buf.push(formatted_path);
                         } else {
                             new_path_buf.push(&settings.new_file_folder_path);
+                            new_path_buf.push(link_path);
                         }
-                        new_path_buf.push(link_path);
                         new_path_buf.set_extension("md");
 
                         let new_path = Url::from_file_path(&new_path_buf).ok()?;
