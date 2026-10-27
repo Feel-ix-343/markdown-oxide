@@ -21,10 +21,14 @@ use serde::{Deserialize, Serialize};
 use tower_lsp::lsp_types::{Location, Position, SymbolInformation, SymbolKind, Url};
 use walkdir::WalkDir;
 
-const MAX_INDEXED_LINES: usize = 10_000;
+#[allow(dead_code)]
+pub const MAX_INDEXED_LINES: usize = 10_000;
 
-fn indexed_text(text: &str) -> &str {
-    match text.match_indices('\n').nth(MAX_INDEXED_LINES - 1) {
+fn indexed_text(text: &str, max_lines: usize) -> &str {
+    if max_lines == 0 {
+        return text;
+    }
+    match text.match_indices('\n').nth(max_lines - 1) {
         Some((idx, _)) => &text[..idx + 1],
         None => text,
     }
@@ -670,7 +674,7 @@ pub struct MDFile {
 
 impl MDFile {
     fn new(context: &Settings, text: &str, path: PathBuf) -> MDFile {
-        let text = indexed_text(text);
+        let text = indexed_text(text, context.max_indexed_lines);
         let code_blocks = MDCodeBlock::new(text).collect_vec();
         let file_name = path
             .file_stem()
@@ -3432,5 +3436,22 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+    #[test]
+    fn mdfile_configurable_indexing_cap() {
+        let mut settings = test_settings();
+        settings.max_indexed_lines = 5;
+
+        let text = "line 1\nline 2\nline 3\nline 4\n[[line 5]]\n[[line 6]]\n";
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md"));
+
+        assert!(parsed.references.iter().any(|r| matches!(r, WikiFileLink(d) if d.reference_text == "line 5")));
+        assert!(!parsed.references.iter().any(|r| matches!(r, WikiFileLink(d) if d.reference_text == "line 6")));
+
+        // Test with max_indexed_lines = 0 (unlimited)
+        settings.max_indexed_lines = 0;
+        let parsed_unlimited = MDFile::new(&settings, text, PathBuf::from("test.md"));
+        assert!(parsed_unlimited.references.iter().any(|r| matches!(r, WikiFileLink(d) if d.reference_text == "line 5")));
+        assert!(parsed_unlimited.references.iter().any(|r| matches!(r, WikiFileLink(d) if d.reference_text == "line 6")));
     }
 }
