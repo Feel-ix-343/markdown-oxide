@@ -47,6 +47,35 @@ fn get_editor() -> String {
         })
 }
 
+pub fn parse_editor_command(editor: &str) -> Result<(String, Vec<String>)> {
+    let parts = shlex::split(editor)
+        .filter(|p| !p.is_empty())
+        .ok_or_else(|| anyhow!("Invalid editor command: '{}'", editor))?;
+
+    let (program, args) = parts
+        .split_first()
+        .ok_or_else(|| anyhow!("Editor command is empty"))?;
+
+    Ok((program.to_string(), args.to_vec()))
+}
+
+fn open_in_editor(path: &Path) -> Result<()> {
+    let editor = get_editor();
+    let (program, args) = parse_editor_command(&editor)?;
+
+    let status = Command::new(&program)
+        .args(&args)
+        .arg(path)
+        .status()
+        .map_err(|e| anyhow!("Failed to launch editor '{}': {}", editor, e))?;
+
+    if !status.success() {
+        return Err(anyhow!("Editor '{}' exited with error", editor));
+    }
+
+    Ok(())
+}
+
 fn parse_relative_directive(input: &str) -> Option<i64> {
     let trimmed = input.trim();
 
@@ -109,14 +138,7 @@ pub fn run_daily(date_args: Vec<String>, root_dir: &Path) -> Result<()> {
         File::create(&path)?;
     }
 
-    let editor = get_editor();
-    let status = Command::new(&editor).arg(&path).status()?;
-
-    if !status.success() {
-        return Err(anyhow!("Editor '{}' exited with error", editor));
-    }
-
-    Ok(())
+    open_in_editor(&path)
 }
 
 pub fn run_config(root_dir: &Path) -> Result<()> {
@@ -136,20 +158,39 @@ pub fn run_config(root_dir: &Path) -> Result<()> {
         global_config_path
     };
 
-    let editor = get_editor();
-    let status = Command::new(&editor).arg(&config_path).status()?;
-
-    if !status.success() {
-        return Err(anyhow!("Editor '{}' exited with error", editor));
-    }
-
-    Ok(())
+    open_in_editor(&config_path)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use chrono::NaiveDate;
+
+    #[test]
+    fn test_parse_editor_command() {
+        // Standard editor without arguments
+        let (prog, args) = parse_editor_command("nano").unwrap();
+        assert_eq!(prog, "nano");
+        assert!(args.is_empty());
+
+        // Editor with arguments (e.g. zed -w or code --wait)
+        let (prog, args) = parse_editor_command("zed -w").unwrap();
+        assert_eq!(prog, "zed");
+        assert_eq!(args, vec!["-w"]);
+
+        let (prog, args) = parse_editor_command("code --wait --new-window").unwrap();
+        assert_eq!(prog, "code");
+        assert_eq!(args, vec!["--wait", "--new-window"]);
+
+        // Editor with quotes and path
+        let (prog, args) = parse_editor_command("'/Applications/Zed.app/Contents/MacOS/zed' -w").unwrap();
+        assert_eq!(prog, "/Applications/Zed.app/Contents/MacOS/zed");
+        assert_eq!(args, vec!["-w"]);
+
+        // Empty editor command
+        assert!(parse_editor_command("").is_err());
+        assert!(parse_editor_command("   ").is_err());
+    }
 
     #[test]
     fn test_parse_relative_directive() {

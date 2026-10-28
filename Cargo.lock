@@ -931,6 +931,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "shellexpand",
+ "shlex",
  "tokio",
  "tower-lsp",
  "urlencoding",
