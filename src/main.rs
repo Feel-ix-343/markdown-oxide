@@ -456,6 +456,7 @@ impl LanguageServer for Backend {
                     commands: vec![
                         "apply_edits".into(),
                         "jump".into(),
+                        "moxide.open_file".into(),
                         "moxide.findReferences".into(),
                         "tomorrow".into(),
                         "today".into(),
@@ -725,6 +726,27 @@ impl LanguageServer for Backend {
                     .bind_vault(|vault| Ok(vault.root_dir().to_owned()))
                     .await?;
                 commands::jump(&self.client, &root_dir, &settings, jump_to).await
+            }
+            ExecuteCommandParams { command, .. } if *command == *"moxide.open_file" => {
+                let uri = params
+                    .arguments
+                    .into_iter()
+                    .next()
+                    .and_then(|val| serde_json::from_value::<Url>(val).ok());
+
+                if let Some(uri) = uri {
+                    let _ = self
+                        .client
+                        .show_document(ShowDocumentParams {
+                            uri,
+                            external: Some(false),
+                            take_focus: Some(true),
+                            selection: None,
+                        })
+                        .await;
+                }
+
+                Ok(None)
             }
             ExecuteCommandParams { command, .. } if *command == *"moxide.findReferences" => {
                 // CodeLens command: handled client-side in VSCode via
