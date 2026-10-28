@@ -32,6 +32,7 @@ pub struct Settings {
     pub excluded_folders: Vec<String>,
     pub heading_slug: bool,
     pub callout_completions: bool,
+    pub open_created_file: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -103,6 +104,7 @@ impl Settings {
             .set_default("excluded_folders", Vec::<String>::new())?
             .set_default("heading_slug", false)?
             .set_default("callout_completions", true)?
+            .set_default("open_created_file", true)?
             .build()
             .map_err(|err| anyhow!("Build err: {err}"))?;
 
@@ -217,6 +219,16 @@ mod test {
             daily_notes_config.folder,
             Some("the-daily-notes-folder".to_string())
         );
+    }
+
+    use super::*;
+
+    #[test]
+    fn test_open_created_file_default() {
+        use tower_lsp::lsp_types::ClientCapabilities;
+        let root = root_dir();
+        let settings = Settings::new(&root, &ClientCapabilities::default()).unwrap();
+        assert!(settings.open_created_file);
     }
 
     #[test]
