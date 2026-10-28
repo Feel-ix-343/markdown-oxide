@@ -159,8 +159,19 @@ impl<'a> LinkCompleter<'a> for MarkdownLinkCompleter<'a> {
             ""
         };
 
+        let current_file_stem = self
+            .context_path
+            .file_stem()
+            .and_then(|s| s.to_str());
+
         let format_link = |name: &str, suffix: &str| {
-            if name.contains(' ') || suffix.contains(' ') {
+            if current_file_stem == Some(name) && !suffix.is_empty() {
+                if suffix.contains(' ') {
+                    format!("<{}>", suffix)
+                } else {
+                    suffix.to_string()
+                }
+            } else if name.contains(' ') || suffix.contains(' ') {
                 format!("<{}{}{}>", name, ext, suffix)
             } else {
                 format!("{}{}{}", name, ext, suffix)
@@ -974,5 +985,97 @@ impl MDDailyNote<'_> {
         let unresolved_file = Referenceable::UnresovledFile(path.to_path_buf(), &self.ref_name);
 
         unresolved_file
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tower_lsp::lsp_types::ClientCapabilities;
+
+    #[test]
+    fn test_current_file_heading_completion_format() {
+        let unique_dir = format!("test_moxide_heading_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos());
+        let root = std::env::temp_dir().join(unique_dir);
+        fs::create_dir_all(&root).unwrap();
+        let test_file = root.join("test-file.md");
+        fs::write(&test_file, "# my heading\n\n# simple\n").unwrap();
+
+        let settings = Settings::new(&root, &ClientCapabilities::default()).unwrap();
+        let vault = Vault::construct_vault(&settings, &root).unwrap();
+
+        let completer = MarkdownLinkCompleter {
+            path: ("test-file".to_string(), 0..9),
+            display: ("my heading".to_string(), 0..10),
+            infile_ref: None,
+            full_range: 0..20,
+            line_nr: 4,
+            position: Position { line: 4, character: 20 },
+            vault: &vault,
+            context_path: &test_file,
+            settings: &settings,
+        };
+
+        // 1. Current file heading with spaces: <#my heading> without filename
+        let edit_current_spaced = completer.completion_text_edit(Some("my heading"), "test-file#my heading");
+        if let CompletionTextEdit::Edit(text_edit) = edit_current_spaced {
+            assert_eq!(text_edit.new_text, "[my heading](<#my heading>)");
+        } else {
+            panic!("Expected CompletionTextEdit::Edit");
+        }
+
+        // 2. Current file heading without spaces: #simple without filename
+        let edit_current_simple = completer.completion_text_edit(Some("simple"), "test-file#simple");
+        if let CompletionTextEdit::Edit(text_edit) = edit_current_simple {
+            assert_eq!(text_edit.new_text, "[simple](#simple)");
+        } else {
+            panic!("Expected CompletionTextEdit::Edit");
+        }
+
+        // 3. Different file heading (default settings, no .md extension): includes target filename
+        let edit_other_spaced = completer.completion_text_edit(Some("other heading"), "other-file#other heading");
+        if let CompletionTextEdit::Edit(text_edit) = edit_other_spaced {
+            assert_eq!(text_edit.new_text, "[other heading](<other-file#other heading>)");
+        } else {
+            panic!("Expected CompletionTextEdit::Edit");
+        }
+
+        let edit_other_simple = completer.completion_text_edit(Some("simple"), "other-file#simple");
+        if let CompletionTextEdit::Edit(text_edit) = edit_other_simple {
+            assert_eq!(text_edit.new_text, "[simple](other-file#simple)");
+        } else {
+            panic!("Expected CompletionTextEdit::Edit");
+        }
+
+        // 4. When include_md_extension_md_link is enabled:
+        let mut settings_with_ext = Settings::new(&root, &ClientCapabilities::default()).unwrap();
+        settings_with_ext.include_md_extension_md_link = true;
+        let completer_with_ext = MarkdownLinkCompleter {
+            path: ("test-file".to_string(), 0..9),
+            display: ("my heading".to_string(), 0..10),
+            infile_ref: None,
+            full_range: 0..20,
+            line_nr: 4,
+            position: Position { line: 4, character: 20 },
+            vault: &vault,
+            context_path: &test_file,
+            settings: &settings_with_ext,
+        };
+
+        let edit_current_with_ext = completer_with_ext.completion_text_edit(Some("my heading"), "test-file#my heading");
+        if let CompletionTextEdit::Edit(text_edit) = edit_current_with_ext {
+            // Current file heading still omits filename and .md extension
+            assert_eq!(text_edit.new_text, "[my heading](<#my heading>)");
+        }
+
+        let edit_other_with_ext = completer_with_ext.completion_text_edit(Some("other heading"), "other-file#other heading");
+        if let CompletionTextEdit::Edit(text_edit) = edit_other_with_ext {
+            // Different file includes .md extension
+            assert_eq!(text_edit.new_text, "[other heading](<other-file.md#other heading>)");
+        }
+
+        let _ = fs::remove_dir_all(&root);
     }
 }
