@@ -674,8 +674,7 @@ impl MDFile {
         let code_blocks = MDCodeBlock::new(text).collect_vec();
         let file_name = path
             .file_stem()
-            .expect("file should have file stem")
-            .to_str()
+            .and_then(|stem| stem.to_str())
             .unwrap_or_default();
         let links = match context {
             Settings {
@@ -3432,5 +3431,25 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn test_mdfile_and_update_vault_without_file_stem() {
+        let mut vault = Vault {
+            md_files: HashMap::new().into(),
+            ropes: HashMap::new().into(),
+            root_dir: PathBuf::from("."),
+        };
+        let settings = test_settings();
+        let path = PathBuf::from("");
+        let text = "# Title in unnamed buffer\n\nSome [[link]]";
+
+        // Must not panic on MDFile::new or update_vault
+        let md_file = MDFile::new(&settings, text, path.clone());
+        assert_eq!(md_file.file_name(), None);
+        assert_eq!(md_file.headings.len(), 1);
+
+        Vault::update_vault(&settings, &mut vault, (&path, text));
+        assert!(vault.ropes.contains_key(&path));
     }
 }
