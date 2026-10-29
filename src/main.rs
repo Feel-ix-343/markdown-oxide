@@ -22,6 +22,7 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 use vault::{Preview, Rangeable, Reference, Vault};
 
+mod call_hierarchy;
 mod cli;
 mod codeactions;
 mod codelens;
@@ -440,6 +441,7 @@ impl LanguageServer for Backend {
                 document_symbol_provider: Some(OneOf::Left(true)),
                 workspace_symbol_provider: Some(OneOf::Left(true)),
                 code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
+                call_hierarchy_provider: Some(CallHierarchyServerCapability::Simple(true)),
                 workspace: Some(WorkspaceServerCapabilities {
                     file_operations: Some(WorkspaceFileOperationsServerCapabilities {
                         did_create: Some(file_op_reg.clone()),
@@ -650,6 +652,37 @@ impl LanguageServer for Backend {
             )
         })
         .await
+    }
+
+    async fn prepare_call_hierarchy(
+        &self,
+        params: CallHierarchyPrepareParams,
+    ) -> Result<Option<Vec<CallHierarchyItem>>> {
+        self.bind_vault(|vault| {
+            let path = params_path!(params.text_document_position_params)?;
+            Ok(call_hierarchy::prepare_call_hierarchy(
+                vault,
+                &path,
+                params.text_document_position_params.position,
+            ))
+        })
+        .await
+    }
+
+    async fn incoming_calls(
+        &self,
+        params: CallHierarchyIncomingCallsParams,
+    ) -> Result<Option<Vec<CallHierarchyIncomingCall>>> {
+        self.bind_vault(|vault| Ok(call_hierarchy::incoming_calls(vault, &params.item)))
+            .await
+    }
+
+    async fn outgoing_calls(
+        &self,
+        params: CallHierarchyOutgoingCallsParams,
+    ) -> Result<Option<Vec<CallHierarchyOutgoingCall>>> {
+        self.bind_vault(|vault| Ok(call_hierarchy::outgoing_calls(vault, &params.item)))
+            .await
     }
 
     async fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>> {
