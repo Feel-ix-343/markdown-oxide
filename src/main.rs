@@ -378,7 +378,7 @@ impl LanguageServer for Backend {
             .log_message(MessageType::LOG, format!("Using root_dir: {:?}", root_dir))
             .await;
 
-        let read_settings = match Settings::new(&root_dir, &i.capabilities) {
+        let initial_settings = match Settings::new(&root_dir, &i.capabilities) {
             Ok(settings) => settings,
             Err(e) => {
                 self.client
@@ -389,6 +389,54 @@ impl LanguageServer for Backend {
                     .await;
                 return Err(Error::new(ErrorCode::ServerError(1)));
             }
+        };
+
+        let init_options_vault_root = i
+            .initialization_options
+            .as_ref()
+            .and_then(|opts| opts.get("vault_root"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(String::from);
+
+        let configured_vault_root = init_options_vault_root.or_else(|| {
+            initial_settings
+                .vault_root
+                .as_deref()
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+        });
+
+        let (root_dir, read_settings) = if let Some(sub_path) = configured_vault_root {
+            let candidate = PathBuf::from(&sub_path);
+            let effective_root = if candidate.is_absolute() {
+                candidate
+            } else {
+                root_dir.join(candidate)
+            };
+
+            self.client
+                .log_message(
+                    MessageType::LOG,
+                    format!(
+                        "Configured nested vault_root: {:?}, using effective root_dir: {:?}",
+                        sub_path, effective_root
+                    ),
+                )
+                .await;
+
+            let settings = match Settings::new(&effective_root, &i.capabilities) {
+                Ok(mut s) => {
+                    s.vault_root = Some(sub_path);
+                    s
+                }
+                Err(_) => initial_settings,
+            };
+            (effective_root, settings)
+        } else {
+            (root_dir, initial_settings)
         };
 
         let Ok(vault) = Vault::construct_vault(&read_settings, &root_dir) else {

@@ -32,6 +32,8 @@ pub struct Settings {
     pub excluded_folders: Vec<String>,
     pub heading_slug: bool,
     pub callout_completions: bool,
+    #[serde(default)]
+    pub vault_root: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -230,5 +232,58 @@ mod test {
 
     fn root_dir() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("TestFiles")
+    }
+
+    #[test]
+    fn test_vault_root_setting_deserialization() {
+        let toml_str = r#"
+            vault_root = "Project_Manag/Docs"
+        "#;
+        let full_config = config::Config::builder()
+            .set_default("dailynote", "%Y-%m-%d")
+            .unwrap()
+            .set_default("new_file_folder_path", "")
+            .unwrap()
+            .set_default("daily_notes_folder", "")
+            .unwrap()
+            .set_default("heading_completions", true)
+            .unwrap()
+            .set_default("unresolved_diagnostics", true)
+            .unwrap()
+            .set_default("title_headings", true)
+            .unwrap()
+            .set_default("semantic_tokens", true)
+            .unwrap()
+            .set_default("tags_in_codeblocks", false)
+            .unwrap()
+            .set_default("references_in_codeblocks", false)
+            .unwrap()
+            .set_default("include_md_extension_md_link", false)
+            .unwrap()
+            .set_default("include_md_extension_wikilink", false)
+            .unwrap()
+            .set_default("hover", true)
+            .unwrap()
+            .set_default("case_matching", "Smart")
+            .unwrap()
+            .set_default("inlay_hints", true)
+            .unwrap()
+            .set_default("block_transclusion", true)
+            .unwrap()
+            .set_default("block_transclusion_length", "Full")
+            .unwrap()
+            .set_default("link_filenames_only", false)
+            .unwrap()
+            .set_default("excluded_folders", Vec::<String>::new())
+            .unwrap()
+            .set_default("heading_slug", false)
+            .unwrap()
+            .set_default("callout_completions", true)
+            .unwrap()
+            .add_source(config::File::from_str(toml_str, config::FileFormat::Toml))
+            .build()
+            .unwrap();
+        let settings: crate::config::Settings = full_config.try_deserialize().unwrap();
+        assert_eq!(settings.vault_root, Some("Project_Manag/Docs".to_string()));
     }
 }
