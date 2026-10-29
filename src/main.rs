@@ -415,8 +415,13 @@ impl LanguageServer for Backend {
         return Ok(InitializeResult {
             server_info: None,
             capabilities: ServerCapabilities {
-                text_document_sync: Some(TextDocumentSyncCapability::Kind(
-                    TextDocumentSyncKind::FULL,
+                text_document_sync: Some(TextDocumentSyncCapability::Options(
+                    TextDocumentSyncOptions {
+                        open_close: Some(true),
+                        change: Some(TextDocumentSyncKind::FULL),
+                        save: Some(TextDocumentSyncSaveOptions::Supported(true)),
+                        ..Default::default()
+                    },
                 )),
                 completion_provider: Some(CompletionOptions {
                     resolve_provider: Some(false),
@@ -635,6 +640,22 @@ impl LanguageServer for Backend {
     }
 
     async fn did_change_watched_files(&self, _params: DidChangeWatchedFilesParams) {
+        self.reconstruct_vault().await
+    }
+
+    async fn did_create_files(&self, _params: CreateFilesParams) {
+        self.reconstruct_vault().await
+    }
+
+    async fn did_rename_files(&self, _params: RenameFilesParams) {
+        self.reconstruct_vault().await
+    }
+
+    async fn did_delete_files(&self, _params: DeleteFilesParams) {
+        self.reconstruct_vault().await
+    }
+
+    async fn did_save(&self, _params: DidSaveTextDocumentParams) {
         self.reconstruct_vault().await
     }
 
@@ -1018,5 +1039,79 @@ async fn main() {
                 .serve(service)
                 .await;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_reconstruct_vault_clears_unresolved_diagnostics_when_file_created() {
+        let unique_dir = format!("test_moxide_reconstruct_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos());
+        let root = std::env::temp_dir().join(unique_dir);
+        fs::create_dir_all(&root).unwrap();
+
+        let source_file = root.join("source.md");
+        fs::write(&source_file, "Link to [[new-target]]").unwrap();
+
+        let (service, _) = LspService::new(|client| Backend {
+            client,
+            vault: Arc::new(None.into()),
+            opened_files: Arc::new(HashSet::new().into()),
+            settings: Arc::new(None.into()),
+            diag_gen: Arc::new(AtomicU64::new(0)),
+        });
+
+        let init_params = InitializeParams {
+            root_uri: Some(Url::from_file_path(&root).unwrap()),
+            capabilities: ClientCapabilities::default(),
+            ..Default::default()
+        };
+
+        let init_result = service.inner().initialize(init_params).await.unwrap();
+
+        // 1. Verify capabilities include save and file operations
+        match init_result.capabilities.text_document_sync {
+            Some(TextDocumentSyncCapability::Options(sync_opts)) => {
+                assert!(sync_opts.save.is_some());
+            }
+            _ => panic!("Expected TextDocumentSyncOptions"),
+        }
+
+        let file_ops = init_result.capabilities.workspace.unwrap().file_operations.unwrap();
+        assert!(file_ops.did_create.is_some());
+        assert!(file_ops.did_rename.is_some());
+        assert!(file_ops.did_delete.is_some());
+
+        // 2. Before file creation, new-target is unresolved
+        {
+            let guard = service.inner().vault.read().await;
+            let vault = guard.as_ref().unwrap();
+            let unresolved = diagnostics::path_unresolved_references(vault, &source_file).unwrap();
+            assert!(!unresolved.is_empty());
+        }
+
+        // 3. Create the target file on disk
+        let target_file = root.join("new-target.md");
+        fs::write(&target_file, "# New Target").unwrap();
+
+        // 4. Simulate did_create_files
+        service.inner().did_create_files(CreateFilesParams {
+            files: vec![FileCreate {
+                uri: Url::from_file_path(&target_file).unwrap().to_string(),
+            }],
+        }).await;
+
+        // 5. Verify vault was reconstructed and diagnostic cleared
+        {
+            let guard = service.inner().vault.read().await;
+            let vault = guard.as_ref().unwrap();
+            let unresolved = diagnostics::path_unresolved_references(vault, &source_file).unwrap();
+            assert!(unresolved.is_empty(), "Unresolved references should be empty after did_create_files");
+        }
+
+        let _ = fs::remove_dir_all(&root);
     }
 }
