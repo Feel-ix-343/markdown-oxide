@@ -177,8 +177,8 @@ impl<'a> UnindexedBlock<'a> {
                 }),
                 format!("{}#^{}", path_ref, indexed_block.index),
             ),
-            _ => (
-                Some(Documentation::MarkupContent(MarkupContent {
+            _ => {
+                let doc = Some(Documentation::MarkupContent(MarkupContent {
                     kind: MarkupKind::Markdown,
                     value: (block.range.start.line as isize - 1
                         ..=block.range.start.line as isize + 1)
@@ -200,42 +200,52 @@ impl<'a> UnindexedBlock<'a> {
                             }
                         })
                         .join(""),
-                })),
-                Some(Command {
-                    title: "Insert Block Reference Into File".into(),
-                    command: "apply_edits".into(),
-                    arguments: Some(vec![serde_json::to_value(
-                        tower_lsp::lsp_types::WorkspaceEdit {
-                            changes: Some(
-                                vec![(
-                                    url,
-                                    vec![TextEdit {
-                                        range: Range {
-                                            start: Position {
-                                                line: block.range.end.line,
-                                                character: block.range.end.character - 1,
-                                            },
-                                            end: Position {
-                                                line: block.range.end.line,
-                                                character: block.range.end.character - 1,
-                                            },
-                                        },
-                                        new_text: format!("   ^{}", rand_id),
-                                    }],
-                                )]
-                                .into_iter()
-                                .collect(),
-                            ),
-                            change_annotations: None,
-                            document_changes: None,
-                        },
+                }));
+
+                let should_index = completer.link_completer.settings().index_unindexed_blocks
+                    && !completer.link_completer.settings().link_filenames_only;
+
+                let (command, refname) = if should_index {
+                    (
+                        Some(Command {
+                            title: "Insert Block Reference Into File".into(),
+                            command: "apply_edits".into(),
+                            arguments: Some(vec![serde_json::to_value(
+                                tower_lsp::lsp_types::WorkspaceEdit {
+                                    changes: Some(
+                                        vec![(
+                                            url,
+                                            vec![TextEdit {
+                                                range: Range {
+                                                    start: Position {
+                                                        line: block.range.end.line,
+                                                        character: block.range.end.character - 1,
+                                                    },
+                                                    end: Position {
+                                                        line: block.range.end.line,
+                                                        character: block.range.end.character - 1,
+                                                    },
+                                                },
+                                                new_text: format!("   ^{}", rand_id),
+                                            }],
+                                        )]
+                                        .into_iter()
+                                        .collect(),
+                                    ),
+                                    change_annotations: None,
+                                    document_changes: None,
+                                },
+                            )
+                            .ok()?]),
+                        }),
+                        format!("{}#^{}", path_ref, rand_id),
                     )
-                    .ok()?]),
-                }),
-                CompletionItemKind::TEXT,
-                None,
-                format!("{}#^{}", path_ref, rand_id),
-            ),
+                } else {
+                    (None, path_ref)
+                };
+
+                (doc, command, CompletionItemKind::TEXT, None, refname)
+            }
         };
 
         Some((
@@ -310,5 +320,108 @@ impl<'a> Completable<'a, UnindexedBlockCompleter<'a, WikiLinkCompleter<'a>>>
 impl Matchable for UnindexedBlock<'_> {
     fn match_string(&self) -> &str {
         self.0.text
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Settings;
+    use crate::vault::{MyRange, Vault};
+    use std::fs;
+    use tower_lsp::lsp_types::ClientCapabilities;
+
+    #[test]
+    fn test_unindexed_block_link_filenames_only_omits_index_and_command() {
+        let unique_dir = format!("test_moxide_unindexed_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos());
+        let root = std::env::temp_dir().join(unique_dir);
+        fs::create_dir_all(&root).unwrap();
+        let test_file = root.join("note.md");
+        fs::write(&test_file, "This is paragraph text without any index\n").unwrap();
+
+        let settings = Settings::new(&root, &ClientCapabilities::default()).unwrap();
+        let vault = Vault::construct_vault(&settings, &root).unwrap();
+
+        let link_completer = MarkdownLinkCompleter {
+            path: ("note".to_string(), 0..4),
+            display: ("".to_string(), 0..0),
+            infile_ref: None,
+            full_range: 0..0,
+            line_nr: 0,
+            position: Position { line: 0, character: 0 },
+            vault: &vault,
+            context_path: &test_file,
+            settings: &settings,
+        };
+
+        let completer = UnindexedBlockCompleter {
+            link_completer,
+            new_id: "test1234".to_string(),
+            __phantom: std::marker::PhantomData,
+        };
+
+        let block = Block {
+            file: &test_file,
+            range: MyRange(tower_lsp::lsp_types::Range {
+                start: Position { line: 0, character: 0 },
+                end: Position { line: 0, character: 40 },
+            }),
+            text: "This is paragraph text without any index",
+        };
+        let unindexed = UnindexedBlock(block);
+
+        // 1. Default settings: command is Some(apply_edits), refname contains ^test1234
+        let (refname_default, item_default) = unindexed.partial_completion(&completer).unwrap();
+        assert!(item_default.command.is_some());
+        assert!(refname_default.contains("^test1234"));
+
+        // 2. When link_filenames_only is true: command is None, refname is just the file name
+        let mut settings_link_only = Settings::new(&root, &ClientCapabilities::default()).unwrap();
+        settings_link_only.link_filenames_only = true;
+        let link_completer_link_only = MarkdownLinkCompleter {
+            path: ("note".to_string(), 0..4),
+            display: ("".to_string(), 0..0),
+            infile_ref: None,
+            full_range: 0..0,
+            line_nr: 0,
+            position: Position { line: 0, character: 0 },
+            vault: &vault,
+            context_path: &test_file,
+            settings: &settings_link_only,
+        };
+        let completer_link_only = UnindexedBlockCompleter {
+            link_completer: link_completer_link_only,
+            new_id: "test1234".to_string(),
+            __phantom: std::marker::PhantomData,
+        };
+        let (refname_link_only, item_link_only) = unindexed.partial_completion(&completer_link_only).unwrap();
+        assert!(item_link_only.command.is_none());
+        assert_eq!(refname_link_only, "note");
+
+        // 3. When index_unindexed_blocks is false: command is None, refname is just the file name
+        let mut settings_no_index = Settings::new(&root, &ClientCapabilities::default()).unwrap();
+        settings_no_index.index_unindexed_blocks = false;
+        let link_completer_no_index = MarkdownLinkCompleter {
+            path: ("note".to_string(), 0..4),
+            display: ("".to_string(), 0..0),
+            infile_ref: None,
+            full_range: 0..0,
+            line_nr: 0,
+            position: Position { line: 0, character: 0 },
+            vault: &vault,
+            context_path: &test_file,
+            settings: &settings_no_index,
+        };
+        let completer_no_index = UnindexedBlockCompleter {
+            link_completer: link_completer_no_index,
+            new_id: "test1234".to_string(),
+            __phantom: std::marker::PhantomData,
+        };
+        let (refname_no_index, item_no_index) = unindexed.partial_completion(&completer_no_index).unwrap();
+        assert!(item_no_index.command.is_none());
+        assert_eq!(refname_no_index, "note");
+
+        let _ = fs::remove_dir_all(&root);
     }
 }
