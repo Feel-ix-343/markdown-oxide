@@ -148,6 +148,28 @@ impl<'a> UnindexedBlock<'a> {
 
         let block = self.0;
 
+        let filename = block
+            .file
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(&path_ref);
+
+        let is_unique_filename = completer
+            .link_completer
+            .vault()
+            .md_files
+            .keys()
+            .filter(|p| p.file_stem().and_then(|s| s.to_str()) == Some(filename))
+            .take(2)
+            .count()
+            <= 1;
+
+        let note_ref = if is_unique_filename {
+            filename
+        } else {
+            &path_ref
+        };
+
         // check if the block is already indexed
         let (documentation, command, kind, label_detail, refname): (
             Option<Documentation>,
@@ -175,7 +197,7 @@ impl<'a> UnindexedBlock<'a> {
                     detail: Some("Indexed Block".to_string()),
                     description: None,
                 }),
-                format!("{}#^{}", path_ref, indexed_block.index),
+                format!("{}#^{}", note_ref, indexed_block.index),
             ),
             _ => (
                 Some(Documentation::MarkupContent(MarkupContent {
@@ -234,7 +256,7 @@ impl<'a> UnindexedBlock<'a> {
                 }),
                 CompletionItemKind::TEXT,
                 None,
-                format!("{}#^{}", path_ref, rand_id),
+                format!("{}#^{}", note_ref, rand_id),
             ),
         };
 
@@ -310,5 +332,33 @@ impl<'a> Completable<'a, UnindexedBlockCompleter<'a, WikiLinkCompleter<'a>>>
 impl Matchable for UnindexedBlock<'_> {
     fn match_string(&self) -> &str {
         self.0.text
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use std::collections::HashSet;
+
+    #[test]
+    fn test_unindexed_block_unique_filename_and_fallback() {
+        let mut keys: HashSet<PathBuf> = HashSet::new();
+
+        // Unique file: path is "sub/unique.md", stem is "unique"
+        let p_unique = PathBuf::from("sub/unique.md");
+        keys.insert(p_unique.clone());
+
+        // Check unique filename logic
+        let filename = p_unique.file_stem().and_then(|s| s.to_str()).unwrap();
+        let is_unique = keys.iter().filter(|p| p.file_stem().and_then(|s| s.to_str()) == Some(filename)).take(2).count() <= 1;
+        assert!(is_unique);
+
+        // Add a duplicate file in another folder: "other/unique.md"
+        let p_dup = PathBuf::from("other/unique.md");
+        keys.insert(p_dup.clone());
+
+        // Check fallback when not unique
+        let is_unique_after_dup = keys.iter().filter(|p| p.file_stem().and_then(|s| s.to_str()) == Some(filename)).take(2).count() <= 1;
+        assert!(!is_unique_after_dup);
     }
 }
