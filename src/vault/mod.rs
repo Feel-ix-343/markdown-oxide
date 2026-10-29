@@ -273,43 +273,81 @@ impl Vault {
                     .flat_map(|file| file.get_referenceables())
                     .collect::<Vec<_>>();
 
+                let root_name = self.root_dir().file_name().and_then(|n| n.to_str()).unwrap_or_default();
                 let resolved_referenceables_refnames: HashSet<String> = resolved_referenceables
                     .par_iter()
                     .flat_map(|resolved| {
-                        resolved.get_refname(self.root_dir()).and_then(|refname| {
+                        let mut entries = Vec::new();
+                        if let Some(refname) = resolved.get_refname(self.root_dir()) {
                             let full = refname.to_string();
-                            let short = format!(
-                                "{}{}",
-                                refname.link_file_key()?,
-                                refname
-                                    .infile_ref
-                                    .as_ref()
-                                    .map(|refe| format!("#{}", refe))
-                                    .unwrap_or("".to_string())
-                            );
-                            // For heading refnames, also add the slugified
-                            // (spaces→dashes) form so that both
-                            // "file#Some Heading" and "file#Some-Heading"
-                            // are recognised as resolved.
-                            let mut entries = vec![full.clone(), short.clone()];
-                            if let Some((file_part, heading_part)) = full.split_once('#') {
-                                let slugged =
-                                    format!("{}#{}", file_part, heading_to_slug(heading_part));
-                                if slugged != full {
-                                    entries.push(slugged);
+                            let link_key = refname.link_file_key();
+                            let short = link_key.as_deref().map(|key| {
+                                format!(
+                                    "{}{}",
+                                    key,
+                                    refname
+                                        .infile_ref
+                                        .as_ref()
+                                        .map(|refe| format!("#{}", refe))
+                                        .unwrap_or("".to_string())
+                                )
+                            });
+
+                            entries.push(full.clone());
+                            if let Some(s) = short {
+                                entries.push(s);
+                            }
+
+                            // Subpath suffixes for files in folders (e.g. Shaders/Shaders for Graphics/WGPU_WebGPU/Shaders/Shaders)
+                            if let Some(ref path_str) = refname.path {
+                                let norm = path_str.replace('\\', "/");
+                                let parts: Vec<&str> = norm.split('/').collect();
+                                if parts.len() > 1 {
+                                    for i in 1..parts.len() {
+                                        let subpath = parts[i..].join("/");
+                                        let sub_entry = match &refname.infile_ref {
+                                            Some(refe) => format!("{}#{}", subpath, refe),
+                                            None => subpath,
+                                        };
+                                        entries.push(sub_entry);
+                                    }
+                                }
+                                if !root_name.is_empty() {
+                                    let root_prepended = format!("{}/{}", root_name, norm);
+                                    let root_entry = match &refname.infile_ref {
+                                        Some(refe) => format!("{}#{}", root_prepended, refe),
+                                        None => root_prepended,
+                                    };
+                                    entries.push(root_entry);
                                 }
                             }
-                            if let Some((file_part, heading_part)) = short.split_once('#') {
-                                let slugged =
-                                    format!("{}#{}", file_part, heading_to_slug(heading_part));
-                                if slugged != short {
-                                    entries.push(slugged);
+
+                            // Heading slug variants
+                            let mut slugged_entries = Vec::new();
+                            for entry in &entries {
+                                if let Some((file_part, heading_part)) = entry.split_once('#') {
+                                    let slugged = format!("{}#{}", file_part, heading_to_slug(heading_part));
+                                    if slugged != *entry {
+                                        slugged_entries.push(slugged);
+                                    }
                                 }
                             }
-                            Some(entries)
-                        })
+                            entries.extend(slugged_entries);
+                        }
+
+                        // Frontmatter metadata aliases
+                        if let Referenceable::File(_, mdfile) = resolved {
+                            if let Some(meta) = &mdfile.metadata {
+                                for alias in meta.aliases() {
+                                    entries.push(alias.clone());
+                                }
+                            }
+                        }
+
+                        let lowercase_entries: Vec<String> = entries.iter().map(|e| e.to_lowercase()).collect();
+                        entries.extend(lowercase_entries);
+                        entries
                     })
-                    .flatten()
                     .collect();
 
                 let unresolved = self.select_references(None).map(|references| {
@@ -330,8 +368,12 @@ impl Vault {
                                 } else {
                                     ref_text.clone()
                                 };
+                            let ref_lower = ref_text.to_lowercase();
+                            let norm_lower = normalized.to_lowercase();
                             !resolved_referenceables_refnames.contains(ref_text)
                                 && !resolved_referenceables_refnames.contains(&normalized)
+                                && !resolved_referenceables_refnames.contains(&ref_lower)
+                                && !resolved_referenceables_refnames.contains(&norm_lower)
                         })
                         .flat_map(|(_, reference)| match reference {
                             Reference::WikiFileLink(data) | Reference::MDFileLink(data) => {
@@ -1022,7 +1064,19 @@ impl Reference {
                 | WikiFileLink(ReferenceData {
                     reference_text: file_ref_text,
                     ..
-                }) => matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir)),
+                }) => {
+                    if matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir)) {
+                        true
+                    } else if let Referenceable::File(_, mdfile) = referenceable {
+                        mdfile.metadata.as_ref().map_or(false, |meta| {
+                            meta.aliases()
+                                .iter()
+                                .any(|alias| alias.eq_ignore_ascii_case(file_ref_text))
+                        })
+                    } else {
+                        false
+                    }
+                }
                 Tag(_) => false,
                 WikiHeadingLink(_, _, _) => false,
                 WikiIndexedBlockLink(_, _, _) => false,
@@ -1726,7 +1780,17 @@ impl Referenceable<'_> {
                 })
                 | MDHeadingLink(.., file_ref_text, _)
                 | MDIndexedBlockLink(.., file_ref_text, _) => {
-                    matches_path_or_file(file_ref_text, self.get_refname(root_dir))
+                    if matches_path_or_file(file_ref_text, self.get_refname(root_dir)) {
+                        true
+                    } else if let Referenceable::File(_, mdfile) = self {
+                        mdfile.metadata.as_ref().map_or(false, |meta| {
+                            meta.aliases()
+                                .iter()
+                                .any(|alias| alias.eq_ignore_ascii_case(file_ref_text))
+                        })
+                    } else {
+                        false
+                    }
                 }
                 Tag(_) => false,
                 Footnote(_) => false,
@@ -1780,17 +1844,31 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
         let refname = refname?;
         let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
 
-        if file_ref_text.contains('/') {
+        if file_ref_text.contains('/') || file_ref_text.contains('\\') {
             let file_ref_text = file_ref_text.replace(r"%20", " ");
             let file_ref_text = file_ref_text.replace(r"\ ", " ");
 
             let chars: Vec<char> = file_ref_text.chars().collect();
-            match chars.as_slice() {
+            let cleaned = match chars.as_slice() {
                 &['.', '/', ref path @ ..] | &['/', ref path @ ..] => {
-                    Some(String::from_iter(path) == refname_path)
+                    String::from_iter(path)
                 }
-                path => Some(String::from_iter(path) == refname_path),
+                path => String::from_iter(path),
+            };
+
+            let norm_cleaned = cleaned.replace('\\', "/").to_lowercase();
+            let norm_ref = refname_path.replace('\\', "/").to_lowercase();
+
+            if norm_cleaned == norm_ref {
+                return Some(true);
             }
+            if norm_ref.ends_with(&format!("/{}", norm_cleaned)) {
+                return Some(true);
+            }
+            if norm_cleaned.ends_with(&format!("/{}", norm_ref)) {
+                return Some(true);
+            }
+            Some(false)
         } else {
             let last_segment = refname.link_file_key()?;
 
@@ -3432,5 +3510,47 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn test_wikilink_subpath_and_custom_name_resolution() {
+        let root = PathBuf::from("Graphics");
+        let mut vault = Vault {
+            md_files: HashMap::new().into(),
+            ropes: HashMap::new().into(),
+            root_dir: root.clone(),
+        };
+
+        let shader_path = root.join("WGPU_WebGPU").join("Shaders").join("Shaders.md");
+        let shader_text = "# Shaders Note\n\nSome content".to_string();
+        Vault::update_vault(&test_settings(), &mut vault, (&shader_path, &shader_text));
+
+        let doc_path = root.join("doc.md");
+        let doc_text = "See [[Graphics/WGPU_WebGPU/Shaders/Shaders|shaders]] and [[Shaders/Shaders|shader]] and [[WGPU_WebGPU/Shaders/Shaders]]".to_string();
+        Vault::update_vault(&test_settings(), &mut vault, (&doc_path, &doc_text));
+
+        let unresolved = crate::diagnostics::path_unresolved_references(&vault, &doc_path);
+        assert_eq!(unresolved.unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_wikilink_frontmatter_aliases_resolution() {
+        let root = PathBuf::from("vault");
+        let mut vault = Vault {
+            md_files: HashMap::new().into(),
+            ropes: HashMap::new().into(),
+            root_dir: root.clone(),
+        };
+
+        let target_path = root.join("target.md");
+        let target_text = "---\naliases: [\"Shader Alias\", custom_name]\n---\n# Title".to_string();
+        Vault::update_vault(&test_settings(), &mut vault, (&target_path, &target_text));
+
+        let doc_path = root.join("doc.md");
+        let doc_text = "Link to [[Shader Alias]] and [[custom_name|display]]".to_string();
+        Vault::update_vault(&test_settings(), &mut vault, (&doc_path, &doc_text));
+
+        let unresolved = crate::diagnostics::path_unresolved_references(&vault, &doc_path);
+        assert_eq!(unresolved.unwrap().len(), 0);
     }
 }
