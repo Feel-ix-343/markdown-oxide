@@ -1154,6 +1154,27 @@ fn has_non_markdown_extension(path: &str) -> bool {
     NON_MD_EXT_RE.is_match(path)
 }
 
+/// Returns true if the path specifies an external URI scheme (e.g., http, https,
+/// tel, mailto, sms, obsidian, etc.) rather than a local markdown file link.
+/// RFC 3986 defines URI schemes as starting with a letter followed by letters,
+/// digits, plus, hyphen, or dot, ending with a colon.
+/// Windows drive letters (e.g. "C:\", "d:/") are explicitly excluded.
+pub(crate) fn is_external_uri(path: &str) -> bool {
+    static URI_SCHEME_RE: Lazy<Regex> =
+        Lazy::new(|| Regex::new(r"^[a-zA-Z][a-zA-Z0-9+.-]*:").unwrap());
+
+    if let Some(m) = URI_SCHEME_RE.find(path) {
+        let scheme = m.as_str();
+        // Exclude single-letter Windows drive letters followed by slash/backslash (e.g. "C:/")
+        if scheme.len() == 2 && path.chars().nth(2).map_or(false, |c| c == '/' || c == '\\') {
+            return false;
+        }
+        true
+    } else {
+        false
+    }
+}
+
 fn generic_link_constructor<T: ParseableReferenceConstructor>(
     text: &str,
     file_name: &str,
@@ -1165,11 +1186,7 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
         has_md_ending,
     }: RegexTuple,
 ) -> Option<Reference> {
-    if file_path.is_some_and(|path| {
-        path.as_str().starts_with("http://")
-            || path.as_str().starts_with("https://")
-            || path.as_str().starts_with("data:")
-    }) {
+    if file_path.is_some_and(|path| is_external_uri(path.as_str())) {
         return None;
     }
 
@@ -1812,6 +1829,7 @@ mod vault_tests {
     use crate::vault::{HeadingLevel, ReferenceData};
     use crate::vault::{MDLinkReferenceDefinition, Refname};
 
+    use super::is_external_uri;
     use super::Reference::*;
     use super::{
         MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference, Referenceable, Vault,
@@ -3432,5 +3450,44 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn test_external_uri_schemes_not_treated_as_note_references() {
+        let text = r#"
+[Call Me](tel:+12345678901)
+[Email Us](mailto:support@example.com)
+[Send SMS](sms:+19876543210)
+[Web Link](https://example.com)
+[Obsidian URI](obsidian://open?vault=work)
+[Regular Note](my_regular_note.md)
+"#;
+        let references = Reference::new(text, "test.md").collect_vec();
+
+        // Only "my_regular_note.md" should be recognized as an internal file Reference
+        assert_eq!(references.len(), 1);
+        match &references[0] {
+            Reference::MDFileLink(data) => {
+                assert_eq!(data.reference_text, "my_regular_note");
+            }
+            other => panic!("Expected MDFileLink, found {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_is_external_uri_helper() {
+        assert!(is_external_uri("tel:+12345678901"));
+        assert!(is_external_uri("mailto:info@domain.com"));
+        assert!(is_external_uri("sms:123456"));
+        assert!(is_external_uri("http://site.org"));
+        assert!(is_external_uri("https://secure.site.org"));
+        assert!(is_external_uri("obsidian://advanced-uri?vault=test"));
+        assert!(is_external_uri("ftp://ftp.example.com"));
+
+        assert!(!is_external_uri("notes/hello.md"));
+        assert!(!is_external_uri("./subfolder/note.md"));
+        assert!(!is_external_uri("simple_note"));
+        assert!(!is_external_uri("C:/Users/name/note.md"));
+        assert!(!is_external_uri(r"C:\Users\name\note.md"));
     }
 }
