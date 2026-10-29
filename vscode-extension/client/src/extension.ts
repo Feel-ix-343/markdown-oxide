@@ -179,12 +179,18 @@ export async function activate(context: ExtensionContext) {
 		// }
 	};
 
+	const config = workspace.getConfiguration('markdown-oxide');
+	const vaultRoot = (config.get<string>('vaultRoot') || '').trim();
+
 	// Options to control the language client
 	const clientOptions: LanguageClientOptions = {
 		// Register the server for plain text documents
 		documentSelector: [{ scheme: 'file', language: 'markdown' }],
 		synchronize: {
 			fileEvents: workspace.createFileSystemWatcher('**/*.md')
+		},
+		initializationOptions: {
+			vault_root: vaultRoot || undefined
 		}
 	};
 

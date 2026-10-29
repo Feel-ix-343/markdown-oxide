@@ -50,6 +50,17 @@
 				"title": "Semantic Jump",
 				"category": "Markdown Oxide"
 			}
-		]
+		],
+		"configuration": {
+			"type": "object",
+			"title": "Markdown Oxide",
+			"properties": {
+				"markdown-oxide.vaultRoot": {
+					"type": "string",
+					"default": "",
+					"description": "Path to the markdown vault root relative to the workspace root (for repositories with nested documentation vaults)."
+				}
+			}
+		}
 	}
 }
