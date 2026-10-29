@@ -1294,7 +1294,7 @@ impl From<tower_lsp::lsp_types::Range> for MyRange {
 impl MDHeading {
     fn new(text: &str) -> impl Iterator<Item = MDHeading> + '_ {
         static HEADING_RE: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"(?<starter>#+) (?<heading_text>.+)").unwrap());
+            Lazy::new(|| Regex::new(r"(?m)^[ ]{0,3}(?<starter>#{1,6}) (?<heading_text>.+)").unwrap());
 
         // Compute the byte offset where frontmatter ends so we can skip
         // YAML comment lines (which start with `#`) that would otherwise
@@ -1315,7 +1315,7 @@ impl MDHeading {
             .filter(move |(full_heading, _, _)| full_heading.start() >= frontmatter_end)
             .map(|(full_heading, heading_match, starter)| MDHeading {
                 heading_text: heading_match.as_str().trim_end().into(),
-                range: MyRange::from_range(&Rope::from_str(text), full_heading.range()),
+                range: MyRange::from_range(&Rope::from_str(text), starter.start()..full_heading.end()),
                 level: HeadingLevel(starter.as_str().len()),
             });
 
@@ -2549,6 +2549,33 @@ mod vault_tests {
         })];
 
         assert_eq!(parsed, expected)
+    }
+
+
+    #[test]
+    fn heading_parsing_rejects_seven_or_more_hashes() {
+        let text = r"# Level 1
+## Level 2
+### Level 3
+#### Level 4
+##### Level 5
+###### Level 6
+####### Seven hashes is not a heading
+######## Eight hashes is not a heading
+Some text with # not a heading in middle
+    # Indented 4 spaces is a code block not a heading
+  ### Indented 2 spaces is valid heading";
+
+        let parsed: Vec<_> = MDHeading::new(text).collect();
+        assert_eq!(parsed.len(), 7);
+        assert_eq!(parsed[0].level, HeadingLevel(1));
+        assert_eq!(parsed[0].heading_text, "Level 1");
+        assert_eq!(parsed[5].level, HeadingLevel(6));
+        assert_eq!(parsed[5].heading_text, "Level 6");
+        assert_eq!(parsed[6].level, HeadingLevel(3));
+        assert_eq!(parsed[6].heading_text, "Indented 2 spaces is valid heading");
+        // Ensure range starts at the first '#' character even when indented
+        assert_eq!(parsed[6].range.0.start.character, 2);
     }
 
     #[test]
