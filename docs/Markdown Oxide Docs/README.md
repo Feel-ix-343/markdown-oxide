@@ -322,7 +322,29 @@ Markdown Oxide is available as an extension titled `Markdown Oxide`. Similarly t
     
     </details>
 
-    
+    <details>
+         <summary>(optional) Configure Daily Note commands in Zed</summary>
+
+        Markdown Oxide provides LSP workspace commands to open or create daily notes (`today`, `tomorrow`, `yesterday`, or `jump` with natural language/relative directives).
+
+        In Zed, you can bind these commands to keyboard shortcuts in your `keymap.json` (accessible via `zed: open keymap`):
+
+        ```json
+        [
+          {
+            "context": "Editor && extension == md",
+            "bindings": {
+              "ctrl-alt-d": ["editor::ExecuteCommand", { "command": "today" }],
+              "ctrl-alt-t": ["editor::ExecuteCommand", { "command": "tomorrow" }],
+              "ctrl-alt-y": ["editor::ExecuteCommand", { "command": "yesterday" }]
+            }
+          }
+        ]
+        ```
+
+        You can also invoke `jump` directly or pass natural language dates like `"next monday"` or relative directives like `"+1"`.
+
+    </details>
 
 ## Helix
 
