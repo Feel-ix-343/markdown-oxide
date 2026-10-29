@@ -72,7 +72,9 @@ pub fn fuzzy_match_completions<'a, 'b, C: Completer<'a>, T: Matchable + Completa
 
     normal_fuzzy_match
         .into_iter()
-        .map(|(item, score)| OrderedCompletion::new(item, score.to_string()))
+        .map(|(item, score)| {
+            OrderedCompletion::new(item, format!("{:010}", u32::MAX.saturating_sub(score)))
+        })
         .collect::<Vec<_>>()
 }
 
@@ -99,4 +101,58 @@ pub fn fuzzy_match<T: Matchable>(
         .into_iter()
         .map(|(item, score)| (item.0, score))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Case;
+
+    #[derive(Clone, Debug, PartialEq)]
+    struct MockItem {
+        text: String,
+    }
+
+    impl Matchable for MockItem {
+        fn match_string(&self) -> &str {
+            &self.text
+        }
+    }
+
+    #[test]
+    fn test_fuzzy_match_ranking_order() {
+        let items = vec![
+            MockItem {
+                text: "how are you .. p".to_string(),
+            },
+            MockItem {
+                text: "hyprland".to_string(),
+            },
+            MockItem {
+                text: "hyperspace".to_string(),
+            },
+        ];
+
+        let matches = fuzzy_match("hypr", items, &Case::Smart);
+        assert!(!matches.is_empty());
+        // Exact prefix match "hyprland" should have highest score and be first
+        assert_eq!(matches[0].0.text, "hyprland");
+        assert!(matches[0].1 > matches.last().unwrap().1);
+    }
+
+    #[test]
+    fn test_sort_text_lexicographical_ascending() {
+        let score_high: u32 = 10000;
+        let score_mid: u32 = 120;
+        let score_low: u32 = 9;
+
+        let rank_high = format!("{:010}", u32::MAX.saturating_sub(score_high));
+        let rank_mid = format!("{:010}", u32::MAX.saturating_sub(score_mid));
+        let rank_low = format!("{:010}", u32::MAX.saturating_sub(score_low));
+
+        // In standard LSP client lexicographical comparison:
+        // higher score must yield smaller sort_text to be placed first in completion list
+        assert!(rank_high < rank_mid);
+        assert!(rank_mid < rank_low);
+    }
 }
