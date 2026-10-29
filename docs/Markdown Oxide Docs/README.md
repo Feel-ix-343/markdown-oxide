@@ -173,29 +173,37 @@ Set up the PKM for your text editor...
         Modify your lsp `on_attach` function.
 
         ```lua
-        local function codelens_supported(bufnr)
-          for _, c in ipairs(vim.lsp.get_clients({ bufnr = bufnr })) do
-            if c.server_capabilities and c.server_capabilities.codeLensProvider then
-              return true
-            end
+        -- NeoVim 0.12+ (built-in automatic codelens management)
+        if vim.lsp.codelens and vim.lsp.codelens.enable then
+          if client.supports_method('textDocument/codeLens') then
+            vim.lsp.codelens.enable(true, { bufnr = bufnr })
           end
-          return false
-        end
-
-        vim.api.nvim_create_autocmd(
-          { 'TextChanged', 'InsertLeave', 'CursorHold', 'BufEnter' },
-          {
-            buffer = bufnr,
-            callback = function()
-              if codelens_supported(bufnr) then
-                vim.lsp.codelens.refresh({ bufnr = bufnr })
+        else
+          -- NeoVim 0.11 and earlier
+          local function codelens_supported(bufnr)
+            for _, c in ipairs(vim.lsp.get_clients({ bufnr = bufnr })) do
+              if c.server_capabilities and c.server_capabilities.codeLensProvider then
+                return true
               end
-            end,
-          }
-        )
+            end
+            return false
+          end
 
-        if codelens_supported(bufnr) then
-          vim.lsp.codelens.refresh({ bufnr = bufnr })
+          vim.api.nvim_create_autocmd(
+            { 'TextChanged', 'InsertLeave', 'CursorHold', 'BufEnter' },
+            {
+              buffer = bufnr,
+              callback = function()
+                if codelens_supported(bufnr) then
+                  vim.lsp.codelens.refresh({ bufnr = bufnr })
+                end
+              end,
+            }
+          )
+
+          if codelens_supported(bufnr) then
+            vim.lsp.codelens.refresh({ bufnr = bufnr })
+          end
         end
         ```
 
