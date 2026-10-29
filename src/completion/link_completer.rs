@@ -613,8 +613,9 @@ impl LinkCompletion<'_> {
         referenceable: Referenceable<'a>,
         completer: &impl LinkCompleter<'a>,
     ) -> Option<Vec<LinkCompletion<'a>>> {
-        if let Some(daily) = MDDailyNote::from_referenceable(referenceable.clone(), completer) {
-            Some(vec![DailyNote(daily)])
+        let dailies = MDDailyNote::from_referenceable(referenceable.clone(), completer);
+        if !dailies.is_empty() {
+            Some(dailies.into_iter().map(DailyNote).collect())
         } else {
             match referenceable {
                 Referenceable::File(_, mdfile) => {
@@ -884,34 +885,34 @@ impl Matchable for LinkCompletion<'_> {
 pub struct MDDailyNote<'a> {
     match_string: String,
     ref_name: String,
+    relative_name: String,
     real_referenceaable: Option<Referenceable<'a>>,
 }
 
 impl MDDailyNote<'_> {
-    pub fn relative_name<'a>(&self, completer: &impl LinkCompleter<'a>) -> Option<String> {
-        let self_date = self.get_self_date(completer)?;
-
-        Self::relative_date_string(self_date)
+    pub fn relative_name<'a>(&self, _completer: &impl LinkCompleter<'a>) -> Option<String> {
+        Some(self.relative_name.clone())
     }
 
+    #[allow(dead_code)]
     pub fn get_self_date<'a>(&self, completer: &impl LinkCompleter<'a>) -> Option<NaiveDate> {
         let dailynote_format = &completer.settings().dailynote;
 
         chrono::NaiveDate::parse_from_str(&self.ref_name, dailynote_format).ok()
     }
 
-    fn relative_date_string(date: NaiveDate) -> Option<String> {
+    fn relative_date_strings(date: NaiveDate) -> Vec<String> {
         let today = chrono::Local::now().date_naive();
 
         if today == date {
-            Some("today".to_string())
+            vec!["today".to_string()]
         } else {
             match (date - today).num_days() {
-                1 => Some("tomorrow".to_string()),
-                2..=7 => Some(format!("next {}", date.format("%A"))),
-                -1 => Some("yesterday".to_string()),
-                -7..=-1 => Some(format!("last {}", date.format("%A"))),
-                _ => None,
+                1 => vec!["tomorrow".to_string(), format!("next {}", date.format("%A"))],
+                2..=7 => vec![format!("next {}", date.format("%A"))],
+                -1 => vec!["yesterday".to_string(), format!("last {}", date.format("%A"))],
+                -7..=-2 => vec![format!("last {}", date.format("%A"))],
+                _ => vec![],
             }
         }
     }
@@ -920,46 +921,48 @@ impl MDDailyNote<'_> {
     fn from_referenceable<'a>(
         referenceable: Referenceable<'a>,
         completer: &impl LinkCompleter<'a>,
-    ) -> Option<MDDailyNote<'a>> {
-        let (filerefname, filter_refname) = (match referenceable {
+    ) -> Vec<MDDailyNote<'a>> {
+        let filename = match referenceable {
             Referenceable::File(&ref path, _) | Referenceable::UnresovledFile(ref path, _) => {
-                let filename = path.file_name();
-                let dailynote_format = &completer.settings().dailynote;
-                let (date, filename) = filename.and_then(|filename| {
-                    let filename = filename.to_str()?;
-                    let filename = filename.replace(".md", "");
-                    Some((
-                        chrono::NaiveDate::parse_from_str(&filename, dailynote_format).ok(),
-                        filename,
-                    ))
-                })?;
-
-                date.and_then(Self::relative_date_string)
-                    .map(|thing| (filename.clone(), format!("{}: {}", thing, filename)))
+                path.file_name()
             }
-            _ => None,
-        })?;
+            _ => return vec![],
+        };
+        let dailynote_format = &completer.settings().dailynote;
+        let Some((date, filerefname)) = filename.and_then(|filename| {
+            let filename = filename.to_str()?;
+            let filename = filename.replace(".md", "");
+            let date = chrono::NaiveDate::parse_from_str(&filename, dailynote_format).ok()?;
+            Some((date, filename))
+        }) else {
+            return vec![];
+        };
 
-        Some(MDDailyNote {
-            match_string: filter_refname,
-            ref_name: filerefname,
-            real_referenceaable: Some(referenceable),
-        })
+        Self::relative_date_strings(date)
+            .into_iter()
+            .map(|rel| MDDailyNote {
+                match_string: format!("{}: {}", rel, filerefname),
+                ref_name: filerefname.clone(),
+                relative_name: rel,
+                real_referenceaable: Some(referenceable.clone()),
+            })
+            .collect()
     }
 
     fn from_date<'a>(
         date: NaiveDate,
         completer: &impl LinkCompleter<'a>,
-    ) -> Option<MDDailyNote<'a>> {
+    ) -> Vec<MDDailyNote<'a>> {
         let filerefname = date.format(&completer.settings().dailynote).to_string();
-        let match_string = format!("{}: {}", Self::relative_date_string(date)?, filerefname);
-
-        // path on unresolved file is useless
-        Some(MDDailyNote {
-            match_string,
-            ref_name: filerefname.clone(),
-            real_referenceaable: None,
-        })
+        Self::relative_date_strings(date)
+            .into_iter()
+            .map(|rel| MDDailyNote {
+                match_string: format!("{}: {}", rel, filerefname),
+                ref_name: filerefname.clone(),
+                relative_name: rel,
+                real_referenceaable: None,
+            })
+            .collect()
     }
 
     /// mock referenceable for kicks
@@ -974,5 +977,27 @@ impl MDDailyNote<'_> {
         let unresolved_file = Referenceable::UnresovledFile(path.to_path_buf(), &self.ref_name);
 
         unresolved_file
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::{Days, Local};
+
+    #[test]
+    fn test_relative_date_strings_includes_both_tomorrow_and_weekday() {
+        let today = Local::now().date_naive();
+        let tomorrow = today.checked_add_days(Days::new(1)).unwrap();
+        let strings = MDDailyNote::relative_date_strings(tomorrow);
+        assert_eq!(strings.len(), 2);
+        assert_eq!(strings[0], "tomorrow");
+        assert_eq!(strings[1], format!("next {}", tomorrow.format("%A")));
+
+        let yesterday = today.checked_sub_days(Days::new(1)).unwrap();
+        let strings_y = MDDailyNote::relative_date_strings(yesterday);
+        assert_eq!(strings_y.len(), 2);
+        assert_eq!(strings_y[0], "yesterday");
+        assert_eq!(strings_y[1], format!("last {}", yesterday.format("%A")));
     }
 }
