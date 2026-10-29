@@ -32,6 +32,7 @@ pub struct Settings {
     pub excluded_folders: Vec<String>,
     pub heading_slug: bool,
     pub callout_completions: bool,
+    pub index_unindexed_blocks: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -103,6 +104,7 @@ impl Settings {
             .set_default("excluded_folders", Vec::<String>::new())?
             .set_default("heading_slug", false)?
             .set_default("callout_completions", true)?
+            .set_default("index_unindexed_blocks", true)?
             .build()
             .map_err(|err| anyhow!("Build err: {err}"))?;
 
@@ -226,6 +228,15 @@ mod test {
             new_file_folder_path,
             Some("the-new-file-folder".to_string())
         );
+    }
+
+
+    #[test]
+    fn test_index_unindexed_blocks_default() {
+        use tower_lsp::lsp_types::ClientCapabilities;
+        let root = root_dir();
+        let settings = super::Settings::new(&root, &ClientCapabilities::default()).unwrap();
+        assert!(settings.index_unindexed_blocks);
     }
 
     fn root_dir() -> PathBuf {
