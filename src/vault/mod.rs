@@ -175,7 +175,7 @@ fn find_range(referenceable: &Referenceable) -> Option<tower_lsp::lsp_types::Ran
 pub struct Vault {
     pub md_files: MyHashMap<MDFile>,
     pub ropes: MyHashMap<Rope>,
-    root_dir: PathBuf,
+    pub(crate) root_dir: PathBuf,
 }
 
 /// Methods using vaults data
@@ -1780,21 +1780,27 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
         let refname = refname?;
         let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
 
-        if file_ref_text.contains('/') {
+        if file_ref_text.contains('/') || file_ref_text.contains('\\') {
             let file_ref_text = file_ref_text.replace(r"%20", " ");
             let file_ref_text = file_ref_text.replace(r"\ ", " ");
+            let file_ref_text = file_ref_text.replace('\\', "/");
+            let refname_path = refname_path.replace('\\', "/");
 
-            let chars: Vec<char> = file_ref_text.chars().collect();
-            match chars.as_slice() {
-                &['.', '/', ref path @ ..] | &['/', ref path @ ..] => {
-                    Some(String::from_iter(path) == refname_path)
-                }
-                path => Some(String::from_iter(path) == refname_path),
-            }
+            let clean_ref_text = file_ref_text
+                .strip_prefix("./")
+                .or_else(|| file_ref_text.strip_prefix('/'))
+                .unwrap_or(&file_ref_text);
+
+            let clean_ref_stem = clean_ref_text.strip_suffix(".md").unwrap_or(clean_ref_text);
+
+            let clean_refname_stem = refname_path.strip_suffix(".md").unwrap_or(&refname_path);
+
+            Some(clean_ref_stem.to_lowercase() == clean_refname_stem.to_lowercase())
         } else {
             let last_segment = refname.link_file_key()?;
+            let file_ref_stem = file_ref_text.strip_suffix(".md").unwrap_or(file_ref_text);
 
-            Some(file_ref_text.to_lowercase() == last_segment.to_lowercase())
+            Some(file_ref_stem.to_lowercase() == last_segment.to_lowercase())
         }
     })()
     .is_some_and(|b| b)
