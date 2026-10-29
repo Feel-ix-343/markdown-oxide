@@ -35,5 +35,10 @@ urlencoding = "2.1.3"
 pkg-url = "{ repo }/releases/download/v{ version }/{ name }-v{ version }-{ target }{ archive-suffix }"
 
 [profile.release]
+lto = "thin"
+
+[profile.optimized-release]
+inherits = "release"
+opt-level = 3
+lto = "fat"
 codegen-units = 1
-lto = true
