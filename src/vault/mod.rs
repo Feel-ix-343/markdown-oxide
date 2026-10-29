@@ -288,23 +288,26 @@ impl Vault {
                                     .unwrap_or("".to_string())
                             );
                             // For heading refnames, also add the slugified
-                            // (spaces→dashes) form so that both
-                            // "file#Some Heading" and "file#Some-Heading"
-                            // are recognised as resolved.
-                            let mut entries = vec![full.clone(), short.clone()];
+                            // (spaces→dashes) form and lowercased forms so that
+                            // "file#Some Heading", "file#Some-Heading", and
+                            // "file#some-heading" (Markdown standard) are recognized.
+                            let mut entries = vec![
+                                full.clone(),
+                                full.to_lowercase(),
+                                short.clone(),
+                                short.to_lowercase(),
+                            ];
                             if let Some((file_part, heading_part)) = full.split_once('#') {
                                 let slugged =
                                     format!("{}#{}", file_part, heading_to_slug(heading_part));
-                                if slugged != full {
-                                    entries.push(slugged);
-                                }
+                                entries.push(slugged.clone());
+                                entries.push(slugged.to_lowercase());
                             }
                             if let Some((file_part, heading_part)) = short.split_once('#') {
                                 let slugged =
                                     format!("{}#{}", file_part, heading_to_slug(heading_part));
-                                if slugged != short {
-                                    entries.push(slugged);
-                                }
+                                entries.push(slugged.clone());
+                                entries.push(slugged.to_lowercase());
                             }
                             Some(entries)
                         })
@@ -330,8 +333,12 @@ impl Vault {
                                 } else {
                                     ref_text.clone()
                                 };
+                            let ref_text_lower = ref_text.to_lowercase();
+                            let normalized_lower = normalized.to_lowercase();
                             !resolved_referenceables_refnames.contains(ref_text)
                                 && !resolved_referenceables_refnames.contains(&normalized)
+                                && !resolved_referenceables_refnames.contains(&ref_text_lower)
+                                && !resolved_referenceables_refnames.contains(&normalized_lower)
                         })
                         .flat_map(|(_, reference)| match reference {
                             Reference::WikiFileLink(data) | Reference::MDFileLink(data) => {
@@ -3432,5 +3439,35 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn test_unresolved_references_multi_word_heading() {
+        let settings = test_settings();
+        let path = PathBuf::from("test.md");
+        let text = r#"
+# Some Heading With Multiple Words
+
+Link to [slug](#some-heading-with-multiple-words)
+Link to [[#Some Heading With Multiple Words]]
+Link to [[#some-heading-with-multiple-words]]
+"#;
+        let mut vault = Vault {
+            md_files: HashMap::new().into(),
+            ropes: HashMap::new().into(),
+            root_dir: PathBuf::from("."),
+        };
+
+        Vault::update_vault(&settings, &mut vault, (&path, text));
+
+        let unresolved_nodes: Vec<_> = vault
+            .select_referenceable_nodes(None)
+            .into_iter()
+            .filter(|r| matches!(r, Referenceable::UnresolvedHeading(..)))
+            .collect();
+        assert_eq!(unresolved_nodes, vec![]);
+
+        let unresolved = crate::diagnostics::path_unresolved_references(&vault, &path);
+        assert_eq!(unresolved, Some(vec![]));
     }
 }
