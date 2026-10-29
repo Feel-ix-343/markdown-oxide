@@ -382,7 +382,9 @@ pub struct WikiLinkCompleter<'a> {
     line: u32,
     context_path: &'a Path,
     settings: &'a Settings,
+    #[allow(dead_code)]
     chars_in_line: u32,
+    trailing_closing_brackets: u32,
 }
 
 impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
@@ -429,7 +431,7 @@ impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
                 },
                 end: Position {
                     line: self.line,
-                    character: (self.chars_in_line - 1).min(self.character + 2_u32), // TODO: in zed, you cannot zed end to be out of the line count index
+                    character: self.character + self.trailing_closing_brackets,
                 },
             },
 
@@ -485,6 +487,10 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
 
         index.and_then(|index| {
             let cmp_text = line_chars.get(index + 1..character)?;
+            let trailing_closing_brackets = line_chars
+                .get(character..)
+                .map(|chars| chars.iter().take_while(|&&c| c == ']').take(2).count())
+                .unwrap_or(0) as u32;
 
             Some(WikiLinkCompleter {
                 vault,
@@ -496,6 +502,7 @@ impl<'a> Completer<'a> for WikiLinkCompleter<'a> {
                 context_path: context.path,
                 settings: context.settings,
                 chars_in_line: line_chars.len() as u32,
+                trailing_closing_brackets,
             })
         })
     }
@@ -974,5 +981,124 @@ impl MDDailyNote<'_> {
         let unresolved_file = Referenceable::UnresovledFile(path.to_path_buf(), &self.ref_name);
 
         unresolved_file
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ropey::Rope;
+    use std::collections::HashMap;
+    use tower_lsp::lsp_types::{ClientCapabilities, Position};
+
+    fn test_settings() -> Settings {
+        Settings::new(Path::new("."), &ClientCapabilities::default()).unwrap()
+    }
+
+    #[test]
+    fn test_wikilink_closing_brackets_detection_and_range() {
+        let settings = test_settings();
+        let path = PathBuf::from("test.md");
+        let mut ropes = HashMap::new();
+        // Line with closing brackets: "Link: [[B]]"
+        // Indices: L(0) i(1) n(2) k(3) :(4)  (5) [(6) [(7) B(8) ](9) ](10)
+        ropes.insert(path.clone(), Rope::from_str("Link: [[B]]"));
+
+        let vault = Vault {
+            md_files: HashMap::new().into(),
+            ropes: ropes.into(),
+            root_dir: PathBuf::from("."),
+        };
+
+        let opened_files = vec![];
+        let context = Context {
+            vault: &vault,
+            opened_files: &opened_files,
+            path: &path,
+            settings: &settings,
+        };
+
+        // Trigger after 'B' at character position 9
+        let completer =
+            WikiLinkCompleter::construct(context, 0, 9).expect("Should construct completer");
+        assert_eq!(completer.trailing_closing_brackets, 2);
+        assert_eq!(completer.index, 7); // second '['
+
+        let edit = completer.completion_text_edit(None, "Target");
+        match edit {
+            CompletionTextEdit::Edit(text_edit) => {
+                // start should be at 'B' (index 7 + 1 = 8)
+                assert_eq!(
+                    text_edit.range.start,
+                    Position {
+                        line: 0,
+                        character: 8
+                    }
+                );
+                // end must cover character 9 + 2 = 11 to replace the existing ']]'
+                assert_eq!(
+                    text_edit.range.end,
+                    Position {
+                        line: 0,
+                        character: 11
+                    }
+                );
+                assert!(text_edit.new_text.starts_with("Target]]"));
+            }
+            _ => panic!("Expected CompletionTextEdit::Edit"),
+        }
+    }
+
+    #[test]
+    fn test_wikilink_without_closing_brackets_preserves_trailing_text() {
+        let settings = test_settings();
+        let path = PathBuf::from("test.md");
+        let mut ropes = HashMap::new();
+        // Line without closing brackets: "Link: [[B and more text"
+        // Indices: L(0) i(1) n(2) k(3) :(4)  (5) [(6) [(7) B(8)  (9) a(10)...
+        ropes.insert(path.clone(), Rope::from_str("Link: [[B and more text"));
+
+        let vault = Vault {
+            md_files: HashMap::new().into(),
+            ropes: ropes.into(),
+            root_dir: PathBuf::from("."),
+        };
+
+        let opened_files = vec![];
+        let context = Context {
+            vault: &vault,
+            opened_files: &opened_files,
+            path: &path,
+            settings: &settings,
+        };
+
+        // Trigger after 'B' at character position 9
+        let completer =
+            WikiLinkCompleter::construct(context, 0, 9).expect("Should construct completer");
+        assert_eq!(completer.trailing_closing_brackets, 0);
+
+        let edit = completer.completion_text_edit(None, "Target");
+        match edit {
+            CompletionTextEdit::Edit(text_edit) => {
+                // start should be at 'B' (index 7 + 1 = 8)
+                assert_eq!(
+                    text_edit.range.start,
+                    Position {
+                        line: 0,
+                        character: 8
+                    }
+                );
+                // end should be exactly 9, NOT consuming trailing space or words
+                assert_eq!(
+                    text_edit.range.end,
+                    Position {
+                        line: 0,
+                        character: 9
+                    }
+                );
+                assert!(text_edit.new_text.starts_with("Target]]"));
+            }
+            _ => panic!("Expected CompletionTextEdit::Edit"),
+        }
     }
 }

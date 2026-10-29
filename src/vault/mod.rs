@@ -175,7 +175,7 @@ fn find_range(referenceable: &Referenceable) -> Option<tower_lsp::lsp_types::Ran
 pub struct Vault {
     pub md_files: MyHashMap<MDFile>,
     pub ropes: MyHashMap<Rope>,
-    root_dir: PathBuf,
+    pub(crate) root_dir: PathBuf,
 }
 
 /// Methods using vaults data
