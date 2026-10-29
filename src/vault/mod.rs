@@ -3433,4 +3433,23 @@ Some content here";
 
         assert_eq!(parsed, expected);
     }
+
+    #[test]
+    fn test_references_in_list_codeblocks_ignored() {
+        let text = r"# Title
+
+1. List item
+
+   ```toml
+   [[not_actually_a_wikilink_but_gives_unresolved_reference]]
+   ```
+
+2. Another list item";
+
+        let settings = test_settings();
+        assert!(!settings.references_in_codeblocks);
+
+        let file = MDFile::new(&settings, text, PathBuf::from("test.md"));
+        assert!(file.references.is_empty(), "Expected no references in indented codeblock, but got: {:?}", file.references);
+    }
 }

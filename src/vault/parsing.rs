@@ -12,7 +12,7 @@ pub struct MDCodeBlock {
 impl MDCodeBlock {
     pub fn new(text: &str) -> impl Iterator<Item = MDCodeBlock> + '_ {
         static RE: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r"(^|\n)(?<fullblock>``` *(?<lang>[^\n]+)?\n(?<code>(\n|.)*?)\n```)")
+            Regex::new(r"(^|\n)[ \t]*(?<fullblock>``` *(?<lang>[^\n]+)?\n(?<code>(\n|.)*?)\n[ \t]*```[ \t]*)")
                 .expect("Codeblock Regex Not Constructing")
         });
 
@@ -289,5 +289,36 @@ fj aklfjd
         ];
 
         assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn test_indented_code_block_parsing() {
+        let test = r"# Title
+
+1. List item
+
+   ```toml
+   [[not_actually_a_wikilink_but_gives_unresolved_reference]]
+   ```
+
+2. Another list item";
+
+        let parsed = MDCodeBlock::new(test).collect_vec();
+
+        let expected = vec![MDCodeBlock {
+            range: Range {
+                start: Position {
+                    line: 4,
+                    character: 3,
+                },
+                end: Position {
+                    line: 6,
+                    character: 6,
+                },
+            }
+            .into(),
+        }];
+
+        assert_eq!(parsed, expected);
     }
 }
