@@ -32,6 +32,15 @@ pub struct Settings {
     pub excluded_folders: Vec<String>,
     pub heading_slug: bool,
     pub callout_completions: bool,
+    pub link_format: LinkFormat,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum LinkFormat {
+    Shortest,
+    Relative,
+    Absolute,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -103,6 +112,10 @@ impl Settings {
             .set_default("excluded_folders", Vec::<String>::new())?
             .set_default("heading_slug", false)?
             .set_default("callout_completions", true)?
+            .set_default(
+                "link_format",
+                obsidian_link_format(root_dir).unwrap_or("shortest".to_string()),
+            )?
             .build()
             .map_err(|err| anyhow!("Build err: {err}"))?;
 
@@ -126,6 +139,26 @@ fn obsidian_daily_note_config(root_dir: &Path) -> Option<ObsidianDailyNoteConfig
     Some(ObsidianDailyNoteConfig {
         folder: config.folder,
         format: config.format.map(|x| convert_momentjs_to_chrono_format(&x)),
+    })
+}
+
+fn obsidian_link_format(root_dir: &Path) -> Option<String> {
+    let obsidian_settings_file = root_dir.join(".obsidian").join("app.json");
+    let file = std::fs::read(obsidian_settings_file).ok();
+    let config: Option<HashMap<String, Value>> = file.and_then(|file| {
+        let parsed = serde_json::from_slice(&file);
+        parsed.ok()
+    });
+
+    config.as_ref().and_then(|config| {
+        config
+            .get("newLinkFormat")
+            .and_then(|value| value.as_str())
+            .map(|format| match format {
+                "absolute" => "absolute",
+                _ => "shortest",
+            })
+            .map(String::from)
     })
 }
 
@@ -226,6 +259,14 @@ mod test {
             new_file_folder_path,
             Some("the-new-file-folder".to_string())
         );
+    }
+
+    #[test]
+    fn test_obsidian_link_format_default() {
+        use crate::config::obsidian_link_format;
+        // TestFiles doesn't have newLinkFormat specified in app.json, so it should be None
+        let link_format = obsidian_link_format(&root_dir());
+        assert_eq!(link_format, None);
     }
 
     fn root_dir() -> PathBuf {

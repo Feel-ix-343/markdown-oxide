@@ -175,7 +175,7 @@ fn find_range(referenceable: &Referenceable) -> Option<tower_lsp::lsp_types::Ran
 pub struct Vault {
     pub md_files: MyHashMap<MDFile>,
     pub ropes: MyHashMap<Rope>,
-    root_dir: PathBuf,
+    pub root_dir: PathBuf,
 }
 
 /// Methods using vaults data
@@ -1560,7 +1560,11 @@ pub enum Referenceable<'a> {
 
 /// Utility function
 pub fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
-    diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(String::from))
+    diff_paths(path, root_dir).and_then(|diff| {
+        diff.with_extension("")
+            .to_str()
+            .map(|s| s.replace('\\', "/"))
+    })
 }
 
 /// Converts heading text to its slug form for use in links.
