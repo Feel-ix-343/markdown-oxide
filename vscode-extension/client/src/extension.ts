@@ -23,7 +23,7 @@ import {
 let client: LanguageClient;
 
 const extId = "moxide"
-const versionTag = "v0.22.0"
+const versionTag = "v0.25.12"
 
 const releaseBaseUrl = "https://github.com/Feel-ix-343/markdown-oxide/releases/download"
 
@@ -123,7 +123,6 @@ export async function activate(context: ExtensionContext) {
 	// );
 	
 
-	let findReferencesCmd = vscode.commands.registerCommand(`${extId}.findReferences`, findReferencesCmdImpl);
 	
 	// Register semantic jump command
 	let semanticJumpCmd = vscode.commands.registerCommand('markdown-oxide.semanticJump', async () => {
@@ -185,6 +184,14 @@ export async function activate(context: ExtensionContext) {
 		documentSelector: [{ scheme: 'file', language: 'markdown' }],
 		synchronize: {
 			fileEvents: workspace.createFileSystemWatcher('**/*.md')
+		},
+		middleware: {
+			executeCommand: async (command, args, next) => {
+				if (command === `${extId}.findReferences` && args && args[0]) {
+					return findReferencesCmdImpl(args[0] as FindReferencesData);
+				}
+				return next(command, args);
+			}
 		}
 	};
 
@@ -197,10 +204,18 @@ export async function activate(context: ExtensionContext) {
 	);
 
 	// Start the client. This will also launch the server
-	client.start();
+	client.start().then(async () => {
+		// If the server didn't advertise moxide.findReferences (e.g. server < v0.25.0),
+		// register it manually as a fallback so CodeLens clicks still work.
+		const commands = await vscode.commands.getCommands(true);
+		if (!commands.includes(`${extId}.findReferences`)) {
+			const findReferencesCmd = vscode.commands.registerCommand(`${extId}.findReferences`, findReferencesCmdImpl);
+			context.subscriptions.push(findReferencesCmd);
+		}
+	});
 	
 	// 将命令处理器添加到订阅中
-	context.subscriptions.push(findReferencesCmd, semanticJumpCmd);
+	context.subscriptions.push(semanticJumpCmd);
 }
 
 export function deactivate(): Thenable<void> | undefined {
