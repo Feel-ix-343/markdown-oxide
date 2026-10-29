@@ -6,7 +6,7 @@ use tower_lsp::lsp_types::{
     RenameFile, RenameParams, ResourceOp, TextDocumentEdit, TextEdit, Url, WorkspaceEdit,
 };
 
-use crate::vault::{Reference, Referenceable, Vault};
+use crate::vault::{ensure_md_extension, Reference, Referenceable, Vault};
 
 pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<WorkspaceEdit> {
     let position = params.text_document_position.position;
@@ -38,7 +38,8 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                 (Some(change_op), name.to_string())
             }
             Referenceable::File(path, _file) => {
-                let new_path = path.with_file_name(&params.new_name).with_extension("md");
+                let file_name = ensure_md_extension(&params.new_name);
+                let new_path = path.with_file_name(&file_name);
 
                 let change_op = DocumentChangeOperation::Op(ResourceOp::Rename(RenameFile {
                     old_uri: Url::from_file_path(path).ok()?,
@@ -47,7 +48,11 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
                     annotation_id: None,
                 }));
 
-                let name = params.new_name.clone();
+                let name = params
+                    .new_name
+                    .strip_suffix(".md")
+                    .unwrap_or(&params.new_name)
+                    .to_string();
 
                 (Some(change_op), name)
             }
@@ -258,4 +263,60 @@ pub fn rename(vault: &Vault, params: &RenameParams, path: &Path) -> Option<Works
         )),
         ..Default::default()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Settings;
+    use std::fs;
+    use tower_lsp::lsp_types::{ClientCapabilities, Position, RenameParams, TextDocumentIdentifier, TextDocumentPositionParams};
+
+    #[test]
+    fn test_rename_file_preserves_dots_in_name() {
+        let unique_dir = format!("test_moxide_rename_dot_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos());
+        let root = std::env::temp_dir().join(unique_dir);
+        fs::create_dir_all(&root).unwrap();
+        let file_path = root.join("OldNote.md");
+        let ref_file = root.join("Referrer.md");
+        fs::write(&file_path, "Plain note content\n").unwrap();
+        fs::write(&ref_file, "Link to [[OldNote]]\n").unwrap();
+
+        let settings = Settings::new(&root, &ClientCapabilities::default()).unwrap();
+        let vault = Vault::construct_vault(&settings, &root).unwrap();
+
+        let params = RenameParams {
+            text_document_position: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier {
+                    uri: Url::from_file_path(&file_path).unwrap(),
+                },
+                position: Position { line: 0, character: 0 },
+            },
+            new_name: "TECH.51.05-New title".to_string(),
+            work_done_progress_params: Default::default(),
+        };
+
+        let edit = rename(&vault, &params, &file_path).unwrap();
+        let ops = match edit.document_changes.unwrap() {
+            DocumentChanges::Operations(ops) => ops,
+            _ => panic!("Expected DocumentChanges::Operations"),
+        };
+
+        let rename_op = ops.iter().find_map(|op| match op {
+            DocumentChangeOperation::Op(ResourceOp::Rename(r)) => Some(r),
+            _ => None,
+        }).expect("Rename operation not found");
+        assert_eq!(rename_op.new_uri.to_file_path().unwrap().file_name().unwrap(), "TECH.51.05-New title.md");
+
+        let edit_op = ops.iter().find_map(|op| match op {
+            DocumentChangeOperation::Edit(e) => Some(e),
+            _ => None,
+        }).expect("Edit operation not found");
+        match &edit_op.edits[0] {
+            OneOf::Left(te) => assert_eq!(te.new_text, "[[TECH.51.05-New title]]"),
+            _ => panic!("Expected TextEdit"),
+        }
+
+        let _ = fs::remove_dir_all(&root);
+    }
 }

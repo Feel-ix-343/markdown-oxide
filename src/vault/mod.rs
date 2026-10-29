@@ -1566,6 +1566,15 @@ pub fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
 /// Converts heading text to its slug form for use in links.
 /// Spaces are replaced with dashes, matching the behavior of GitHub, Obsidian,
 /// and tools like markdown-toc.
+/// Appends `.md` extension if not already present. Does not strip dots from filename.
+pub fn ensure_md_extension(name: &str) -> String {
+    if name.ends_with(".md") {
+        name.to_string()
+    } else {
+        format!("{name}.md")
+    }
+}
+
 pub fn heading_to_slug(heading: &str) -> String {
     heading.replace(' ', "-")
 }
@@ -1814,7 +1823,7 @@ mod vault_tests {
 
     use super::Reference::*;
     use super::{
-        MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference, Referenceable, Vault,
+        ensure_md_extension, MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference, Referenceable, Vault,
         MAX_INDEXED_LINES,
     };
 
@@ -3432,5 +3441,13 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn test_ensure_md_extension() {
+        assert_eq!(ensure_md_extension("TECH.51.04-Proxmox backups"), "TECH.51.04-Proxmox backups.md");
+        assert_eq!(ensure_md_extension("TECH.51.04-Proxmox backups.md"), "TECH.51.04-Proxmox backups.md");
+        assert_eq!(ensure_md_extension("simple"), "simple.md");
+        assert_eq!(ensure_md_extension("simple.md"), "simple.md");
     }
 }
