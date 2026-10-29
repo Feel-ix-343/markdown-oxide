@@ -7,7 +7,7 @@ use std::{
     hash::Hash,
     iter,
     ops::{Deref, DerefMut, Not, Range},
-    path::{Path, PathBuf, MAIN_SEPARATOR},
+    path::{Path, PathBuf},
     time::SystemTime,
 };
 
@@ -1182,7 +1182,7 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
 
     let decoded_filepath = file_path
         .map(|file_path| {
-            let file_path = file_path.as_str();
+            let file_path = file_path.as_str().trim();
             urlencoding::decode(file_path).map_or_else(|_| file_path.to_string(), |d| d.to_string())
         })
         .unwrap_or_else(|| file_name.to_string());
@@ -1581,7 +1581,7 @@ impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
         let path = &self.path.clone()?;
 
-        let last = path.split(MAIN_SEPARATOR).next_back()?;
+        let last = path.split(|c| c == '/' || c == '\\').next_back()?;
 
         Some(last.to_string())
     }
@@ -1780,21 +1780,32 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
         let refname = refname?;
         let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
 
-        if file_ref_text.contains('/') {
-            let file_ref_text = file_ref_text.replace(r"%20", " ");
-            let file_ref_text = file_ref_text.replace(r"\ ", " ");
+        let refname_path_normalized = refname_path.replace('\\', "/");
 
-            let chars: Vec<char> = file_ref_text.chars().collect();
-            match chars.as_slice() {
-                &['.', '/', ref path @ ..] | &['/', ref path @ ..] => {
-                    Some(String::from_iter(path) == refname_path)
-                }
-                path => Some(String::from_iter(path) == refname_path),
-            }
+        let file_ref_text = file_ref_text.trim();
+        let file_ref_text = file_ref_text.replace(r"%20", " ");
+        let file_ref_text = file_ref_text.replace(r"\ ", " ");
+        let file_ref_text = file_ref_text.replace('\\', "/");
+
+        if file_ref_text.contains('/') {
+            let clean_ref_text = file_ref_text
+                .trim_start_matches("./")
+                .trim_start_matches('/');
+
+            let refname_clean = refname_path_normalized
+                .trim_start_matches("./")
+                .trim_start_matches('/');
+
+            Some(
+                clean_ref_text.eq_ignore_ascii_case(refname_clean)
+                    || refname_clean
+                        .to_lowercase()
+                        .ends_with(&format!("/{}", clean_ref_text.to_lowercase())),
+            )
         } else {
             let last_segment = refname.link_file_key()?;
 
-            Some(file_ref_text.to_lowercase() == last_segment.to_lowercase())
+            Some(file_ref_text.eq_ignore_ascii_case(&last_segment))
         }
     })()
     .is_some_and(|b| b)
@@ -3432,5 +3443,44 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn test_wikilinks_with_spaces_in_filename() {
+        let make_refname = || Some(super::Refname {
+            full_refname: "git command".into(),
+            path: Some("git command".into()),
+            ..Default::default()
+        });
+
+        // Bare wikilink
+        assert!(super::matches_path_or_file("git command", make_refname()));
+
+        // Wikilink with surrounding whitespace trimmed
+        assert!(super::matches_path_or_file(" git command ", make_refname()));
+
+        // URL encoded space (%20)
+        assert!(super::matches_path_or_file("git%20command", make_refname()));
+
+        // Escaped space (\ )
+        assert!(super::matches_path_or_file("git\\ command", make_refname()));
+    }
+
+    #[test]
+    fn test_nested_path_with_spaces_in_filename() {
+        let make_refname = || Some(super::Refname {
+            full_refname: "subfolder/git command".into(),
+            path: Some("subfolder/git command".into()),
+            ..Default::default()
+        });
+
+        // Matching by filename alone
+        assert!(super::matches_path_or_file("git command", make_refname()));
+
+        // Matching by full path
+        assert!(super::matches_path_or_file("subfolder/git command", make_refname()));
+
+        // Matching by full path with %20
+        assert!(super::matches_path_or_file("subfolder/git%20command", make_refname()));
     }
 }
