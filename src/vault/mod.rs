@@ -1514,7 +1514,7 @@ pub struct MDLinkReferenceDefinition {
 impl MDLinkReferenceDefinition {
     fn new(text: &str) -> impl Iterator<Item = MDLinkReferenceDefinition> + '_ {
         static REGEX: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"\[(?<index>[^\^][^ \[\]]+)\]\:(?<text>.+)").unwrap());
+            Lazy::new(|| Regex::new(r"\[(?<index>[^\^][^ \[\]]+)\]\:[ \t]*(?:\r?\n[ \t]*)?(?<text>[^ \t\r\n][^\r\n]*)").unwrap());
 
         let result = REGEX
             .captures_iter(text)
@@ -3179,6 +3179,38 @@ Continued
         ];
 
         assert_eq!(parsed, expected)
+    }
+
+
+    #[test]
+    fn parse_link_ref_def_multiline() {
+        let text = "[ref]:\n  https://example.com/a-really-long-destination";
+
+        let parsed = MDLinkReferenceDefinition::new(text).collect_vec();
+
+        let expected = vec![MDLinkReferenceDefinition {
+            link_ref_name: "ref".into(),
+            url: "https://example.com/a-really-long-destination".into(),
+            title: None,
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 1,
+                    character: 47,
+                },
+            }
+            .into(),
+        }];
+
+        assert_eq!(parsed, expected);
+
+        // Also test that Reference::new recognizes the shortcut reference when defined across lines
+        let doc_text = "See [ref].\n\n[ref]:\n  https://example.com/long";
+        let refs = Reference::new(doc_text, "note.md").collect_vec();
+        assert!(refs.iter().any(|r| matches!(r, Reference::LinkRef(data) if data.reference_text == "ref")));
     }
 
     #[test]
