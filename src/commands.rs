@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::path::Path;
 
-use crate::config::Settings;
+use crate::{config::Settings, vault::ensure_md_extension};
 use chrono::offset::Local;
 use chrono::{Days, NaiveDate, NaiveDateTime};
 use fuzzydate::parse;
@@ -15,16 +15,16 @@ fn datetime_to_file(
     root_dir: &Path,
 ) -> Option<Url> {
     let filename = datetime.format(dailynote_format).to_string();
-    let path = root_dir.join(&filename);
+    let path = root_dir.join(ensure_md_extension(&filename));
 
-    Url::from_file_path(path.with_extension("md")).ok()
+    Url::from_file_path(path).ok()
 }
 
 fn date_to_file(date: NaiveDate, dailynote_format: &str, root_dir: &Path) -> Option<Url> {
     let filename = date.format(dailynote_format).to_string();
-    let path = root_dir.join(&filename);
+    let path = root_dir.join(ensure_md_extension(&filename));
 
-    Url::from_file_path(path.with_extension("md")).ok()
+    Url::from_file_path(path).ok()
 }
 
 fn extract_date_from_filename(filename: &str, dailynote_format: &str) -> Option<NaiveDate> {
