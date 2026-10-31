@@ -7,7 +7,7 @@ use std::{
     hash::Hash,
     iter,
     ops::{Deref, DerefMut, Not, Range},
-    path::{Path, PathBuf, MAIN_SEPARATOR},
+    path::{Path, PathBuf},
     time::SystemTime,
 };
 
@@ -1022,7 +1022,12 @@ impl Reference {
                 | WikiFileLink(ReferenceData {
                     reference_text: file_ref_text,
                     ..
-                }) => matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir)),
+                }) => matches_path_or_file(
+                    file_ref_text,
+                    referenceable.get_refname(root_dir),
+                    Some(root_dir),
+                    Some(file_path),
+                ),
                 Tag(_) => false,
                 WikiHeadingLink(_, _, _) => false,
                 WikiIndexedBlockLink(_, _, _) => false,
@@ -1050,9 +1055,13 @@ impl Reference {
                 | WikiIndexedBlockLink(.., file_ref_text, link_infile_ref)
                 | MDHeadingLink(.., file_ref_text, link_infile_ref)
                 | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => {
-                    matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir))
-                        && heading_to_slug(&link_infile_ref.to_lowercase())
-                            == heading_to_slug(&infile_ref.to_lowercase())
+                    matches_path_or_file(
+                        file_ref_text,
+                        referenceable.get_refname(root_dir),
+                        Some(root_dir),
+                        Some(file_path),
+                    ) && heading_to_slug(&link_infile_ref.to_lowercase())
+                        == heading_to_slug(&infile_ref.to_lowercase())
                 }
                 Tag(_) => false,
                 WikiFileLink(_) => false,
@@ -1560,7 +1569,11 @@ pub enum Referenceable<'a> {
 
 /// Utility function
 pub fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
-    diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(String::from))
+    diff_paths(path, root_dir).and_then(|diff| {
+        diff.with_extension("")
+            .to_str()
+            .map(|s| s.replace('\\', "/"))
+    })
 }
 
 /// Converts heading text to its slug form for use in links.
@@ -1581,7 +1594,7 @@ impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
         let path = &self.path.clone()?;
 
-        let last = path.split(MAIN_SEPARATOR).next_back()?;
+        let last = path.split(['/', '\\']).next_back()?;
 
         Some(last.to_string())
     }
@@ -1725,9 +1738,12 @@ impl Referenceable<'_> {
                     ..
                 })
                 | MDHeadingLink(.., file_ref_text, _)
-                | MDIndexedBlockLink(.., file_ref_text, _) => {
-                    matches_path_or_file(file_ref_text, self.get_refname(root_dir))
-                }
+                | MDIndexedBlockLink(.., file_ref_text, _) => matches_path_or_file(
+                    file_ref_text,
+                    self.get_refname(root_dir),
+                    Some(root_dir),
+                    Some(reference_path),
+                ),
                 Tag(_) => false,
                 Footnote(_) => false,
                 LinkRef(_) => false,
@@ -1775,29 +1791,72 @@ impl Referenceable<'_> {
     }
 }
 
-fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
+fn matches_path_or_file(
+    file_ref_text: &str,
+    refname: Option<Refname>,
+    root_dir: Option<&Path>,
+    source_file_path: Option<&Path>,
+) -> bool {
     (|| {
         let refname = refname?;
         let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
 
-        if file_ref_text.contains('/') {
-            let file_ref_text = file_ref_text.replace(r"%20", " ");
-            let file_ref_text = file_ref_text.replace(r"\ ", " ");
+        let norm_ref_text = file_ref_text.replace('\\', "/");
+        let norm_refname_path = refname_path.replace('\\', "/");
 
-            let chars: Vec<char> = file_ref_text.chars().collect();
-            match chars.as_slice() {
-                &['.', '/', ref path @ ..] | &['/', ref path @ ..] => {
-                    Some(String::from_iter(path) == refname_path)
-                }
-                path => Some(String::from_iter(path) == refname_path),
+        if norm_ref_text.contains('/') {
+            let norm_ref_text = norm_ref_text.replace(r"%20", " ");
+            let norm_ref_text = norm_ref_text.replace(r"\ ", " ");
+
+            let trimmed = norm_ref_text
+                .strip_prefix("./")
+                .or_else(|| norm_ref_text.strip_prefix('/'))
+                .unwrap_or(&norm_ref_text);
+
+            let trimmed = trimmed.strip_suffix(".md").unwrap_or(trimmed);
+
+            if trimmed.eq_ignore_ascii_case(&norm_refname_path) {
+                return Some(true);
             }
+
+            // Resolve relative path against source file directory
+            if let (Some(root), Some(source_path)) = (root_dir, source_file_path) {
+                if let Some(source_dir) = source_path.parent() {
+                    let mut resolved = source_dir.to_path_buf();
+                    for part in norm_ref_text.split('/') {
+                        if part == "." || part.is_empty() {
+                            continue;
+                        } else if part == ".." {
+                            resolved.pop();
+                        } else {
+                            resolved.push(part);
+                        }
+                    }
+
+                    if resolved.extension().is_some_and(|ext| ext == "md") {
+                        resolved.set_extension("");
+                    }
+
+                    if let Some(rel) = diff_paths(&resolved, root) {
+                        if let Some(rel_str) = rel.to_str() {
+                            let norm_rel = rel_str.replace('\\', "/");
+                            if norm_rel.eq_ignore_ascii_case(&norm_refname_path) {
+                                return Some(true);
+                            }
+                        }
+                    }
+                }
+            }
+
+            Some(false)
         } else {
             let last_segment = refname.link_file_key()?;
+            let clean_ref_text = norm_ref_text.strip_suffix(".md").unwrap_or(&norm_ref_text);
 
-            Some(file_ref_text.to_lowercase() == last_segment.to_lowercase())
+            Some(clean_ref_text.eq_ignore_ascii_case(&last_segment))
         }
     })()
-    .is_some_and(|b| b)
+    .unwrap_or(false)
 }
 
 // tests
@@ -3432,5 +3491,42 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn test_subfolder_reference_resolution_issue_274() {
+        let root_dir = Path::new("/vault");
+        let subfolder_file_path = PathBuf::from("/vault/subfolder/nested.md");
+        let source_file_path = PathBuf::from("/vault/subfolder/source.md");
+        let root_source_path = PathBuf::from("/vault/index.md");
+
+        let md_file = MDFile::new(
+            &test_settings(),
+            "# Nested Note",
+            subfolder_file_path.clone(),
+        );
+        let referenceable = Referenceable::File(&subfolder_file_path, &md_file);
+
+        // 1. Vault-root-relative wiki link: [[subfolder/nested]]
+        let link_root_wiki = Reference::new("[[subfolder/nested]]", "index")
+            .next()
+            .unwrap();
+        assert!(referenceable.matches_reference(root_dir, &link_root_wiki, &root_source_path));
+
+        // 2. Relative wiki link with ./ from inside subfolder: [[./nested]]
+        let link_sub_wiki = Reference::new("[[./nested]]", "source").next().unwrap();
+        assert!(referenceable.matches_reference(root_dir, &link_sub_wiki, &source_file_path));
+
+        // 3. Relative markdown link from inside subfolder: [nested](./nested.md)
+        let link_sub_md = Reference::new("[nested](./nested.md)", "source")
+            .next()
+            .unwrap();
+        assert!(referenceable.matches_reference(root_dir, &link_sub_md, &source_file_path));
+
+        // 4. Windows backslash path normalization check
+        let win_root = Path::new(r"C:\vault");
+        let win_path = PathBuf::from(r"C:\vault\subfolder\nested.md");
+        let win_ref_path = super::get_obsidian_ref_path(win_root, &win_path);
+        assert_eq!(win_ref_path.as_deref(), Some("subfolder/nested"));
     }
 }
