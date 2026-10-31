@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 #[derive(Deserialize, Debug, Clone, Hash, PartialEq, Eq)]
 pub struct MDMetadata {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_tags", alias = "alias")]
     aliases: Vec<String>,
     #[serde(default, deserialize_with = "deserialize_tags", alias = "tag")]
     tags: Vec<String>,
@@ -92,6 +92,18 @@ impl MDMetadata {
 #[cfg(test)]
 mod tests {
     use crate::vault::metadata::MDMetadata;
+
+    #[test]
+    fn test_alias_singular() {
+        let metadata = MDMetadata::new("---\nalias: my_alias\n---").unwrap();
+        assert_eq!(metadata.aliases(), &["my_alias"]);
+    }
+
+    #[test]
+    fn test_aliases_comma_separated() {
+        let metadata = MDMetadata::new("---\naliases: a1, a2, a3\n---").unwrap();
+        assert_eq!(metadata.aliases(), &["a1", "a2", "a3"]);
+    }
 
     #[test]
     fn test_aliases() {

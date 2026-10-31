@@ -467,11 +467,11 @@ impl Vault {
             _ => &[],
         };
 
-        std::iter::once(vault_name)
-            .chain(alias_names.iter().map(|a| Some(a.to_string())))
-            .flatten()
-            .map(|name| SymbolInformation {
-                name,
+        let mut symbols = Vec::new();
+
+        if let Some(ref name) = vault_name {
+            symbols.push(SymbolInformation {
+                name: name.clone(),
                 kind,
                 location: Location {
                     uri: uri.clone(),
@@ -480,8 +480,24 @@ impl Vault {
                 container_name: None,
                 tags: None,
                 deprecated: None,
-            })
-            .collect()
+            });
+        }
+
+        for alias in alias_names {
+            symbols.push(SymbolInformation {
+                name: alias.clone(),
+                kind,
+                location: Location {
+                    uri: uri.clone(),
+                    range,
+                },
+                container_name: vault_name.clone(),
+                tags: None,
+                deprecated: None,
+            });
+        }
+
+        symbols
     }
 }
 
@@ -3329,6 +3345,40 @@ Some content here";
         // "tag" should be on line 2 (the `- tag` line), NOT line 1 (the `tags:` key line)
         assert_eq!(tags[0].range.start.line, 2);
         assert_eq!(tags[1].range.start.line, 3);
+    }
+
+    #[test]
+    fn test_workspace_symbols_with_aliases_issue_263() {
+        let root = std::env::current_dir().unwrap();
+        let path = root.join("my_note.md");
+        let text = "---\naliases: [\"alias1\", \"alias2\"]\n---\n# Header\nSome text".to_string();
+        let mut vault = Vault {
+            md_files: HashMap::new().into(),
+            ropes: HashMap::new().into(),
+            root_dir: root,
+        };
+
+        Vault::update_vault(&test_settings(), &mut vault, (&path, &text));
+
+        let ref_node = vault
+            .select_referenceable_nodes(None)
+            .into_iter()
+            .find(|n| matches!(n, Referenceable::File(_, _)))
+            .expect("file referenceable node exists");
+
+        let symbols = vault.to_symbol_informations(&ref_node);
+        assert_eq!(symbols.len(), 3);
+
+        // Primary note symbol
+        assert_eq!(symbols[0].name, "my_note");
+        assert_eq!(symbols[0].container_name, None);
+
+        // Aliases symbols with container_name pointing to parent note
+        assert_eq!(symbols[1].name, "alias1");
+        assert_eq!(symbols[1].container_name, Some("my_note".to_string()));
+
+        assert_eq!(symbols[2].name, "alias2");
+        assert_eq!(symbols[2].container_name, Some("my_note".to_string()));
     }
 
     #[test]
