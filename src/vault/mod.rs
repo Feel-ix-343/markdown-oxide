@@ -617,6 +617,22 @@ pub trait Rangeable {
             && (range.end.line > position.line
                 || (range.end.line == position.line && range.end.character >= position.character))
     }
+
+    /// Returns true when two ranges overlap (intersect) on a non-empty span.
+    fn overlaps(&self, other: &impl Rangeable) -> bool {
+        let self_range = self.range();
+        let other_range = other.range();
+
+        let self_start_before_other_end = self_range.start.line < other_range.end.line
+            || (self_range.start.line == other_range.end.line
+                && self_range.start.character < other_range.end.character);
+
+        let other_start_before_self_end = other_range.start.line < self_range.end.line
+            || (other_range.start.line == self_range.end.line
+                && other_range.start.character < self_range.end.character);
+
+        self_start_before_other_end && other_start_before_self_end
+    }
 }
 
 impl Rangeable for MDHeading {
@@ -682,7 +698,11 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| {
+                    !code_blocks
+                        .iter()
+                        .any(|codeblock| codeblock.overlaps(it) && !it.includes(codeblock))
+                })
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -3432,5 +3452,75 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn test_issue_269_wikilink_across_inline_code_spans() {
+        let settings = test_settings();
+
+        // 1. Issue #269 reported case: bracket markers split across inline code spans
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers";
+        let md_file = MDFile::new(&settings, text, PathBuf::from("test.md"));
+        assert!(
+            md_file.references.is_empty(),
+            "Expected 0 references when brackets are split across inline code spans, got: {:?}",
+            md_file.references
+        );
+
+        // 2. Control: normal wikilink outside code must be parsed
+        let text_normal = "This is a [[valid_link]] in markdown";
+        let md_normal = MDFile::new(&settings, text_normal, PathBuf::from("test.md"));
+        assert_eq!(
+            md_normal.references.len(),
+            1,
+            "Expected 1 reference for normal wikilink"
+        );
+        match &md_normal.references[0] {
+            WikiFileLink(data) => assert_eq!(data.reference_text, "valid_link"),
+            other => panic!("Expected WikiFileLink, got: {:?}", other),
+        }
+
+        // 3. Control: wikilink directly adjacent to inline code spans
+        let text_adjacent = "`prefix`[[adjacent_link]]`suffix`";
+        let md_adjacent = MDFile::new(&settings, text_adjacent, PathBuf::from("test.md"));
+        assert_eq!(
+            md_adjacent.references.len(),
+            1,
+            "Expected 1 reference for adjacent wikilink"
+        );
+        match &md_adjacent.references[0] {
+            WikiFileLink(data) => assert_eq!(data.reference_text, "adjacent_link"),
+            other => panic!("Expected WikiFileLink, got: {:?}", other),
+        }
+
+        // 4. Control: markdown link with inline code in display text must be retained
+        let text_code_in_display = "[see `code` docs](doc.md)";
+        let md_code_display =
+            MDFile::new(&settings, text_code_in_display, PathBuf::from("test.md"));
+        assert_eq!(
+            md_code_display.references.len(),
+            1,
+            "Expected 1 reference for markdown link with inline code in display text"
+        );
+        match &md_code_display.references[0] {
+            MDFileLink(data) => assert_eq!(data.reference_text, "doc"),
+            other => panic!("Expected MDFileLink, got: {:?}", other),
+        }
+
+        // 5. Control: wikilink fully enclosed inside inline code must be ignored
+        let text_inside_inline = "Here is `[[enclosed_link]]` inside inline code";
+        let md_inside_inline = MDFile::new(&settings, text_inside_inline, PathBuf::from("test.md"));
+        assert!(
+            md_inside_inline.references.is_empty(),
+            "Expected 0 references for wikilink enclosed in inline code"
+        );
+
+        // 6. Control: wikilink fully enclosed inside fenced code block must be ignored
+        let text_inside_fenced = "```rust\nlet x = [[fenced_link]];\n```";
+        let md_inside_fenced = MDFile::new(&settings, text_inside_fenced, PathBuf::from("test.md"));
+        assert!(
+            md_inside_fenced.references.is_empty(),
+            "Expected 0 references for wikilink in fenced code block"
+        );
     }
 }
