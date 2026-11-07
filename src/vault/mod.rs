@@ -1605,9 +1605,9 @@ impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
         let path = &self.path.clone()?;
 
-        let last = path.split(MAIN_SEPARATOR).next_back()?;
+        let last = path.rsplit(['/', MAIN_SEPARATOR]).next()?;
 
-        Some(last.to_string())
+        Some(last.trim_end_matches(".md").to_string())
     }
 }
 
@@ -1804,21 +1804,29 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
         let refname = refname?;
         let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
 
-        if file_ref_text.contains('/') {
-            let file_ref_text = file_ref_text.replace(r"%20", " ");
-            let file_ref_text = file_ref_text.replace(r"\ ", " ");
+        let file_ref_text = file_ref_text.replace(r"%20", " ").replace(r"\ ", " ");
+        let normalized_ref = file_ref_text
+            .trim_start_matches("./")
+            .trim_start_matches('/')
+            .trim_end_matches(".md")
+            .replace('\\', "/");
+        let normalized_target = refname_path
+            .trim_start_matches("./")
+            .trim_start_matches('/')
+            .trim_end_matches(".md")
+            .replace('\\', "/");
 
-            let chars: Vec<char> = file_ref_text.chars().collect();
-            match chars.as_slice() {
-                &['.', '/', ref path @ ..] | &['/', ref path @ ..] => {
-                    Some(String::from_iter(path) == refname_path)
-                }
-                path => Some(String::from_iter(path) == refname_path),
-            }
+        if normalized_ref.contains('/') {
+            Some(
+                normalized_ref.eq_ignore_ascii_case(&normalized_target)
+                    || normalized_target
+                        .to_lowercase()
+                        .ends_with(&format!("/{}", normalized_ref.to_lowercase())),
+            )
         } else {
             let last_segment = refname.link_file_key()?;
 
-            Some(file_ref_text.to_lowercase() == last_segment.to_lowercase())
+            Some(normalized_ref.to_lowercase() == last_segment.to_lowercase())
         }
     })()
     .is_some_and(|b| b)
