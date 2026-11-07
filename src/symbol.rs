@@ -38,6 +38,7 @@ pub fn workspace_symbol(
         .select_referenceable_nodes(None)
         .into_iter()
         .flat_map(|referenceable| vault.to_symbol_informations(&referenceable))
+        .unique_by(|sym| (sym.name.clone(), sym.location.clone()))
         .collect_vec();
 
     // Some clients (e.g. one-shot workspace symbol pickers) send an empty query first and
