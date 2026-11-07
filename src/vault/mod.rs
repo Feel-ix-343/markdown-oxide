@@ -610,6 +610,18 @@ pub trait Rangeable {
                     && self_range.end.character >= other_range.end.character))
     }
 
+    fn intersects(&self, other: &impl Rangeable) -> bool {
+        let self_range = self.range();
+        let other_range = other.range();
+
+        (self_range.end.line > other_range.start.line
+            || (self_range.end.line == other_range.start.line
+                && self_range.end.character >= other_range.start.character))
+            && (other_range.end.line > self_range.start.line
+                || (other_range.end.line == self_range.start.line
+                    && other_range.end.character >= self_range.start.character))
+    }
+
     fn includes_position(&self, position: Position) -> bool {
         let range = self.range();
         (range.start.line < position.line
@@ -682,9 +694,21 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| {
+                    code_blocks
+                        .iter()
+                        .all(|codeblock| !codeblock.intersects(it) || it.includes(codeblock))
+                })
                 .collect_vec(),
-            _ => Reference::new(text, file_name).collect_vec(),
+            _ => Reference::new(text, file_name)
+                .filter(|it| {
+                    code_blocks.iter().all(|codeblock| {
+                        !codeblock.intersects(it)
+                            || codeblock.includes(it)
+                            || it.includes(codeblock)
+                    })
+                })
+                .collect_vec(),
         };
         let headings = MDHeading::new(text)
             .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
