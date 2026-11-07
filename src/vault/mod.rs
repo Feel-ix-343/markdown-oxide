@@ -610,6 +610,18 @@ pub trait Rangeable {
                     && self_range.end.character >= other_range.end.character))
     }
 
+    fn intersects(&self, other: &impl Rangeable) -> bool {
+        let self_range = self.range();
+        let other_range = other.range();
+
+        (self_range.end.line > other_range.start.line
+            || (self_range.end.line == other_range.start.line
+                && self_range.end.character >= other_range.start.character))
+            && (other_range.end.line > self_range.start.line
+                || (other_range.end.line == self_range.start.line
+                    && other_range.end.character >= self_range.start.character))
+    }
+
     fn includes_position(&self, position: Position) -> bool {
         let range = self.range();
         (range.start.line < position.line
@@ -682,9 +694,21 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| {
+                    code_blocks
+                        .iter()
+                        .all(|codeblock| !codeblock.intersects(it) || it.includes(codeblock))
+                })
                 .collect_vec(),
-            _ => Reference::new(text, file_name).collect_vec(),
+            _ => Reference::new(text, file_name)
+                .filter(|it| {
+                    code_blocks.iter().all(|codeblock| {
+                        !codeblock.intersects(it)
+                            || codeblock.includes(it)
+                            || it.includes(codeblock)
+                    })
+                })
+                .collect_vec(),
         };
         let headings = MDHeading::new(text)
             .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
@@ -1581,9 +1605,9 @@ impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
         let path = &self.path.clone()?;
 
-        let last = path.split(MAIN_SEPARATOR).next_back()?;
+        let last = path.rsplit(['/', MAIN_SEPARATOR]).next()?;
 
-        Some(last.to_string())
+        Some(last.trim_end_matches(".md").to_string())
     }
 }
 
@@ -1780,21 +1804,29 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
         let refname = refname?;
         let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
 
-        if file_ref_text.contains('/') {
-            let file_ref_text = file_ref_text.replace(r"%20", " ");
-            let file_ref_text = file_ref_text.replace(r"\ ", " ");
+        let file_ref_text = file_ref_text.replace(r"%20", " ").replace(r"\ ", " ");
+        let normalized_ref = file_ref_text
+            .trim_start_matches("./")
+            .trim_start_matches('/')
+            .trim_end_matches(".md")
+            .replace('\\', "/");
+        let normalized_target = refname_path
+            .trim_start_matches("./")
+            .trim_start_matches('/')
+            .trim_end_matches(".md")
+            .replace('\\', "/");
 
-            let chars: Vec<char> = file_ref_text.chars().collect();
-            match chars.as_slice() {
-                &['.', '/', ref path @ ..] | &['/', ref path @ ..] => {
-                    Some(String::from_iter(path) == refname_path)
-                }
-                path => Some(String::from_iter(path) == refname_path),
-            }
+        if normalized_ref.contains('/') {
+            Some(
+                normalized_ref.eq_ignore_ascii_case(&normalized_target)
+                    || normalized_target
+                        .to_lowercase()
+                        .ends_with(&format!("/{}", normalized_ref.to_lowercase())),
+            )
         } else {
             let last_segment = refname.link_file_key()?;
 
-            Some(file_ref_text.to_lowercase() == last_segment.to_lowercase())
+            Some(normalized_ref.to_lowercase() == last_segment.to_lowercase())
         }
     })()
     .is_some_and(|b| b)
