@@ -7,7 +7,7 @@ use std::{
     hash::Hash,
     iter,
     ops::{Deref, DerefMut, Not, Range},
-    path::{Path, PathBuf, MAIN_SEPARATOR},
+    path::{Path, PathBuf},
     time::SystemTime,
 };
 
@@ -1560,7 +1560,11 @@ pub enum Referenceable<'a> {
 
 /// Utility function
 pub fn get_obsidian_ref_path(root_dir: &Path, path: &Path) -> Option<String> {
-    diff_paths(path, root_dir).and_then(|diff| diff.with_extension("").to_str().map(String::from))
+    diff_paths(path, root_dir).and_then(|diff| {
+        diff.with_extension("")
+            .to_str()
+            .map(|s| s.replace('\\', "/"))
+    })
 }
 
 /// Converts heading text to its slug form for use in links.
@@ -1581,7 +1585,7 @@ impl Refname {
     pub fn link_file_key(&self) -> Option<String> {
         let path = &self.path.clone()?;
 
-        let last = path.split(MAIN_SEPARATOR).next_back()?;
+        let last = path.rsplit(|c| c == '/' || c == '\\').next()?;
 
         Some(last.to_string())
     }
@@ -1778,11 +1782,12 @@ impl Referenceable<'_> {
 fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
     (|| {
         let refname = refname?;
-        let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
+        let refname_path = refname.path.clone()?.replace('\\', "/"); // this function should not be used for tags, ... only for heading, files, indexed blocks
 
-        if file_ref_text.contains('/') {
+        if file_ref_text.contains('/') || file_ref_text.contains('\\') {
             let file_ref_text = file_ref_text.replace(r"%20", " ");
             let file_ref_text = file_ref_text.replace(r"\ ", " ");
+            let file_ref_text = file_ref_text.replace('\\', "/");
 
             let chars: Vec<char> = file_ref_text.chars().collect();
             match chars.as_slice() {
@@ -3432,5 +3437,56 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    // Issue #274: on Windows, refnames are indexed with `\` separators while
+    // Obsidian link text always uses `/`. These tests verify cross-platform
+    // compatibility by testing Windows-style paths against forward-slash link text.
+    fn windows_style_refname() -> Refname {
+        Refname {
+            full_refname: r"sub\note".to_string(),
+            path: Some(r"sub\note".to_string()),
+            infile_ref: None,
+        }
+    }
+
+    #[test]
+    fn windows_style_refname_matches_forward_slash_link() {
+        assert!(super::matches_path_or_file(
+            "sub/note",
+            Some(windows_style_refname())
+        ));
+    }
+
+    #[test]
+    fn windows_style_refname_matches_dot_slash_link() {
+        assert!(super::matches_path_or_file(
+            "./sub/note",
+            Some(windows_style_refname())
+        ));
+    }
+
+    #[test]
+    fn windows_style_refname_matches_filename_only_link() {
+        assert!(super::matches_path_or_file(
+            "note",
+            Some(windows_style_refname())
+        ));
+        assert_eq!(
+            windows_style_refname().link_file_key().as_deref(),
+            Some("note")
+        );
+    }
+
+    #[test]
+    fn windows_style_refname_rejects_other_paths() {
+        assert!(!super::matches_path_or_file(
+            "other/note",
+            Some(windows_style_refname())
+        ));
+        assert!(!super::matches_path_or_file(
+            "sub/other",
+            Some(windows_style_refname())
+        ));
     }
 }
