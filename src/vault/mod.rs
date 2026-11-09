@@ -1022,7 +1022,12 @@ impl Reference {
                 | WikiFileLink(ReferenceData {
                     reference_text: file_ref_text,
                     ..
-                }) => matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir)),
+                }) => matches_path_or_file_from(
+                    file_ref_text,
+                    referenceable.get_refname(root_dir),
+                    root_dir,
+                    file_path,
+                ),
                 Tag(_) => false,
                 WikiHeadingLink(_, _, _) => false,
                 WikiIndexedBlockLink(_, _, _) => false,
@@ -1050,9 +1055,13 @@ impl Reference {
                 | WikiIndexedBlockLink(.., file_ref_text, link_infile_ref)
                 | MDHeadingLink(.., file_ref_text, link_infile_ref)
                 | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => {
-                    matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir))
-                        && heading_to_slug(&link_infile_ref.to_lowercase())
-                            == heading_to_slug(&infile_ref.to_lowercase())
+                    matches_path_or_file_from(
+                        file_ref_text,
+                        referenceable.get_refname(root_dir),
+                        root_dir,
+                        file_path,
+                    ) && heading_to_slug(&link_infile_ref.to_lowercase())
+                        == heading_to_slug(&infile_ref.to_lowercase())
                 }
                 Tag(_) => false,
                 WikiFileLink(_) => false,
@@ -1725,9 +1734,12 @@ impl Referenceable<'_> {
                     ..
                 })
                 | MDHeadingLink(.., file_ref_text, _)
-                | MDIndexedBlockLink(.., file_ref_text, _) => {
-                    matches_path_or_file(file_ref_text, self.get_refname(root_dir))
-                }
+                | MDIndexedBlockLink(.., file_ref_text, _) => matches_path_or_file_from(
+                    file_ref_text,
+                    self.get_refname(root_dir),
+                    root_dir,
+                    reference_path,
+                ),
                 Tag(_) => false,
                 Footnote(_) => false,
                 LinkRef(_) => false,
@@ -1798,6 +1810,73 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
         }
     })()
     .is_some_and(|b| b)
+}
+
+/// Like [`matches_path_or_file`], but additionally resolves explicit relative
+/// links (`./…` and `../…`) against the directory of the file that contains
+/// the link, the way Obsidian and other markdown tools interpret them.
+/// Vault-root-relative and bare-filename links keep their existing meaning.
+fn matches_path_or_file_from(
+    file_ref_text: &str,
+    refname: Option<Refname>,
+    root_dir: &Path,
+    source_path: &Path,
+) -> bool {
+    let Some(refname) = refname else {
+        return false;
+    };
+    let refname_path = refname.path.clone();
+
+    if matches_path_or_file(file_ref_text, Some(refname)) {
+        return true;
+    }
+
+    let Some(refname_path) = refname_path else {
+        return false;
+    };
+
+    resolve_relative_ref(file_ref_text, root_dir, source_path)
+        .is_some_and(|resolved| resolved == refname_path.replace(MAIN_SEPARATOR, "/"))
+}
+
+/// Resolves a link that starts with `./` or `../` relative to the directory
+/// of `source_path`, returning the vault-relative path it points to (forward
+/// slashes, no `.md` extension). Returns `None` for links that are not
+/// explicit relative links and for links that would escape the vault root.
+fn resolve_relative_ref(
+    file_ref_text: &str,
+    root_dir: &Path,
+    source_path: &Path,
+) -> Option<String> {
+    let cleaned = file_ref_text.replace("%20", " ").replace(r"\ ", " ");
+    let target = cleaned.strip_suffix(".md").unwrap_or(&cleaned);
+
+    if !target.starts_with("./") && !target.starts_with("../") {
+        return None;
+    }
+
+    // Directory of the file containing the link, relative to the vault root.
+    let source_rel = diff_paths(source_path, root_dir)?;
+    let mut segments: Vec<String> = source_rel
+        .parent()?
+        .components()
+        .filter_map(|component| match component {
+            std::path::Component::Normal(part) => part.to_str().map(str::to_owned),
+            _ => None,
+        })
+        .collect();
+
+    for segment in target.split('/') {
+        match segment {
+            "" | "." => {}
+            ".." => {
+                segments.pop()?;
+            }
+            part => segments.push(part.to_string()),
+        }
+    }
+
+    Some(segments.join("/"))
 }
 
 // tests
@@ -3432,5 +3511,125 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn resolve_relative_ref_resolves_against_containing_file() {
+        let root = Path::new("/vault");
+
+        // `./sibling` from a note inside `sub/` points into `sub/`
+        assert_eq!(
+            super::resolve_relative_ref("./sibling", root, Path::new("/vault/sub/inner.md"))
+                .as_deref(),
+            Some("sub/sibling")
+        );
+        // `../outer` climbs from `sub/` back to the vault root
+        assert_eq!(
+            super::resolve_relative_ref("../outer", root, Path::new("/vault/sub/inner.md"))
+                .as_deref(),
+            Some("outer")
+        );
+        // `./sub/inner` from a note at the root stays a root-level path
+        assert_eq!(
+            super::resolve_relative_ref("./sub/inner", root, Path::new("/vault/outer.md"))
+                .as_deref(),
+            Some("sub/inner")
+        );
+        // mixed `.` and `..` segments across deeper nesting
+        assert_eq!(
+            super::resolve_relative_ref("../c/./d", root, Path::new("/vault/a/b/note.md"))
+                .as_deref(),
+            Some("a/c/d")
+        );
+        // a `.md` ending and `%20` are normalized like vault-relative links
+        assert_eq!(
+            super::resolve_relative_ref("./my%20note.md", root, Path::new("/vault/sub/inner.md"))
+                .as_deref(),
+            Some("sub/my note")
+        );
+    }
+
+    #[test]
+    fn resolve_relative_ref_rejects_escapes_and_non_relative_links() {
+        let root = Path::new("/vault");
+
+        // links that would climb out of the vault are not resolved
+        assert_eq!(
+            super::resolve_relative_ref("../../secret", root, Path::new("/vault/sub/inner.md")),
+            None
+        );
+        assert_eq!(
+            super::resolve_relative_ref("../secret", root, Path::new("/vault/outer.md")),
+            None
+        );
+        // only explicit `./` / `../` links are relative; the rest keep
+        // their vault-relative or bare-filename meaning
+        assert_eq!(
+            super::resolve_relative_ref("sub/inner", root, Path::new("/vault/outer.md")),
+            None
+        );
+        assert_eq!(
+            super::resolve_relative_ref("inner", root, Path::new("/vault/sub/inner.md")),
+            None
+        );
+        assert_eq!(
+            super::resolve_relative_ref("/sub/inner", root, Path::new("/vault/outer.md")),
+            None
+        );
+    }
+
+    #[test]
+    fn relative_links_do_not_report_unresolved_references() {
+        let mut vault = Vault {
+            md_files: HashMap::new().into(),
+            ropes: HashMap::new().into(),
+            root_dir: PathBuf::from("."),
+        };
+
+        let outer = PathBuf::from("outer.md");
+        let inner = PathBuf::from("sub/inner.md");
+        let sibling = PathBuf::from("sub/sibling.md");
+
+        let outer_text = "Down: [[./sub/inner]] and [[sub/inner]]".to_string();
+        let inner_text = "Up: [[../outer]] and [md up](../outer.md). \
+                          Side: [[./sibling]]. Gone: [[sub/missing]]. \
+                          Escape: [[../../secret]]"
+            .to_string();
+        let sibling_text = "# Sibling".to_string();
+
+        Vault::update_vault(&test_settings(), &mut vault, (&outer, &outer_text));
+        Vault::update_vault(&test_settings(), &mut vault, (&inner, &inner_text));
+        Vault::update_vault(&test_settings(), &mut vault, (&sibling, &sibling_text));
+
+        // every link in outer.md resolves (vault-relative controls included)
+        let unresolved_outer =
+            crate::diagnostics::path_unresolved_references(&vault, &outer).unwrap();
+        assert!(unresolved_outer.is_empty(), "{unresolved_outer:?}");
+
+        // in sub/inner.md only the genuinely missing target and the
+        // vault-escaping link stay unresolved
+        let unresolved_inner =
+            crate::diagnostics::path_unresolved_references(&vault, &inner).unwrap();
+        let unresolved_texts = unresolved_inner
+            .iter()
+            .map(|(_, reference)| reference.data().reference_text.as_str())
+            .collect_vec();
+
+        assert!(
+            unresolved_texts.contains(&"sub/missing"),
+            "{unresolved_texts:?}"
+        );
+        assert!(
+            unresolved_texts.contains(&"../../secret"),
+            "{unresolved_texts:?}"
+        );
+        assert!(
+            !unresolved_texts.contains(&"../outer"),
+            "{unresolved_texts:?}"
+        );
+        assert!(
+            !unresolved_texts.contains(&"./sibling"),
+            "{unresolved_texts:?}"
+        );
     }
 }
