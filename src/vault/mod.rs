@@ -617,6 +617,13 @@ pub trait Rangeable {
             && (range.end.line > position.line
                 || (range.end.line == position.line && range.end.character >= position.character))
     }
+
+    fn overlaps(&self, other: &impl Rangeable) -> bool {
+        let other_range = other.range();
+        self.includes(other)
+            || self.includes_position(other_range.start)
+            || self.includes_position(other_range.end)
+    }
 }
 
 impl Rangeable for MDHeading {
@@ -682,7 +689,7 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.overlaps(it)))
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
