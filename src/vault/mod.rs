@@ -324,13 +324,24 @@ impl Vault {
                             // reference text so that e.g. "file#Some Heading" matches
                             // the slugified refname "file#Some-Heading" in the resolved
                             // set, without corrupting spaces in file paths.
+                            let clean_ref = ref_text
+                                .trim_start_matches("./")
+                                .trim_start_matches('/')
+                                .replace("\\", "/");
+                            let clean_ref_no_ext = clean_ref
+                                .strip_suffix(".md")
+                                .unwrap_or(&clean_ref)
+                                .to_string();
                             let normalized =
-                                if let Some((file_part, heading_part)) = ref_text.split_once('#') {
-                                    format!("{}#{}", file_part, heading_to_slug(heading_part))
+                                if let Some((file_part, heading_part)) = clean_ref.split_once('#') {
+                                    let clean_file = file_part.strip_suffix(".md").unwrap_or(file_part);
+                                    format!("{}#{}", clean_file, heading_to_slug(heading_part))
                                 } else {
-                                    ref_text.clone()
+                                    clean_ref_no_ext.clone()
                                 };
                             !resolved_referenceables_refnames.contains(ref_text)
+                                && !resolved_referenceables_refnames.contains(&clean_ref)
+                                && !resolved_referenceables_refnames.contains(&clean_ref_no_ext)
                                 && !resolved_referenceables_refnames.contains(&normalized)
                         })
                         .flat_map(|(_, reference)| match reference {
@@ -1784,13 +1795,12 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
             let file_ref_text = file_ref_text.replace(r"%20", " ");
             let file_ref_text = file_ref_text.replace(r"\ ", " ");
 
-            let chars: Vec<char> = file_ref_text.chars().collect();
-            match chars.as_slice() {
-                &['.', '/', ref path @ ..] | &['/', ref path @ ..] => {
-                    Some(String::from_iter(path) == refname_path)
-                }
-                path => Some(String::from_iter(path) == refname_path),
-            }
+            let cleaned = file_ref_text
+                .trim_start_matches("./")
+                .trim_start_matches('/')
+                .strip_suffix(".md")
+                .unwrap_or(file_ref_text.trim_start_matches("./").trim_start_matches('/'));
+            Some(cleaned.eq_ignore_ascii_case(&refname_path))
         } else {
             let last_segment = refname.link_file_key()?;
 
