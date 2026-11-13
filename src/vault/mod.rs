@@ -617,6 +617,20 @@ pub trait Rangeable {
             && (range.end.line > position.line
                 || (range.end.line == position.line && range.end.character >= position.character))
     }
+
+    /// Whether the two ranges strictly overlap. Ranges that merely touch at a
+    /// single boundary point do not count as intersecting.
+    fn intersects(&self, other: &impl Rangeable) -> bool {
+        let self_range = self.range();
+        let other_range = other.range();
+
+        (self_range.start.line < other_range.end.line
+            || (self_range.start.line == other_range.end.line
+                && self_range.start.character < other_range.end.character))
+            && (other_range.start.line < self_range.end.line
+                || (other_range.start.line == self_range.end.line
+                    && other_range.start.character < self_range.end.character))
+    }
 }
 
 impl Rangeable for MDHeading {
@@ -677,15 +691,20 @@ impl MDFile {
             .expect("file should have file stem")
             .to_str()
             .unwrap_or_default();
-        let links = match context {
-            Settings {
-                references_in_codeblocks: false,
-                ..
-            } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
-                .collect_vec(),
-            _ => Reference::new(text, file_name).collect_vec(),
-        };
+        let links = Reference::new(text, file_name)
+            .filter(|it| {
+                !code_blocks.iter().any(|codeblock| {
+                    if codeblock.includes(it) {
+                        // Fully inside a code block: drop unless the user opted in.
+                        !context.references_in_codeblocks
+                    } else {
+                        // Partially overlapping a code block (e.g. `[[` in one code
+                        // span and `]]` in another) is never a real reference.
+                        codeblock.intersects(it)
+                    }
+                })
+            })
+            .collect_vec();
         let headings = MDHeading::new(text)
             .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)));
         let footnotes = MDFootnote::new(text)
@@ -3432,5 +3451,67 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn mdfile_ignores_wikilink_split_across_code_spans() {
+        // `[[` and `]]` in separate inline code spans are different syntax
+        // nodes and must not be treated as a wiki link.
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers";
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("test.md"));
+
+        assert!(parsed.references.is_empty());
+    }
+
+    #[test]
+    fn mdfile_ignores_mdlink_split_across_code_spans() {
+        let text = "Use `[` and `](target)` carefully";
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("test.md"));
+
+        assert!(parsed.references.is_empty());
+    }
+
+    #[test]
+    fn mdfile_keeps_links_adjacent_to_code_spans() {
+        let text = "`code` [[link]] and [[link 2]] `code`";
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("test.md"));
+
+        let reference_texts = parsed
+            .references
+            .iter()
+            .map(|reference| reference.data().reference_text.as_str())
+            .collect_vec();
+        assert_eq!(reference_texts, vec!["link", "link 2"]);
+    }
+
+    #[test]
+    fn mdfile_keeps_links_inside_code_spans_when_opted_in() {
+        let mut settings = test_settings();
+        settings.references_in_codeblocks = true;
+
+        let text = "See `[[inner]]` but not `[[` and `]]`";
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md"));
+
+        let reference_texts = parsed
+            .references
+            .iter()
+            .map(|reference| reference.data().reference_text.as_str())
+            .collect_vec();
+        assert_eq!(reference_texts, vec!["inner"]);
+    }
+
+    #[test]
+    fn e2e_issue_269_no_unresolved_diagnostic_for_split_brackets() {
+        let path = PathBuf::from("issue269.md");
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers";
+        let mut vault = Vault {
+            md_files: HashMap::new().into(),
+            ropes: HashMap::new().into(),
+            root_dir: PathBuf::from("."),
+        };
+        Vault::update_vault(&test_settings(), &mut vault, (&path, text));
+
+        let unresolved = crate::diagnostics::path_unresolved_references(&vault, &path);
+        assert_eq!(unresolved, Some(vec![]));
     }
 }
