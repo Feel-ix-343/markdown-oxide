@@ -617,6 +617,32 @@ pub trait Rangeable {
             && (range.end.line > position.line
                 || (range.end.line == position.line && range.end.character >= position.character))
     }
+
+    /// Whether the position lies strictly inside the range, i.e. not on the
+    /// range's boundary. A position that merely touches the start or end of
+    /// the range (directly adjacent content) does not count as inside.
+    fn includes_position_strict(&self, position: Position) -> bool {
+        let range = self.range();
+        (range.start.line < position.line
+            || (range.start.line == position.line && range.start.character < position.character))
+            && (range.end.line > position.line
+                || (range.end.line == position.line && range.end.character > position.character))
+    }
+}
+
+/// The position of the last character covered by `range`, whose end is
+/// exclusive. Falls back to the end position itself when the range covers
+/// no character on its end line.
+fn last_char_position(range: &MyRange) -> Position {
+    let end = range.end;
+    if end.character > 0 {
+        Position {
+            line: end.line,
+            character: end.character - 1,
+        }
+    } else {
+        end
+    }
 }
 
 impl Rangeable for MDHeading {
@@ -682,7 +708,22 @@ impl MDFile {
                 references_in_codeblocks: false,
                 ..
             } => Reference::new(text, file_name)
-                .filter(|it| !code_blocks.iter().any(|codeblock| codeblock.includes(it)))
+                .filter(|it| {
+                    !code_blocks.iter().any(|codeblock| {
+                        // A reference counts as code not only when a codeblock fully
+                        // contains it, but also when either of its ends lands inside
+                        // one: a wiki-link match can start in one inline code span
+                        // and end in another (e.g. "`[[` and `]]`"), in which case no
+                        // single span ever contains the whole match. Testing the
+                        // reference's own first/last characters -- instead of any
+                        // overlap with a span -- keeps genuine links that merely
+                        // contain code inside their display text, such as
+                        // [a `code` link](file.md), intact.
+                        codeblock.includes(it)
+                            || codeblock.includes_position_strict(it.range().start)
+                            || codeblock.includes_position_strict(last_char_position(it.range()))
+                    })
+                })
                 .collect_vec(),
             _ => Reference::new(text, file_name).collect_vec(),
         };
@@ -3432,5 +3473,74 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn mdfile_ignores_wikilink_split_across_inline_code_spans() {
+        // The `[[` and `]]` markers sit in two separate inline code spans, so
+        // no single codeblock contains the whole wiki-link match; it must not
+        // surface as an (unresolved) reference.
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers";
+
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("test.md"));
+
+        assert!(parsed.references.is_empty());
+    }
+
+    #[test]
+    fn mdfile_keeps_wikilink_next_to_inline_code() {
+        let text = "`code` [[real link]] and [[other link]] `code`";
+
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("test.md"));
+
+        let reference_texts = parsed
+            .references
+            .iter()
+            .map(|reference| reference.data().reference_text.clone())
+            .collect_vec();
+        assert_eq!(reference_texts, vec!["real link", "other link"]);
+    }
+
+    #[test]
+    fn mdfile_keeps_md_link_with_code_in_display_text() {
+        let text = "[see `code` docs](target.md)";
+
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("test.md"));
+
+        assert!(parsed.references.iter().any(|reference| {
+            matches!(
+                reference,
+                MDFileLink(data) if data.reference_text == "target"
+            )
+        }));
+    }
+
+    #[test]
+    fn mdfile_ignores_wikilink_inside_inline_code() {
+        let text = "Use `[[not a link]]` literally";
+
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("test.md"));
+
+        assert!(parsed.references.is_empty());
+    }
+
+    #[test]
+    fn mdfile_ignores_wikilink_inside_fenced_codeblock() {
+        let text = "```\n[[not a link]]\n```";
+
+        let parsed = MDFile::new(&test_settings(), text, PathBuf::from("test.md"));
+
+        assert!(parsed.references.is_empty());
+    }
+
+    #[test]
+    fn mdfile_keeps_split_code_span_wikilink_when_references_in_codeblocks() {
+        let mut settings = test_settings();
+        settings.references_in_codeblocks = true;
+        let text = "* DO NOT use the square bracket `[[` and `]]` markers";
+
+        let parsed = MDFile::new(&settings, text, PathBuf::from("test.md"));
+
+        assert!(!parsed.references.is_empty());
     }
 }
