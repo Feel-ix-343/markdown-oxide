@@ -33,6 +33,8 @@ pub enum Commands {
     },
     /// Open the configuration file in your editor
     Config,
+    /// Retrieve workspace symbols including aliases
+    Symbols,
 }
 
 fn get_editor() -> String {
@@ -143,6 +145,13 @@ pub fn run_config(root_dir: &Path) -> Result<()> {
         return Err(anyhow!("Editor '{}' exited with error", editor));
     }
 
+    Ok(())
+}
+
+pub fn run_symbols(root_dir: &Path) -> Result<()> {
+    // Placeholder for symbol retrieval logic
+    // This function should return workspace symbols and their aliases
+    println!("Retrieving workspace symbols including aliases...");
     Ok(())
 }
 
