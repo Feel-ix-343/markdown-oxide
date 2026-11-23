@@ -32,7 +32,13 @@ pub fn references(vault: &Vault, cursor_position: Position, path: &Path) -> Opti
         references
             .into_iter()
             .filter_map(|link| {
-                Url::from_file_path(link.0)
+                let file_path = link.0;
+                let resolved_path = if file_path.is_relative() {
+                    path.parent().unwrap().join(file_path) // Resolve relative paths
+                } else {
+                    file_path.to_path_buf()
+                };
+                Url::from_file_path(resolved_path)
                     .map(|good| Location {
                         uri: good,
                         range: *link.1.data().range, // TODO: Why can't I use .into() here?
