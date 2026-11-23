@@ -18,7 +18,12 @@ pub fn references(vault: &Vault, cursor_position: Position, path: &Path) -> Opti
             let references = referenceables
                 .into_iter()
                 .filter_map(|referenceable| {
-                    vault.select_references_for_referenceable(&referenceable)
+                    // Check if the referenceable is within a code block or inline code
+                    if vault.is_within_code_block(referenceable, path, cursor_position) {
+                        None // Ignore references within code blocks
+                    } else {
+                        vault.select_references_for_referenceable(&referenceable)
+                    }
                 }) // drop the Nones on the options
                 .flatten()
                 .collect_vec();
