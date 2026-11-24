@@ -885,7 +885,14 @@ impl Reference {
             });
 
         static MD_LINK_RE: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r"\[(?<display>[^\[\]]*?)\]\(<?(?<filepath>(\.?\/)?[^\[\]\|\#<>]+?)?(?<ending>\.md)?(\#(?<infileref>[^\[\]\|<>]+?))?>?\)")
+            // Inside <...>, parentheses are destination characters, not link delimiters.
+            // Keep the bare-destination alternative separate so its closing parenthesis
+            // still ends the link without consuming trailing prose (see issue #260).
+            Regex::new(concat!(
+                r"\[(?<display>[^\[\]]*?)\]\(",
+                r"(?:<(?<angle_filepath>(\.?\/)?[^\[\]\|\#<>]+?)?(?<angle_ending>\.md)?(\#(?<angle_infileref>[^\[\]\|<>]+?))?>",
+                r"|(?<filepath>(\.?\/)?[^\[\]\|\#<>]+?)?(?<ending>\.md)?(\#(?<infileref>[^\[\]\|<>]+?))?)\)",
+            ))
                 .expect("MD Link Not Constructing")
         }); // [display](relativePath)
 
@@ -893,7 +900,10 @@ impl Reference {
             .captures_iter(text)
             .filter(|captures| {
                 matches!(
-                    captures.name("ending").map(|ending| ending.as_str()),
+                    captures
+                        .name("ending")
+                        .or_else(|| captures.name("angle_ending"))
+                        .map(|ending| ending.as_str()),
                     Some(".md") | None
                 )
             })
@@ -1092,11 +1102,18 @@ struct RegexTuple<'a> {
 
 impl RegexTuple<'_> {
     fn new(capture: Captures) -> Option<RegexTuple> {
-        let has_md_ending = capture.name("ending").is_some();
+        let has_md_ending = capture
+            .name("ending")
+            .or_else(|| capture.name("angle_ending"))
+            .is_some();
         match (
             capture.get(0),
-            capture.name("filepath"),
-            capture.name("infileref"),
+            capture
+                .name("filepath")
+                .or_else(|| capture.name("angle_filepath")),
+            capture
+                .name("infileref")
+                .or_else(|| capture.name("angle_infileref")),
             capture.name("display"),
         ) {
             (Some(range), file_path, infile_ref, display_text) => Some(RegexTuple {
@@ -1806,6 +1823,7 @@ mod vault_tests {
     use std::{collections::HashMap, path::Path, path::PathBuf};
 
     use itertools::Itertools;
+    use ropey::Rope;
     use tower_lsp::lsp_types::{ClientCapabilities, Position, Range};
 
     use crate::config::Settings;
@@ -1814,8 +1832,8 @@ mod vault_tests {
 
     use super::Reference::*;
     use super::{
-        MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, Reference, Referenceable, Vault,
-        MAX_INDEXED_LINES,
+        MDFile, MDFootnote, MDHeading, MDIndexedBlock, MDTag, MyHashMap, Reference, Referenceable,
+        Vault, MAX_INDEXED_LINES,
     };
 
     fn test_settings() -> Settings {
@@ -2108,6 +2126,40 @@ mod vault_tests {
         )];
 
         assert_eq!(parsed, expected)
+    }
+
+    #[test]
+    fn same_file_md_heading_with_parentheses() {
+        let path = PathBuf::from("/vault/mmv.md");
+        let link = "[golang](<#original (golang)>)";
+        let text = format!(
+            "### original (golang)\n\n{link} (trailing prose)\n[missing](<#missing (golang)>)\n"
+        );
+        let file = MDFile::new(&test_settings(), &text, path.clone());
+        let vault = Vault {
+            md_files: MyHashMap(HashMap::from([(path.clone(), file)])),
+            ropes: MyHashMap(HashMap::from([(path.clone(), Rope::from_str(&text))])),
+            root_dir: PathBuf::from("/vault"),
+        };
+
+        let references = vault.select_references(Some(&path)).unwrap();
+        assert_eq!(references.len(), 2);
+        let reference = references[0].1;
+        assert_eq!(reference.data().reference_text, "mmv#original (golang)");
+        assert_eq!(reference.data().range.start, Position::new(2, 0));
+        assert_eq!(
+            reference.data().range.end,
+            Position::new(2, link.len() as u32)
+        );
+        let targets = vault.select_referenceables_for_reference(reference, &path);
+        assert_eq!(targets.len(), 1);
+        assert!(matches!(targets[0], Referenceable::Heading(..)));
+        let unresolved = crate::diagnostics::path_unresolved_references(&vault, &path).unwrap();
+        assert_eq!(unresolved.len(), 1);
+        assert_eq!(
+            unresolved[0].1.data().reference_text,
+            "mmv#missing (golang)"
+        );
     }
 
     #[test]
