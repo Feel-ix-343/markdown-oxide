@@ -7,7 +7,7 @@ use std::{
     hash::Hash,
     iter,
     ops::{Deref, DerefMut, Not, Range},
-    path::{Path, PathBuf, MAIN_SEPARATOR},
+    path::{Component, Path, PathBuf, MAIN_SEPARATOR},
     time::SystemTime,
 };
 
@@ -306,15 +306,64 @@ impl Vault {
                                     entries.push(slugged);
                                 }
                             }
+                            // GitHub-style anchors (headings only, not ^block indexes).
+                            for form in [&full, &short] {
+                                if let Some((file_part, heading_part)) = form.split_once('#') {
+                                    if !heading_part.starts_with('^') {
+                                        entries.push(format!(
+                                            "{}#{}",
+                                            file_part,
+                                            github_heading_slug(heading_part)
+                                        ));
+                                    }
+                                }
+                            }
                             Some(entries)
                         })
                     })
                     .flatten()
                     .collect();
 
+                // Standalone `<a id>` anchors are valid `file#id` targets.
+                let mut resolved_referenceables_refnames = resolved_referenceables_refnames;
+                for (path, file) in self.md_files.iter() {
+                    let full = get_obsidian_ref_path(self.root_dir(), path);
+                    let short = file.file_name().map(str::to_string);
+                    for anchor in &file.anchors {
+                        for base in full.iter().chain(short.iter()) {
+                            resolved_referenceables_refnames
+                                .insert(format!("{}#{}", base, anchor.id));
+                        }
+                    }
+                }
+
                 let unresolved = self.select_references(None).map(|references| {
                     references
                         .iter()
+                        // A link resolved relative to its own file is not unresolved. This
+                        // depends on the linking file, so check it before de-duplicating by text.
+                        .filter(|(ref_path, reference)| {
+                            let ref_text = &reference.data().reference_text;
+                            let (file_part, infile_part) = match ref_text.split_once('#') {
+                                Some((file_part, infile)) => (file_part, Some(infile)),
+                                None => (ref_text.as_str(), None),
+                            };
+                            let Some(relative) =
+                                reference.relative_ref_path(self.root_dir(), ref_path, file_part)
+                            else {
+                                return true;
+                            };
+                            let candidate = match infile_part {
+                                Some(infile) => format!("{}#{}", relative, infile),
+                                None => relative.clone(),
+                            };
+                            let slugged = match infile_part {
+                                Some(infile) => format!("{}#{}", relative, heading_to_slug(infile)),
+                                None => relative,
+                            };
+                            !resolved_referenceables_refnames.contains(&candidate)
+                                && !resolved_referenceables_refnames.contains(&slugged)
+                        })
                         .unique_by(|(_, reference)| &reference.data().reference_text)
                         .par_bridge()
                         .into_par_iter()
@@ -659,6 +708,8 @@ impl Rangeable for Reference {
 pub struct MDFile {
     pub references: Vec<Reference>,
     pub headings: Vec<MDHeading>,
+    /// Standalone custom anchors (`<a id="x"></a>` lines), accepted as link targets.
+    pub anchors: Vec<MDAnchor>,
     pub indexed_blocks: Vec<MDIndexedBlock>,
     pub tags: Vec<MDTag>,
     pub footnotes: Vec<MDFootnote>,
@@ -704,6 +755,13 @@ impl MDFile {
             _ => MDTag::new(text).collect_vec(),
         };
         let metadata = MDMetadata::new(text);
+        let anchors = MDAnchor::new(text)
+            .filter(|anchor| {
+                !code_blocks
+                    .iter()
+                    .any(|codeblock| codeblock.includes(anchor))
+            })
+            .collect_vec();
 
         // Parse frontmatter tags and add them to both tags and references
         let frontmatter_tags = metadata
@@ -731,6 +789,7 @@ impl MDFile {
         MDFile {
             references: all_links,
             headings: headings.collect(),
+            anchors,
             indexed_blocks: indexed_blocks.collect(),
             tags: all_tags,
             footnotes: footnotes.collect(),
@@ -751,6 +810,7 @@ impl MDFile {
         let MDFile {
             references: _,
             headings,
+            anchors: _,
             indexed_blocks,
             tags,
             footnotes,
@@ -973,6 +1033,25 @@ impl Reference {
             .chain(link_ref_references)
     }
 
+    /// The vault-root path (without extension) this link points to when it is resolved
+    /// relative to the linking file's folder. Markdown links are always relative-capable
+    /// (CommonMark semantics); wiki links only when written with a leading `./` or `../`.
+    /// Returns `None` for vault-absolute (`/x`) paths and paths escaping the vault root.
+    pub fn relative_ref_path(
+        &self,
+        root_dir: &Path,
+        source_path: &Path,
+        file_ref_text: &str,
+    ) -> Option<String> {
+        let explicit = file_ref_text.starts_with("./") || file_ref_text.starts_with("../");
+        match self {
+            MDFileLink(..) | MDHeadingLink(..) | MDIndexedBlockLink(..) => {}
+            WikiFileLink(..) | WikiHeadingLink(..) | WikiIndexedBlockLink(..) if explicit => {}
+            _ => return None,
+        }
+        resolve_relative_ref_path(root_dir, source_path, file_ref_text)
+    }
+
     pub fn references(
         &self,
         root_dir: &Path,
@@ -1022,7 +1101,13 @@ impl Reference {
                 | WikiFileLink(ReferenceData {
                     reference_text: file_ref_text,
                     ..
-                }) => matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir)),
+                }) => {
+                    matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir))
+                        || matches_relative_path(
+                            self.relative_ref_path(root_dir, file_path, file_ref_text),
+                            referenceable.get_refname(root_dir),
+                        )
+                }
                 Tag(_) => false,
                 WikiHeadingLink(_, _, _) => false,
                 WikiIndexedBlockLink(_, _, _) => false,
@@ -1050,9 +1135,12 @@ impl Reference {
                 | WikiIndexedBlockLink(.., file_ref_text, link_infile_ref)
                 | MDHeadingLink(.., file_ref_text, link_infile_ref)
                 | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => {
-                    matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir))
-                        && heading_to_slug(&link_infile_ref.to_lowercase())
-                            == heading_to_slug(&infile_ref.to_lowercase())
+                    (matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir))
+                        || matches_relative_path(
+                            self.relative_ref_path(root_dir, file_path, file_ref_text),
+                            referenceable.get_refname(root_dir),
+                        ))
+                        && heading_matches(link_infile_ref, infile_ref)
                 }
                 Tag(_) => false,
                 WikiFileLink(_) => false,
@@ -1214,6 +1302,37 @@ fn generic_link_constructor<T: ParseableReferenceConstructor>(
             filepath,
             infile.as_str(),
         )),
+    }
+}
+
+/// A standalone custom anchor: a line containing only `<a id="x"></a>` (or `name=`).
+/// Other custom-ID forms (inside headings, mixed with text, other tags) are ignored.
+#[derive(Debug, PartialEq, Eq, Default, Hash, Clone)]
+pub struct MDAnchor {
+    pub id: String,
+    pub range: MyRange,
+}
+
+impl Rangeable for MDAnchor {
+    fn range(&self) -> &MyRange {
+        &self.range
+    }
+}
+
+impl MDAnchor {
+    fn new(text: &str) -> impl Iterator<Item = MDAnchor> + '_ {
+        static ANCHOR_RE: Lazy<Regex> = Lazy::new(|| {
+            Regex::new(r#"(?m)^[ \t]*<a\s+(?:id|name)="(?<id>[A-Za-z0-9_.:-]+)"\s*>\s*</a>[ \t]*$"#)
+                .unwrap()
+        });
+        let rope = Rope::from_str(text);
+        ANCHOR_RE.captures_iter(text).flat_map(move |captures| {
+            let (full, id) = (captures.get(0)?, captures.name("id")?);
+            Some(MDAnchor {
+                id: id.as_str().to_string(),
+                range: MyRange::from_range(&rope, full.range()),
+            })
+        })
     }
 }
 
@@ -1570,6 +1689,32 @@ pub fn heading_to_slug(heading: &str) -> String {
     heading.replace(' ', "-")
 }
 
+/// GitHub-compatible heading ID (github-slugger semantics, without duplicate suffixes):
+/// lowercase, spaces become `-`, and everything except letters, numbers, `-` and `_` is
+/// removed, so punctuation, Markdown emphasis/code markers and emoji disappear.
+/// Example: `2d.5. Shell — stock tmux` -> `2d5-shell--stock-tmux`.
+/// Known limits: GitHub's `-1`/`-2` suffixes for repeated headings, link syntax inside
+/// headings and decomposed combining marks are not modelled.
+pub fn github_heading_slug(heading: &str) -> String {
+    heading
+        .to_lowercase()
+        .chars()
+        .filter_map(|c| match c {
+            ' ' => Some('-'),
+            '-' | '_' => Some(c),
+            c if c.is_alphanumeric() => Some(c),
+            _ => None,
+        })
+        .collect()
+}
+
+/// True when a link's in-file reference names `heading`, either in Moxide's native
+/// form (case-insensitive, spaces or dashes) or as a GitHub-style anchor.
+fn heading_matches(link_infile_ref: &str, heading: &str) -> bool {
+    heading_to_slug(&link_infile_ref.to_lowercase()) == heading_to_slug(&heading.to_lowercase())
+        || link_infile_ref.to_lowercase() == github_heading_slug(heading)
+}
+
 #[derive(Debug, PartialEq, Eq, Default)]
 pub struct Refname {
     pub full_refname: String,
@@ -1727,6 +1872,10 @@ impl Referenceable<'_> {
                 | MDHeadingLink(.., file_ref_text, _)
                 | MDIndexedBlockLink(.., file_ref_text, _) => {
                     matches_path_or_file(file_ref_text, self.get_refname(root_dir))
+                        || matches_relative_path(
+                            reference.relative_ref_path(root_dir, reference_path, file_ref_text),
+                            self.get_refname(root_dir),
+                        )
                 }
                 Tag(_) => false,
                 Footnote(_) => false,
@@ -1772,6 +1921,46 @@ impl Referenceable<'_> {
                 | Referenceable::UnresovledFile(..)
                 | Referenceable::UnresovledIndexedBlock(..)
         )
+    }
+}
+
+/// Resolve `file_ref_text` against the folder of `source_path` and return a vault-root
+/// refname path. `None` if the path is vault-absolute, the source is outside the vault,
+/// or `..` segments would leave the vault root.
+pub fn resolve_relative_ref_path(
+    root_dir: &Path,
+    source_path: &Path,
+    file_ref_text: &str,
+) -> Option<String> {
+    let text = file_ref_text.replace(r"%20", " ").replace(r"\ ", " ");
+    if text.is_empty() || text.starts_with('/') {
+        return None;
+    }
+    let source_dir = diff_paths(source_path.parent()?, root_dir)?;
+    let mut parts = Vec::new();
+    for component in source_dir.components() {
+        match component {
+            Component::Normal(part) => parts.push(part.to_str()?.to_string()),
+            Component::CurDir => {}
+            _ => return None,
+        }
+    }
+    for segment in text.split('/') {
+        match segment {
+            "" | "." => {}
+            ".." => {
+                parts.pop()?;
+            }
+            other => parts.push(other.to_string()),
+        }
+    }
+    (!parts.is_empty()).then(|| parts.join("/"))
+}
+
+fn matches_relative_path(relative: Option<String>, refname: Option<Refname>) -> bool {
+    match (relative, refname.and_then(|refname| refname.path)) {
+        (Some(relative), Some(path)) => relative == path,
+        _ => false,
     }
 }
 
@@ -3432,5 +3621,202 @@ Some content here";
         })];
 
         assert_eq!(parsed, expected);
+    }
+}
+
+#[cfg(test)]
+mod kb_customization_tests {
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use tower_lsp::lsp_types::ClientCapabilities;
+
+    use super::{Reference, Referenceable, Vault};
+    use crate::config::Settings;
+
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    /// A throwaway vault on disk; removed on drop.
+    pub(crate) struct TempVault {
+        pub root: PathBuf,
+        pub vault: Vault,
+    }
+
+    impl Drop for TempVault {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.root);
+        }
+    }
+
+    pub(crate) fn temp_vault(files: &[(&str, &str)]) -> TempVault {
+        let root = std::env::temp_dir().join(format!(
+            "moxide-kb-test-{}-{}",
+            std::process::id(),
+            COUNTER.fetch_add(1, Ordering::SeqCst)
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        for (rel, text) in files {
+            let path = root.join(rel);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, text).unwrap();
+        }
+        let settings = Settings::new(Path::new("."), &ClientCapabilities::default()).unwrap();
+        let vault = Vault::construct_vault(&settings, &root).unwrap();
+        TempVault { root, vault }
+    }
+
+    fn file_referenceable<'a>(vault: &'a Vault, root: &Path, rel: &str) -> Referenceable<'a> {
+        let (path, file) = vault
+            .md_files
+            .iter()
+            .find(|(path, _)| path.as_path() == root.join(rel))
+            .expect("file in vault");
+        Referenceable::File(path, file)
+    }
+
+    fn backlink_sources(t: &TempVault, rel: &str) -> Vec<String> {
+        let target = file_referenceable(&t.vault, &t.root, rel);
+        let mut sources: Vec<String> = t
+            .vault
+            .select_references_for_referenceable(&target)
+            .unwrap()
+            .into_iter()
+            .map(|(path, reference)| {
+                format!(
+                    "{}:{}",
+                    path.strip_prefix(&t.root).unwrap().to_str().unwrap(),
+                    reference.data().reference_text
+                )
+            })
+            .collect();
+        sources.sort();
+        sources
+    }
+
+    fn unresolved(t: &TempVault, rel: &str) -> Vec<String> {
+        let mut texts: Vec<String> =
+            crate::diagnostics::path_unresolved_references(&t.vault, &t.root.join(rel))
+                .unwrap()
+                .into_iter()
+                .map(|(_, reference): (&Path, &Reference)| reference.data().reference_text.clone())
+                .collect();
+        texts.sort();
+        texts
+    }
+
+    #[test]
+    fn relative_markdown_links_resolve_from_the_linking_file() {
+        let t = temp_vault(&[
+            ("joule/target.md", "# Target\n\n## Part Two\n"),
+            ("joule/sibling.md", "[same folder](./target.md) [bare](target.md)\n"),
+            (
+                "agent-platform/a.md",
+                "[up](../joule/target.md) [heading](../joule/target.md#Part-Two)\n[[../joule/target|wiki up]]\n",
+            ),
+            ("agent-platform/guide/log-in.md", "# Log in\n"),
+            ("agent-platform/caveats.md", "[guide](guide/log-in.md)\n[[guide/log-in|wiki not relative]]\n"),
+            ("root.md", "[escape](../../outside.md)\n"),
+        ]);
+
+        assert_eq!(
+            backlink_sources(&t, "joule/target.md"),
+            vec![
+                "agent-platform/a.md:../joule/target",
+                "agent-platform/a.md:../joule/target",
+                // heading links count as file backlinks too (existing behaviour)
+                "agent-platform/a.md:../joule/target#Part-Two",
+                "joule/sibling.md:./target",
+                "joule/sibling.md:target",
+            ]
+        );
+        assert_eq!(
+            backlink_sources(&t, "agent-platform/guide/log-in.md"),
+            vec!["agent-platform/caveats.md:guide/log-in"]
+        );
+
+        assert!(unresolved(&t, "agent-platform/a.md").is_empty());
+        assert!(unresolved(&t, "joule/sibling.md").is_empty());
+        // A wiki link without ./ keeps vault-root semantics, so this one stays unresolved.
+        assert_eq!(
+            unresolved(&t, "agent-platform/caveats.md"),
+            vec!["guide/log-in"]
+        );
+        assert_eq!(unresolved(&t, "root.md"), vec!["../../outside"]);
+    }
+
+    #[test]
+    fn github_heading_slugs() {
+        use super::github_heading_slug as slug;
+        assert_eq!(
+            slug("2d.5. Lightweight shell commands — stock tmux"),
+            "2d5-lightweight-shell-commands--stock-tmux"
+        );
+        assert_eq!(slug("**API** `GET` /v1: status?"), "api-get-v1-status");
+        assert_eq!(slug("Café 😀"), "café-");
+        assert_eq!(slug("snake_case and-dash"), "snake_case-and-dash");
+        assert_eq!(slug("日本語 Heading"), "日本語-heading");
+    }
+
+    #[test]
+    fn github_style_anchors_resolve_and_native_forms_still_work() {
+        let t = temp_vault(&[
+            (
+                "setup.md",
+                "# Setup\n\n### 2d.5. Lightweight shell commands — stock tmux\n\n## Some Heading\n",
+            ),
+            (
+                "links.md",
+                concat!(
+                    "[[setup#2d5-lightweight-shell-commands--stock-tmux|github]]\n",
+                    "[md](setup.md#2d5-lightweight-shell-commands--stock-tmux)\n",
+                    "[[setup#Some Heading|native spaces]] [[setup#Some-Heading|native dashes]]\n",
+                    "[[setup#no-such-heading|missing]]\n",
+                ),
+            ),
+        ]);
+        assert_eq!(unresolved(&t, "links.md"), vec!["setup#no-such-heading"]);
+    }
+
+    #[test]
+    fn standalone_html_anchors_are_link_targets() {
+        let t = temp_vault(&[
+            (
+                "setup.md",
+                concat!(
+                    "# Setup\n\n<a id=\"legacy-id\"></a>\n\n## Section\n\n",
+                    "  <a name=\"named\"></a>  \n\n",
+                    "text <a id=\"inline-id\"></a>\n\n<span id=\"span-id\"></span>\n\n",
+                    "```\n<a id=\"in-code\"></a>\n```\n",
+                ),
+            ),
+            (
+                "guide/links.md",
+                concat!(
+                    "[[setup#legacy-id|a]] [md](../setup.md#legacy-id) [[setup#named|b]]\n",
+                    "[[setup#inline-id|c]] [[setup#span-id|d]] [[setup#in-code|e]]\n",
+                ),
+            ),
+        ]);
+        assert_eq!(
+            unresolved(&t, "guide/links.md"),
+            vec!["setup#in-code", "setup#inline-id", "setup#span-id"]
+        );
+    }
+
+    #[test]
+    fn relative_path_helper_bounds() {
+        let root = Path::new("/vault");
+        let source = Path::new("/vault/a/b/note.md");
+        let resolve = |text: &str| super::resolve_relative_ref_path(root, source, text);
+        assert_eq!(resolve("../c/x"), Some("a/c/x".into()));
+        assert_eq!(resolve("./x"), Some("a/b/x".into()));
+        assert_eq!(resolve("x%20y"), Some("a/b/x y".into()));
+        assert_eq!(resolve("../../top"), Some("top".into()));
+        assert_eq!(resolve("../../../escape"), None);
+        assert_eq!(resolve("/abs"), None);
+        assert_eq!(
+            super::resolve_relative_ref_path(root, Path::new("/elsewhere/n.md"), "x"),
+            None
+        );
     }
 }

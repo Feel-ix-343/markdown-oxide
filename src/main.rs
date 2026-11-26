@@ -412,9 +412,16 @@ impl LanguageServer for Backend {
             .collect(),
         };
 
+        // Positions are Unicode code-point offsets (ropey chars), i.e. LSP "utf-32".
+        // Announce that when the client accepts it; otherwise keep upstream behaviour
+        // (clients then assume utf-16, so columns after astral characters such as
+        // emoji are off). See position_encoding_for().
+        let position_encoding = position_encoding_for(&i.capabilities);
+
         return Ok(InitializeResult {
             server_info: None,
             capabilities: ServerCapabilities {
+                position_encoding,
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
                     TextDocumentSyncKind::FULL,
                 )),
@@ -978,6 +985,17 @@ async fn jump_to_specific(
 
 use clap::Parser;
 
+/// The position encoding to announce: "utf-32" (code points, which is what this server
+/// computes) when the client lists it, else `None` (protocol default utf-16).
+fn position_encoding_for(capabilities: &ClientCapabilities) -> Option<PositionEncodingKind> {
+    capabilities
+        .general
+        .as_ref()
+        .and_then(|general| general.position_encodings.as_ref())
+        .filter(|encodings| encodings.contains(&PositionEncodingKind::UTF32))
+        .map(|_| PositionEncodingKind::UTF32)
+}
+
 #[tokio::main]
 async fn main() {
     let cli = cli::Cli::parse();
@@ -1018,5 +1036,37 @@ async fn main() {
                 .serve(service)
                 .await;
         }
+    }
+}
+
+#[cfg(test)]
+mod kb_customization_tests {
+    use tower_lsp::lsp_types::{
+        ClientCapabilities, GeneralClientCapabilities, PositionEncodingKind,
+    };
+
+    fn caps(encodings: Option<Vec<PositionEncodingKind>>) -> ClientCapabilities {
+        ClientCapabilities {
+            general: Some(GeneralClientCapabilities {
+                position_encodings: encodings,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn announces_utf32_only_when_the_client_accepts_it() {
+        use super::position_encoding_for as pick;
+        assert_eq!(
+            pick(&caps(Some(vec![
+                PositionEncodingKind::UTF16,
+                PositionEncodingKind::UTF32
+            ]))),
+            Some(PositionEncodingKind::UTF32)
+        );
+        assert_eq!(pick(&caps(Some(vec![PositionEncodingKind::UTF16]))), None);
+        assert_eq!(pick(&caps(None)), None);
+        assert_eq!(pick(&ClientCapabilities::default()), None);
     }
 }

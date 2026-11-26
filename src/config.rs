@@ -32,6 +32,8 @@ pub struct Settings {
     pub excluded_folders: Vec<String>,
     pub heading_slug: bool,
     pub callout_completions: bool,
+    /// Warn when a link's file part matches more than one note (default: off).
+    pub ambiguous_diagnostics: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -103,6 +105,7 @@ impl Settings {
             .set_default("excluded_folders", Vec::<String>::new())?
             .set_default("heading_slug", false)?
             .set_default("callout_completions", true)?
+            .set_default("ambiguous_diagnostics", false)?
             .build()
             .map_err(|err| anyhow!("Build err: {err}"))?;
 
