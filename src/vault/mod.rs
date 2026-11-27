@@ -1022,7 +1022,12 @@ impl Reference {
                 | WikiFileLink(ReferenceData {
                     reference_text: file_ref_text,
                     ..
-                }) => matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir)),
+                }) => matches_path_or_file(
+                    file_ref_text,
+                    referenceable.get_refname(root_dir),
+                    file_path,
+                    root_dir,
+                ),
                 Tag(_) => false,
                 WikiHeadingLink(_, _, _) => false,
                 WikiIndexedBlockLink(_, _, _) => false,
@@ -1050,9 +1055,13 @@ impl Reference {
                 | WikiIndexedBlockLink(.., file_ref_text, link_infile_ref)
                 | MDHeadingLink(.., file_ref_text, link_infile_ref)
                 | MDIndexedBlockLink(.., file_ref_text, link_infile_ref) => {
-                    matches_path_or_file(file_ref_text, referenceable.get_refname(root_dir))
-                        && heading_to_slug(&link_infile_ref.to_lowercase())
-                            == heading_to_slug(&infile_ref.to_lowercase())
+                    matches_path_or_file(
+                        file_ref_text,
+                        referenceable.get_refname(root_dir),
+                        file_path,
+                        root_dir,
+                    ) && heading_to_slug(&link_infile_ref.to_lowercase())
+                        == heading_to_slug(&infile_ref.to_lowercase())
                 }
                 Tag(_) => false,
                 WikiFileLink(_) => false,
@@ -1725,9 +1734,12 @@ impl Referenceable<'_> {
                     ..
                 })
                 | MDHeadingLink(.., file_ref_text, _)
-                | MDIndexedBlockLink(.., file_ref_text, _) => {
-                    matches_path_or_file(file_ref_text, self.get_refname(root_dir))
-                }
+                | MDIndexedBlockLink(.., file_ref_text, _) => matches_path_or_file(
+                    file_ref_text,
+                    self.get_refname(root_dir),
+                    reference_path,
+                    root_dir,
+                ),
                 Tag(_) => false,
                 Footnote(_) => false,
                 LinkRef(_) => false,
@@ -1775,14 +1787,29 @@ impl Referenceable<'_> {
     }
 }
 
-fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
+fn matches_path_or_file(
+    file_ref_text: &str,
+    refname: Option<Refname>,
+    reference_path: &Path,
+    root_dir: &Path,
+) -> bool {
     (|| {
         let refname = refname?;
-        let refname_path = refname.path.clone()?; // this function should not be used for tags, ... only for heading, files, indexed blocks
+        let refname_path = refname.path.clone()?.replace(MAIN_SEPARATOR, "/"); // this function should not be used for tags, ... only for heading, files, indexed blocks
 
         if file_ref_text.contains('/') {
             let file_ref_text = file_ref_text.replace(r"%20", " ");
             let file_ref_text = file_ref_text.replace(r"\ ", " ");
+
+            // Resolve the reference relative to the referencing file's
+            // directory before falling back to a root-relative match.
+            if let Some(candidate) =
+                resolve_relative_file_path(root_dir, reference_path, &file_ref_text)
+            {
+                if candidate == refname_path {
+                    return Some(true);
+                }
+            }
 
             let chars: Vec<char> = file_ref_text.chars().collect();
             match chars.as_slice() {
@@ -1798,6 +1825,39 @@ fn matches_path_or_file(file_ref_text: &str, refname: Option<Refname>) -> bool {
         }
     })()
     .is_some_and(|b| b)
+}
+
+/// Resolves `file_ref_text` relative to the directory containing
+/// `reference_path`, returning a root-relative path. Handles `.` and `..`
+/// segments; returns `None` when the result escapes the vault root.
+fn resolve_relative_file_path(
+    root_dir: &Path,
+    reference_path: &Path,
+    file_ref_text: &str,
+) -> Option<String> {
+    let dir = diff_paths(reference_path.parent()?, root_dir)?;
+
+    let mut segments: Vec<String> = dir
+        .iter()
+        .map(|segment| segment.to_string_lossy().into_owned())
+        .collect();
+
+    for segment in file_ref_text.split('/') {
+        match segment {
+            "" | "." => {}
+            ".." => {
+                segments.pop()?;
+            }
+            segment => segments.push(segment.to_string()),
+        }
+    }
+
+    let resolved = Path::new(&segments.join(MAIN_SEPARATOR.to_string().as_str()))
+        .with_extension("")
+        .to_string_lossy()
+        .replace(MAIN_SEPARATOR, "/");
+
+    Some(resolved)
 }
 
 // tests
@@ -3379,6 +3439,78 @@ Some content here";
                 WikiFileLink(data) if data.reference_text == "outside cap"
             )
         }));
+    }
+
+    #[test]
+    fn matches_relative_file_paths() {
+        use super::matches_path_or_file;
+
+        let root = Path::new("/vault");
+        let refname = |path: &str| {
+            Some(Refname {
+                full_refname: path.into(),
+                path: Some(path.into()),
+                ..Default::default()
+            })
+        };
+
+        let source = Path::new("/vault/a/source.md");
+
+        // ./ and ../ resolve relative to the referencing file's directory
+        assert!(matches_path_or_file(
+            "./sibling",
+            refname("a/sibling"),
+            source,
+            root
+        ));
+        assert!(matches_path_or_file(
+            "../other/file",
+            refname("other/file"),
+            source,
+            root
+        ));
+        // a bare path also resolves relative to the referencing file first
+        assert!(matches_path_or_file(
+            "sub/file",
+            refname("a/sub/file"),
+            source,
+            root
+        ));
+        // root-relative links keep working
+        assert!(matches_path_or_file(
+            "folder/Fiile",
+            refname("folder/Fiile"),
+            source,
+            root
+        ));
+        // ./ from a file at the vault root resolves at the root
+        assert!(matches_path_or_file(
+            "./top",
+            refname("top"),
+            Path::new("/vault/source.md"),
+            root
+        ));
+        // a relative path that escapes the root never matches
+        assert!(!matches_path_or_file(
+            "../outside",
+            refname("outside"),
+            Path::new("/vault/source.md"),
+            root
+        ));
+        // a relative path pointing elsewhere does not match
+        assert!(!matches_path_or_file(
+            "./other",
+            refname("a/sibling"),
+            source,
+            root
+        ));
+        // a .md suffix is tolerated
+        assert!(matches_path_or_file(
+            "./sibling.md",
+            refname("a/sibling"),
+            source,
+            root
+        ));
     }
 
     #[test]
